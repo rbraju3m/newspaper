@@ -30,6 +30,7 @@ class MediaFactory extends Factory
             'conversions' => [
                 'w320' => $dir.'/'.$name.'-w320.webp',
                 'w640' => $dir.'/'.$name.'-w640.webp',
+                'w768' => $dir.'/'.$name.'-w768.webp',
                 'w960' => $dir.'/'.$name.'-w960.webp',
                 'w1600' => $dir.'/'.$name.'-w1600.webp',
                 'thumb' => $dir.'/'.$name.'-thumb.webp',

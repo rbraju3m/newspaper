@@ -128,9 +128,16 @@ caches, update banner.
 13. Scheduled articles need a cron entry (`status=scheduled` past its
     `published_at` is counted on the dashboard but never auto-publishes).
 14. Ad impressions are never incremented — only clicks are.
-15. `ArticleQuery::related()` runs a correlated `EXISTS` subquery for topic
+15. **Ad creatives bypass the image pipeline.** `AdController` stores uploads
+    with `$file->store('ads', 'public')` — no `Media` row, no derivative ladder,
+    no resizing. A creative uploaded through the admin is served at whatever
+    dimensions it arrived in; one uploaded during the Phase 6 work is now the
+    only remaining "properly size images" offender on the article page, at 57 KB
+    for a 728x90 slot. `<x-ui.ad-slot>` renders a plain `src` with no srcset, so
+    nothing is broken — it is just unoptimised.
+16. `ArticleQuery::related()` runs a correlated `EXISTS` subquery for topic
     matching; fine at this size, worth watching as content grows.
-16. Cold homepage is ~1.4s / 80 queries; warm is ~340ms / 15. The cold path
+17. Cold homepage is ~1.4s / 80 queries; warm is ~340ms / 15. The cold path
     deserves attention in Phase 6.
 
 ---
@@ -150,6 +157,15 @@ In rough order of value:
    box, not the code:** this PHP has no `imageavif()` and no Imagick, so
    `ImageService` cannot write AVIF here at all. Needs a rebuilt GD or
    `php-imagick` before the code is worth writing.
+
+   The `w768` rung this item was paired with is **done**. Adding it surfaced
+   that a rung change is inert on everything already stored — srcset is built
+   from the `conversions` a row recorded, not from `WIDTHS`. `ImageService`
+   gained `regenerate()` and `rungsFor()`, and `MediaSeeder` self-heals the demo
+   library when the two disagree. **There is still no backfill for real editor
+   uploads**: `regenerate()` exists but nothing calls it outside the seeder, so
+   adding a rung in production would leave every existing upload behind. An
+   artisan command is the missing piece.
 4. ~~Lighthouse pass on homepage and article, mobile profile. Target ≥ 90.~~
    **Done** — see below.
 5. ~~Measure Core Web Vitals against the budget in `PLAN.md`
@@ -252,12 +268,12 @@ defects. All three are fixed; a11y is 100 on both pages.
    the same treatment.
 
 Two smaller diagnostics. The homepage ships 1,329 DOM elements. And the article
-hero was flagged for 26 KB of oversize, which turns out **not** to be a `sizes`
+hero was flagged for 26 KB of oversize, which turned out **not** to be a `sizes`
 defect: Lighthouse emulates 412 CSS px at DPR 1.75, so the hero needs 721 device
 px, and with rungs at 640 and 960 the browser correctly took 960 rather than
-upscale a 640. The ladder's spacing is the cause, not its wiring — a `w768` rung
-in `ImageService::WIDTHS` would close most of the gap. Worth doing alongside
-AVIF, since both are changes to the same ladder.
+upscale a 640. The ladder's spacing was the cause. **Fixed** — `w768` is now a
+rung, the hero fetches 28 KB where it fetched 51 KB, and it no longer appears in
+"properly size images" at all.
 
 `SiteSeeder` now creates the house ads active rather than inactive. They were
 switched off because there was no creative to show; `MediaSeeder` fills `asset`,

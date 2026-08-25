@@ -21,6 +21,7 @@ class ImageService
     private const WIDTHS = [
         'w320' => 320,    // mobile card
         'w640' => 640,    // tablet card / mobile hero
+        'w768' => 768,    // full-bleed hero on a mid-range phone
         'w960' => 960,    // desktop feature
         'w1600' => 1600,  // article hero
     ];
@@ -57,6 +58,55 @@ class ImageService
             'caption' => $meta['caption'] ?? null,
             'credit' => $meta['credit'] ?? null,
         ]);
+    }
+
+    /**
+     * Rebuilds the derivative ladder for an upload that is already stored.
+     *
+     * Adding a rung to WIDTHS is inert on everything already in the media
+     * table: srcset is built from the `conversions` the row recorded, not from
+     * this constant. Derivative filenames are the original's name plus the rung
+     * key, so a rebuild overwrites the rungs it still produces; a rung dropped
+     * from WIDTHS just stops being referenced and its file is left behind.
+     */
+    public function regenerate(Media $media): Media
+    {
+        $disk = Storage::disk($media->disk);
+
+        if (! $this->isConvertible($media->mime) || ! $disk->exists($media->path)) {
+            return $media;
+        }
+
+        $media->update([
+            'conversions' => $this->deriveAll(
+                $disk->path($media->path),
+                dirname($media->path),
+                pathinfo($media->path, PATHINFO_FILENAME),
+                $media->width,
+                $media->disk,
+            ),
+        ]);
+
+        return $media;
+    }
+
+    /**
+     * The rung keys this service would produce for a source of the given width.
+     *
+     * Lets a caller tell a media row whose ladder predates a WIDTHS change from
+     * one that is simply too small to have earned the upper rungs.
+     *
+     * @return list<string>
+     */
+    public function rungsFor(?int $sourceWidth): array
+    {
+        $first = array_key_first(self::WIDTHS);
+
+        return array_keys(array_filter(
+            self::WIDTHS,
+            fn (int $target, string $key): bool => ! $sourceWidth || $target <= $sourceWidth || $key === $first,
+            ARRAY_FILTER_USE_BOTH,
+        ));
     }
 
     private function isConvertible(?string $mime): bool

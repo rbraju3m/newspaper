@@ -41,7 +41,7 @@ class ResponsiveImageTest extends TestCase
 
         $srcset = $media->srcset();
 
-        foreach ([320, 640, 960, 1600] as $w) {
+        foreach ([320, 640, 768, 960, 1600] as $w) {
             $this->assertStringContainsString("-w{$w}.webp {$w}w", $srcset);
         }
 
@@ -60,7 +60,27 @@ class ResponsiveImageTest extends TestCase
         $srcset = $media->srcset();
 
         $this->assertStringContainsString('320w', $srcset);
+        $this->assertStringNotContainsString('768w', $srcset);
         $this->assertStringNotContainsString('1600w', $srcset);
+    }
+
+    public function test_rungs_for_reports_the_ladder_a_source_of_a_given_width_earns(): void
+    {
+        $service = app(\App\Services\ImageService::class);
+
+        $this->assertSame(
+            ['w320', 'w640', 'w768', 'w960', 'w1600'],
+            $service->rungsFor(2400),
+        );
+
+        // Never upscale — except the first rung, which is the floor every
+        // source gets so that a tiny image still has one candidate.
+        $this->assertSame(['w320', 'w640'], $service->rungsFor(700));
+        $this->assertSame(['w320'], $service->rungsFor(200));
+
+        // Unknown source width: assume it earns everything rather than
+        // silently truncating a real photograph's ladder.
+        $this->assertSame(['w320', 'w640', 'w768', 'w960', 'w1600'], $service->rungsFor(null));
     }
 
     public function test_article_exposes_no_srcset_without_a_linked_media(): void
