@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Not started** |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Not started** |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — test harness fixed, no coverage yet |
 
 ### By the numbers
 
@@ -42,8 +42,9 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 These are ad-hoc scripts run during development, **not** a committed test
-suite. The repo contains only Laravel's two stock `ExampleTest` stubs, and
-`php artisan test` currently **fails** — see below. Building a real suite is
+suite. The committed suite is `tests/Feature/HarnessTest.php` only — four tests
+that verify the harness itself (right database, FULLTEXT index present,
+factories and model events firing, strict mode on). Building real coverage is
 Phase 7's first job.
 
 ---
@@ -79,12 +80,12 @@ caches, update banner.
 
 ### Blocking a public launch
 
-1. **No test suite, and `php artisan test` fails.** `phpunit.xml` points at
-   SQLite `:memory:`, but **`pdo_sqlite` is not installed** on this machine, so
-   the one stock feature test errors with "could not find driver". Before
-   writing any tests, either install the driver (`sudo apt install
-   php8.4-sqlite3`) or repoint `phpunit.xml` at a MySQL test database. Nothing
-   above was verified by automated tests.
+1. **Almost no test suite.** The harness is fixed — `php artisan test` runs
+   green against the `newspaper_test` MySQL database — but it contains only
+   `tests/Feature/HarnessTest.php`, four tests that prove the plumbing works.
+   No application behaviour is covered yet; everything under "Verification
+   currently passing" above is still ad-hoc scripts. Writing real coverage is
+   Phase 7's first job.
 2. **Article bodies are raw HTML rendered unescaped.** Safe while only staff can
    write them. Must be sanitised before authorship widens.
 3. **Demo data and demo logins are in the database.** Purge before deploying.

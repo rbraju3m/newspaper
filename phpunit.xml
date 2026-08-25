@@ -23,8 +23,20 @@
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
-        <env name="DB_CONNECTION" value="sqlite"/>
-        <env name="DB_DATABASE" value=":memory:"/>
+        <!-- Tests run on MySQL, not SQLite in-memory: the article search path
+             uses a real FULLTEXT index (MATCH ... AGAINST) that no other driver
+             implements, and Article::search() silently degrades to LIKE when the
+             driver is not mysql. Host, user and password come from .env so no
+             credentials live in this file. Create the database once as MySQL
+             root - note `sudo mysql` does NOT work here, root uses password
+             auth rather than socket auth, and the `newspaper` user is scoped to
+             `newspaper`.* so it cannot create databases itself:
+             mysql -uroot -p -e "CREATE DATABASE newspaper_test CHARACTER SET
+             utf8mb4 COLLATE utf8mb4_unicode_ci;"
+             mysql -uroot -p -e "GRANT ALL PRIVILEGES ON newspaper_test.* TO
+             'newspaper'@'127.0.0.1';" -->
+        <env name="DB_CONNECTION" value="mysql"/>
+        <env name="DB_DATABASE" value="newspaper_test"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>

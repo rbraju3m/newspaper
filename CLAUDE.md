@@ -145,11 +145,30 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-There is no real test suite yet (Phase 7). `php artisan test` currently
-**fails**: `phpunit.xml` uses SQLite `:memory:` and `pdo_sqlite` is not
-installed here. Fix that first if you are adding tests —
-`sudo apt install php8.4-sqlite3`, or repoint `phpunit.xml` at a MySQL test
-database. Until then, at minimum:
+`php artisan test` runs and passes, but the suite is still only a harness
+smoke test (`tests/Feature/HarnessTest.php`) — real coverage is Phase 7.
+
+Tests run on **MySQL**, against `newspaper_test`, not SQLite in-memory:
+`Article::search()` silently falls back to `LIKE` on any non-MySQL driver, so
+the `MATCH ... AGAINST` path that production uses would never be exercised.
+`pdo_sqlite` is not installed here in any case.
+
+`tests/TestCase.php` refuses to run unless the connected database name ends in
+`_test`. `RefreshDatabase` drops every table it finds, and an exported
+`DB_DATABASE` **overrides** `phpunit.xml` — PHPUnit does not force-override an
+existing environment variable. Without that guard, one stray export wipes the
+seeded demo database. Do not remove it.
+
+If the test database is ever lost, recreate it with MySQL root (`-uroot`; the
+`newspaper` user is scoped to `newspaper`.* and cannot create databases, and
+`sudo mysql` socket auth is not configured on this box):
+
+```bash
+mysql -uroot -p -e "CREATE DATABASE newspaper_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -uroot -p -e "GRANT ALL PRIVILEGES ON newspaper_test.* TO 'newspaper'@'127.0.0.1';"
+```
+
+Beyond the suite, at minimum:
 
 ```bash
 find app database routes config -name '*.php' -exec php -l {} \;
