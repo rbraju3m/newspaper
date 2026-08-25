@@ -92,7 +92,7 @@ class AdController extends Controller
             // media:backfill could not see it.
             $data['asset'] = $images->store($file, $request->user()?->id, [
                 'alt' => $data['title'],
-            ])->path;
+            ], 'ads')->path;
         }
 
         unset($data['file']);

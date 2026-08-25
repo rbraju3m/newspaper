@@ -9,6 +9,7 @@
           'title' => old('title', $article->title),
           'image' => old('image', $article->image),
           'imageId' => old('image_id', $article->image_id),
+          'articleSlug' => $article->slug,
           'imageUrl' => $article->image_url,
           'tags' => old('tags', $article->exists ? $article->tags->pluck('name')->all() : []),
           'mediaEndpoint' => route('admin.media.index'),

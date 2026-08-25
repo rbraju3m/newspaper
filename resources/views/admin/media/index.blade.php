@@ -45,18 +45,50 @@
                     <div class="relative aspect-square bg-surface-2">
                         <img src="{{ $item->conversion('thumb') }}" alt="{{ $item->alt }}" loading="lazy"
                              class="h-full w-full object-cover">
-                        <button type="button" @click="open = true"
-                                class="absolute inset-0 flex items-center justify-center bg-black/0
-                                       opacity-0 transition group-hover:bg-black/40 group-hover:opacity-100">
-                            <span class="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-ink">বিস্তারিত</span>
-                        </button>
+                        {{-- Hover actions. The delete button targets a form
+                             outside this overlay via form="…": the grid is not
+                             inside a form, but keeping the two separate means
+                             the details button can never submit anything. --}}
+                        {{-- Tailwind 4 gates every hover: variant behind
+                             @media (hover: hover), so on a tablet these
+                             controls would never appear at all — the admin
+                             would have no way to open or delete anything.
+                             focus-within keeps them reachable by keyboard, and
+                             the hover:none query pins them open on touch. --}}
+                        <div class="absolute inset-0 flex items-center justify-center gap-2 bg-black/40
+                                    opacity-0 transition group-hover:opacity-100
+                                    group-focus-within:opacity-100
+                                    [@media(hover:none)]:opacity-100">
+                            <button type="button" @click="open = true"
+                                    class="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-ink">
+                                বিস্তারিত
+                            </button>
+                            <button type="submit" form="media-delete-{{ $item->id }}"
+                                    class="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white"
+                                    aria-label="{{ $item->folder ?? $item->filename }} মুছে ফেলুন">
+                                মুছে ফেলুন
+                            </button>
+                        </div>
                     </div>
                     <figcaption class="p-2">
-                        <p class="truncate text-xs font-medium text-ink">{{ $item->filename }}</p>
+                        {{-- The story it was filed under, which is what an
+                             editor recognises. Uploads from before the folder
+                             layout have none and fall back to the filename. --}}
+                        <p class="truncate text-xs font-medium text-ink"
+                           title="{{ $item->folder ?? $item->filename }}">
+                            {{ $item->folder ?? $item->filename }}
+                        </p>
+                        <p class="lat truncate text-2xs text-muted">{{ $item->filename }}</p>
                         <p class="lat text-2xs text-muted">
                             @bn($item->width)×@bn($item->height) · {{ round($item->size / 1024) }}KB
                         </p>
                     </figcaption>
+
+                    <form method="POST" action="{{ route('admin.media.destroy', $item) }}"
+                          id="media-delete-{{ $item->id }}"
+                          onsubmit="return confirm('ছবিটি স্থায়ীভাবে মুছে ফেলতে চান? যেসব খবরে এটি ব্যবহৃত হয়েছে সেখানে ছবি হারিয়ে যাবে।')">
+                        @csrf @method('DELETE')
+                    </form>
 
                     {{-- Detail / edit dialog --}}
                     <div x-show="open" x-cloak @click.self="open = false"

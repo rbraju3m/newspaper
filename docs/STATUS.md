@@ -78,6 +78,32 @@ caches, update banner.
 
 ---
 
+## Where uploads live
+
+`uploads/YYYY/MM/<bucket>/<original-name>.<ext>`, where the bucket is the slug
+of whatever the file was uploaded for:
+
+```
+uploads/2026/08/জলবায়ু-পরিবর্তনের-প্রভাব-মোকাবিলায়/98.png
+uploads/2026/08/sports/seed-sports-1.jpg
+uploads/2026/08/ads/creative.jpg
+uploads/2026/08/avatars/me.jpg
+uploads/2026/08/misc/98.png          ← no context: a media-library upload
+```
+
+The article editor posts the saved slug, or the headline currently in the box
+when the article has not been saved yet; slugifying happens server-side in
+`App\Support\Slug` so the Bangla rules live in one place. The original filename
+is kept — it is what an editor recognises — and made unique within its folder
+(`98.png`, `98-2.png`), since the folder now carries the uniqueness a random
+24-character name used to.
+
+Files uploaded before this layout sit directly in the date folder. They are left
+alone; `Media::$folder` returns null for them and the media library falls back
+to showing the filename.
+
+---
+
 ## Replaced images are reaped
 
 Changing an article's lead image or an ad's creative deletes the old one — media

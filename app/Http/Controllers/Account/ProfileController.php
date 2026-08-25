@@ -5,11 +5,11 @@ namespace App\Http\Controllers\Account;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Account\ProfileUpdateRequest;
 use App\Models\Article;
+use App\Services\ImageService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 
@@ -34,19 +34,22 @@ class ProfileController extends Controller
         ]);
     }
 
-    public function update(ProfileUpdateRequest $request): RedirectResponse
+    public function update(ProfileUpdateRequest $request, ImageService $images): RedirectResponse
     {
         $user = $request->user();
         $data = $request->validated();
 
-        if ($file = $request->file('avatar')) {
-            // Replace rather than accumulate — an avatar has no history worth
-            // keeping, and orphaned uploads add up fast.
-            if ($user->avatar && ! str_starts_with($user->avatar, 'http')) {
-                Storage::disk('public')->delete($user->avatar);
-            }
+        $previousAvatar = $user->avatar;
 
-            $data['avatar'] = $file->store('avatars', 'public');
+        if ($file = $request->file('avatar')) {
+            // Through the media library like every other upload. Stored with
+            // $file->store('avatars', 'public') it had no Media row, so it got
+            // no derivative ladder, media:backfill could not see it, and the
+            // old file was deleted by raw path with no check on who else might
+            // be pointing at it.
+            $data['avatar'] = $images->store($file, $user->id, [
+                'alt' => $user->name,
+            ], 'avatars')->path;
         }
 
         $emailChanged = isset($data['email']) && $data['email'] !== $user->email;
@@ -59,6 +62,13 @@ class ProfileController extends Controller
         }
 
         $user->save();
+
+        // After the save, so the user's own old avatar is gone and does not
+        // read as a reference to itself. release() keeps the file if any other
+        // row still points at it.
+        if ($user->avatar !== $previousAvatar) {
+            $images->release($previousAvatar);
+        }
 
         if ($emailChanged) {
             $user->sendEmailVerificationNotification();

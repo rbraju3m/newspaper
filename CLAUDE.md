@@ -76,6 +76,24 @@ Stores calling `Alpine.$persist()` must import `resources/js/bootstrap.js`, not
 `alpinejs` directly. ES imports are hoisted, so a store importing Alpine
 directly runs before `Alpine.plugin(persist)`.
 
+### `hover:` is gated behind a media query
+
+Tailwind 4 wraps every `hover:` and `group-hover:` variant in
+`@media (hover: hover)`:
+
+```css
+@media (hover:hover){ .group-hover\:opacity-100:is(:where(.group):hover *){opacity:1} }
+```
+
+A control that only appears on hover therefore **does not exist on a touch
+device**, and headless Chrome reports `hover: none` too — so it cannot be
+verified by screenshot either. `el.matches(':hover')` returns true while the
+descendant's computed style never changes, which reads exactly like a broken
+selector.
+
+Pair every hover-revealed control with `group-focus-within:` and
+`[@media(hover:none)]:` so it stays reachable by keyboard and by finger.
+
 ### Response return types
 
 `Illuminate\Http\Response` is **not** a supertype of `JsonResponse` or

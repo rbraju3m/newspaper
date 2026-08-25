@@ -3,10 +3,10 @@
 namespace App\Services;
 
 use App\Models\Media;
+use App\Support\Slug;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 /**
  * Stores an upload and derives the sizes the site actually renders.
@@ -31,11 +31,23 @@ class ImageService
 
     private const QUALITY = 82;
 
-    public function store(UploadedFile $file, ?int $userId = null, array $meta = []): Media
+    /**
+     * @param  string|null  $folder  Headline or slug of whatever this belongs to.
+     *                               Grouping uploads under it is what makes the
+     *                               media library legible: a bare
+     *                               `Str::random(24)` tells an editor nothing
+     *                               about which story an image came from.
+     */
+    public function store(UploadedFile $file, ?int $userId = null, array $meta = [], ?string $folder = null): Media
     {
         $disk = 'public';
-        $dir = 'uploads/'.now()->format('Y/m');
-        $name = Str::random(24);
+
+        // `misc` rather than the bare date folder, so every upload sits one
+        // level down and the layout stays uniform whether the caller knew what
+        // the file was for or not.
+        $dir = 'uploads/'.now()->format('Y/m').'/'.(Slug::make((string) $folder, 80) ?: 'misc');
+
+        $name = $this->uniqueName($dir, $file, $disk);
 
         $original = $file->storeAs($dir, $name.'.'.$file->extension(), $disk);
 
@@ -59,6 +71,28 @@ class ImageService
             'caption' => $meta['caption'] ?? null,
             'credit' => $meta['credit'] ?? null,
         ]);
+    }
+
+    /**
+     * Keeps the uploaded name, made safe and made unique within its folder.
+     *
+     * The original filename is what an editor recognises in the media library,
+     * and it survives here because the folder now carries the uniqueness that
+     * a random name used to.
+     */
+    private function uniqueName(string $dir, UploadedFile $file, string $disk): string
+    {
+        $extension = $file->extension() ?: $file->getClientOriginalExtension() ?: 'bin';
+        $base = Slug::make(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME), 60) ?: 'image';
+
+        $name = $base;
+        $i = 1;
+
+        while (Storage::disk($disk)->exists($dir.'/'.$name.'.'.$extension)) {
+            $name = $base.'-'.++$i;
+        }
+
+        return $name;
     }
 
     /**

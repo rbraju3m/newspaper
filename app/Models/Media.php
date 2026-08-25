@@ -53,6 +53,21 @@ class Media extends Model
             ->implode(', ');
     }
 
+    /**
+     * The bucket this upload was filed under — an article slug, `ads`,
+     * `avatars` or `misc`.
+     *
+     * Read back off the path rather than stored in a column: a media row has no
+     * owner, since the same file can be used by several articles. Files from
+     * before the folder layout sit directly in the date folder and have none.
+     */
+    protected function folder(): Attribute
+    {
+        return Attribute::get(fn (): ?string => preg_match(
+            '#^uploads/\d{4}/\d{2}/([^/]+)/#u', $this->path, $m,
+        ) ? $m[1] : null);
+    }
+
     public function isImage(): bool
     {
         return str_starts_with($this->mime, 'image/');

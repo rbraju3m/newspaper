@@ -39,15 +39,20 @@ class MediaController extends Controller
             'alt' => ['nullable', 'string', 'max:255'],
             'caption' => ['nullable', 'string', 'max:500'],
             'credit' => ['nullable', 'string', 'max:255'],
+            // A headline or slug: what the upload belongs to, so it can be
+            // filed under it. Absent for a library upload.
+            'for' => ['nullable', 'string', 'max:500'],
         ], [
             'file.max' => 'ফাইলের আকার সর্বোচ্চ ৮ মেগাবাইট হতে পারে।',
             'file.mimes' => 'শুধু JPG, PNG, WebP বা GIF আপলোড করা যাবে।',
+            'file.uploaded' => 'সার্ভার এত বড় ফাইল নিতে পারেনি। PHP-র upload_max_filesize সীমা বাড়াতে হবে।',
         ]);
 
         $media = $images->store(
             $request->file('file'),
             $request->user()->id,
             $request->only('alt', 'caption', 'credit'),
+            $request->string('for')->value() ?: null,
         );
 
         return response()->json($this->payload($media), 201);

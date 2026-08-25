@@ -15,6 +15,7 @@ use Database\Seeders\Support\SeedImagery;
 use Illuminate\Database\Seeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Gives the demo database something to actually render.
@@ -102,6 +103,7 @@ class MediaSeeder extends Seeder
                             'alt' => $section->name.' বিভাগের প্রতীকী ছবি',
                             'credit' => self::CREDIT,
                         ],
+                        $section->slug,
                     );
             }
 
@@ -216,8 +218,11 @@ class MediaSeeder extends Seeder
 
             if (! $media) {
                 // An editor's own creative is not ours to replace, and drawing
-                // a seed one to sit unused would just litter the disk.
-                if ($ad->asset !== null) {
+                // a seed one to sit unused would just litter the disk. A path
+                // whose file is gone does not count as one: the first version
+                // of this check looked only for null and so left every slot
+                // pointing at a dead file after the library was regenerated.
+                if ($ad->asset !== null && Storage::disk('public')->exists($ad->asset)) {
                     continue;
                 }
 
@@ -234,10 +239,12 @@ class MediaSeeder extends Seeder
                     $filename,
                     $userId,
                     ['alt' => $ad->title, 'credit' => self::CREDIT],
+                    'ads',
                 );
             }
 
-            if ($ad->asset === null || $ad->asset === $media->path) {
+            if ($ad->asset === null || $ad->asset === $media->path
+                || ! Storage::disk('public')->exists($ad->asset)) {
                 $ad->update(['asset' => $media->path]);
                 $filled++;
             }
@@ -249,7 +256,7 @@ class MediaSeeder extends Seeder
     }
 
     /** Hands a drawn plate to ImageService as though it had been uploaded. */
-    private function store(ImageService $service, \GdImage $image, string $filename, ?int $userId, array $meta): Media
+    private function store(ImageService $service, \GdImage $image, string $filename, ?int $userId, array $meta, ?string $folder = null): Media
     {
         // tempnam() has no extension and does not need one: ImageService reads
         // the extension back off the sniffed mime type, not the name.
@@ -263,6 +270,7 @@ class MediaSeeder extends Seeder
                 new UploadedFile($tmp, $filename, 'image/jpeg', null, true),
                 $userId,
                 $meta,
+                $folder,
             );
         } finally {
             File::delete($tmp);

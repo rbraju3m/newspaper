@@ -23,6 +23,11 @@ Alpine.data('articleEditor', (config) => ({
     // derivative ladder while claiming the new one's src — and a browser
     // given both attributes reads srcset and ignores src.
     imageId: config.imageId ?? null,
+    // What the upload belongs to, so the server can file it under that story.
+    // The saved slug when there is one, otherwise whatever headline is in the
+    // box — slugifying is left to PHP, because the Bangla rules (\p{M} for
+    // vowel signs and hasant) live in one place and must not be reimplemented.
+    articleSlug: config.articleSlug ?? null,
     imageUrl: config.imageUrl ?? null,
     uploading: false,
     uploadError: '',
@@ -41,6 +46,10 @@ Alpine.data('articleEditor', (config) => ({
 
     removeTag(i) {
         this.tags.splice(i, 1);
+    },
+
+    uploadFolder() {
+        return this.articleSlug || this.title || '';
     },
 
     clearImage() {
@@ -62,6 +71,7 @@ Alpine.data('articleEditor', (config) => ({
 
         const body = new FormData();
         body.append('file', file);
+        body.append('for', this.uploadFolder());
 
         try {
             const res = await fetch(config.uploadEndpoint, {

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\ArticleStatus;
 use App\Enums\ArticleType;
 use App\Support\Bangla;
+use App\Support\Slug;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -74,14 +75,7 @@ class Article extends Model
      */
     private static function uniqueSlug(string $title, ?string $locale, ?int $ignoreId = null): string
     {
-        $base = Str::of($title)
-            ->replaceMatches('/[^\p{L}\p{M}\p{N}\s-]+/u', ' ')
-            ->squish()
-            ->replace(' ', '-')
-            ->lower()                     // no-op for Bangla, normalises Latin
-            ->value();
-
-        $base = self::trimSlug($base, 100) ?: 'সংবাদ';
+        $base = Slug::make($title, 100) ?: 'সংবাদ';
 
         $slug = $base;
         $i = 1;
@@ -103,23 +97,6 @@ class Article extends Model
      * characters, not bytes — a Bangla character is three UTF-8 bytes, and the
      * unique index has room for it.
      */
-    private static function trimSlug(string $slug, int $max): string
-    {
-        if (mb_strlen($slug) <= $max) {
-            return trim($slug, '-');
-        }
-
-        $cut = mb_substr($slug, 0, $max);
-        $lastHyphen = mb_strrpos($cut, '-');
-
-        // Prefer a word boundary, but never trim away most of the slug.
-        if ($lastHyphen !== false && $lastHyphen > $max * 0.6) {
-            $cut = mb_substr($cut, 0, $lastHyphen);
-        }
-
-        return trim($cut, '-');
-    }
-
     // ── Relationships ────────────────────────────────────────────────────
 
     public function category(): BelongsTo
