@@ -1,8 +1,18 @@
 # Newspaper Portal — Master Plan
 
-**Stack:** Laravel 12 · Blade (SSR) · Tailwind CSS 4 · Alpine.js · MySQL 8 · Apache
+**Stack:** Laravel 13 · Blade (SSR) · Tailwind CSS 4 · Alpine.js · MySQL 8 · Apache
 **Content language:** Bangla-first, bilingual-ready (i18n scaffolding from day one)
 **Auth scope:** Full reader accounts + staff roles
+
+> **This document is the original plan, annotated as-built.** The competitive
+> analysis and design system below still describe the shipped product. Section 5
+> now records what was actually built and where it diverged.
+>
+> Current progress lives in [`STATUS.md`](STATUS.md); the reasoning behind
+> individual choices lives in [`DECISIONS.md`](DECISIONS.md).
+>
+> **Planned as Laravel 12; the installer pulled 13.26.** Same APIs, but three
+> Laravel 13 defaults changed the work materially — see §5 notes.
 
 ---
 
@@ -104,13 +114,20 @@ Each category also carries its own accent colour (Sports green, Business blue, E
 /live                         live TV / live blog
 /search?q=                    search results
 /page/{slug}                  static pages (about, contact, privacy, terms, ad rates)
+/offline                      PWA fallback (added in Phase 5)
 
 Auth:    /login /register /logout /forgot-password /reset-password
          /verify-email /auth/{provider}/redirect|callback
 Reader:  /account  /account/bookmarks  /account/history
          /account/preferences  /account/comments
+Feeds:   /rss  /sitemap.xml  /news-sitemap.xml
+API:     /api/breaking  /api/articles/{id}/live  /api/articles/{id}/share
 Admin:   /admin/...
 ```
+
+**As built.** Category slugs are ASCII (`/khela/cricket`); article and tag slugs
+keep Bangla (`/tag/নির্বাচন`). `/account/comments` was planned but is not built.
+Route registration order is load-bearing — see `CLAUDE.md`.
 
 ---
 
@@ -137,42 +154,130 @@ Admin:   /admin/...
 | `epapers` / `epaper_pages` | date, pdf, page images, section |
 | `home_blocks` | drag-and-drop homepage layout: type, category_id, position, limit, style |
 | `settings` | key/value site config |
-| `menus` / `menu_items` | header/footer menu builder |
-| `redirects`, `activity_log` | ops |
+| `pages` | static pages (about, contact, privacy…) |
+| `live_entries` | live-blog timeline, added in Phase 5 |
+| `article_related` | editor-curated related stories |
+| `comment_likes` | comment reactions |
+| `redirects` | old-CMS URL preservation — table exists, **no middleware consumes it yet** |
+
+**Not built:** `menus` / `menu_items` (navigation is driven by
+`categories.show_in_nav` instead, which turned out to be enough) and
+`activity_log`.
+
+**Added during the build:** `categories.path` — a materialised path, so a
+nested category resolves in one query. `articles` also carries `kicker`,
+`subtitle`, `dateline`, `source`, `is_pinned`, `breaking_until`,
+`translation_of` and `allow_comments`, none of which were in the original
+sketch.
+
+38 tables in total, including Laravel's own `cache`, `sessions`, `jobs` and
+`migrations`.
 
 ---
 
-## 5. Implementation Phases
+## 5. Implementation Phases — as built
 
-### Phase 0 — Foundation
-Laravel 12 install · MySQL database + `.env` · Vite + Tailwind 4 + Alpine · Bangla fonts self-hosted · design tokens · `BanglaDate` / `BanglaNumber` helpers · base layout (header, nav, footer) · Apache vhost.
+Phases 0–5 are complete and verified against a live database. Phases 6–7 are
+outstanding. Deviations from the original plan are called out inline.
 
-### Phase 1 — Data layer
-All migrations, models, relationships, enums, factories, seeders with realistic Bangla demo content (30+ categories, 200+ articles, authors, tags, topics).
+### Phase 0 — Foundation ✅
+Laravel 13 · MySQL · Vite + Tailwind 4 + Alpine · self-hosted Noto Serif/Sans
+Bengali + Inter · semantic light/dark design tokens · `App\Support\Bangla`
+(digits, relative time, day-part clock, Bengali calendar) · base layout, header,
+mega-menu, footer.
 
-### Phase 2 — Public site
-Homepage with all blocks · category & sub-category pages · article detail (share bar, font control, related, tags, author box) · latest/popular · search · date archive · video hub · photo galleries · author pages · static pages · RSS.
+*Deviation:* the Bengali calendar turned out to warrant real test coverage —
+all twelve month boundaries are asserted against known anchors.
 
-### Phase 3 — Auth & reader features
-Register/login/logout · email verification · password reset · Google + Facebook OAuth · profile & avatar · bookmarks · reading history · comments + replies + moderation queue · reactions · newsletter subscribe/verify · personalised "আপনার জন্য" feed.
+### Phase 1 — Data layer ✅
+15 migrations / 38 tables · 23 models with scopes, casts and counter hooks ·
+factories · seeders producing 55 categories, 374 articles, 107 comments.
 
-### Phase 4 — Admin CMS
-Dashboard (traffic, top stories, pending comments) · article editor (rich text, image upload w/ crop, scheduling, SEO preview) · media library · categories/tags/topics CRUD · homepage layout manager · users & roles · comment moderation · ads manager · polls · e-paper upload · settings · activity log.
+*Deviation:* demo content is generated by a purpose-built `BanglaContent`
+class rather than Faker. Latin lorem makes it impossible to judge Bangla
+typography, which is the whole point of seeding a front page.
 
-### Phase 5 — Interactivity & polish
-Dark mode · reading-progress bar · infinite scroll · live ticker (polling/SSE) · live blog · sticky share rail · skeleton loaders · toast notifications · PWA (offline last-read, install prompt) · push notifications for breaking news · keyboard shortcuts.
+### Phase 2 — Public site ✅
+Editor-configured homepage blocks · nested category pages · article detail with
+JSON-LD, share bar and reading controls · full-text search with filters · date
+archive · video and photo hubs · topic clusters · author pages · e-paper reader ·
+static pages · RSS, sitemap, Google News sitemap.
 
-### Phase 6 — SEO & performance
-`NewsArticle` JSON-LD · Open Graph + Twitter cards · XML sitemap + **Google News sitemap** · canonical/hreflang for BN/EN · responsive images WebP/AVIF + `srcset` · Redis/file cache for homepage blocks · queue for views/notifications · Lighthouse ≥ 90 · Core Web Vitals budget (LCP < 2.5s, CLS < 0.1).
+*Deviation:* article URLs canonicalise via 301 on stale slug, missing slug or
+wrong section — not in the original plan, but necessary once slugs became
+editable.
 
-### Phase 7 — Hardening & launch
-Rate limiting, CSRF/XSS/SQLi review, comment spam control, backups, error tracking, feature/browser tests, deploy runbook.
+### Phase 3 — Auth & reader features ✅
+Register · email verification · password reset · Google/Facebook OAuth ·
+login by email **or** phone (Bangla or ASCII digits) · profile with avatar ·
+bookmarks · reading history with resume position · threaded comments with
+moderation, likes and reporting · newsletter preferences · account deletion.
+
+*Deviation:* Socialite requires Guzzle ≤7, so Guzzle is pinned to 7.15.5 —
+a version Laravel 13 explicitly supports.
+
+### Phase 4 — Admin CMS ✅
+Dashboard (desk to-do list, publishing trend, top stories) · article editor with
+live slug and SEO preview · media library with a WebP derivative ladder ·
+comment moderation (single + bulk) · category tree · tags with merge · topic
+clusters · drag-and-drop front-page layout · users · ads · static pages ·
+settings.
+
+*Deviation:* e-paper upload and photo-gallery CRUD were in scope and are **not
+built** — the public-facing readers exist, but issues and galleries must be
+inserted by hand. Tracked in `STATUS.md`.
+
+### Phase 5 — Interactivity & polish ✅
+PWA (manifest, service worker, offline page, install prompt, update banner) ·
+live blog with polling timeline and key-points rail · toast notifications ·
+skeleton loaders · sticky share rail · keyboard shortcuts · back-to-top ·
+offline banner.
+
+*Deviation:* push notifications were in scope. The service worker has the
+handlers, but subscription storage, VAPID config and the sending side are **not
+built**. Either finish or strip — see `STATUS.md`.
+
+### Phase 6 — SEO & performance ⬜ *not started*
+`NewsArticle` JSON-LD, OG/Twitter cards, sitemaps and canonical URLs already
+shipped in Phase 2. What remains:
+
+- **Wire `srcset`/`sizes` through the card and hero components.** `ImageService`
+  already produces a 320/640/960/1600 WebP ladder and `Media::srcset()` exists;
+  templates still emit a single `src`. Largest available mobile win.
+- AVIF alongside WebP where the source justifies it
+- Lighthouse ≥ 90 on homepage and article, mobile profile
+- Core Web Vitals against the budget in §6 (LCP < 2.5s, CLS < 0.1)
+- Reduce the cold-homepage query count (~80 cold vs 15 warm)
+- `hreflang` once a second locale exists
+
+### Phase 7 — Hardening & launch ⬜ *not started*
+Test suite — only Laravel's stock `ExampleTest` stubs exist, and
+`php artisan test` currently fails because `phpunit.xml` targets SQLite
+`:memory:` while `pdo_sqlite` is not installed. All verification so far has been
+ad-hoc scripts · HTML sanitising for article bodies · purge demo data and logins ·
+real branding · rate-limit review · backups · error tracking · deploy runbook.
 
 ---
+
+### Laravel 13 defaults that changed the work
+
+Three framework defaults materially affected the build and are worth knowing
+before touching this code:
+
+1. **`cache.serializable_classes => false`** — no PHP classes may be
+   unserialized from cache at all. Every cached Eloquent payload needs an
+   explicit allow-list entry.
+2. **`Model::shouldBeStrict()`** — lazy loading and mass-assigning guarded
+   attributes both throw outside production.
+3. **PHP attributes for `#[Scope]`, `#[Fillable]`, `#[Hidden]`** — the newer
+   model conventions are used throughout.
 
 ## 6. Success Criteria
-- Lighthouse ≥ 90 on home + article, mobile
-- LCP < 2.5s, CLS < 0.1 with ads rendered
-- WCAG 2.1 AA
-- Reader can register, verify, log in, bookmark, comment, and see history — end to end
-- Editor can publish a story from admin to homepage in under 2 minutes
+
+| Criterion | Status |
+|---|---|
+| Reader can register, verify, log in, bookmark, comment, see history — end to end | **Met** — verified end to end |
+| Editor can publish a story from admin to homepage in under 2 minutes | **Met** — one request, front page updated |
+| Lighthouse ≥ 90 on home + article, mobile | **Not measured** — Phase 6 |
+| LCP < 2.5s, CLS < 0.1 with ads rendered | **Not measured** — ad slots are zero-CLS by construction; LCP unverified |
+| WCAG 2.1 AA | **Partial** — skip links, focus states, ARIA, reduced-motion and semantic landmarks are in; no audit run |
