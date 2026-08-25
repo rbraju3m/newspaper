@@ -29,7 +29,7 @@ class PhotoController extends Controller
         $gallery->increment('views');
 
         return view('site.photo-show', [
-            'gallery' => $gallery->load(['images', 'category']),
+            'gallery' => $gallery->load(['images.media:id,disk,path,conversions', 'category']),
             'more' => Gallery::published()
                 ->whereKeyNot($gallery->id)
                 ->withCount('images')

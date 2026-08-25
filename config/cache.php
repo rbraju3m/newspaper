@@ -163,6 +163,9 @@ return [
         App\Models\Gallery::class,
         App\Models\GalleryImage::class,
         App\Models\HomeBlock::class,
+        // Reaches the cache as Article->featuredImage: ArticleQuery::cards()
+        // eager-loads it and HomepageService caches the result.
+        App\Models\Media::class,
         App\Models\Poll::class,
         App\Models\PollOption::class,
         App\Models\Topic::class,

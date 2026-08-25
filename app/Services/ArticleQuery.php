@@ -17,7 +17,7 @@ class ArticleQuery
     public const CARD_COLUMNS = [
         'articles.id', 'articles.category_id', 'articles.author_id', 'articles.title',
         'articles.slug', 'articles.kicker', 'articles.excerpt', 'articles.type',
-        'articles.image', 'articles.video_url', 'articles.video_duration',
+        'articles.image_id', 'articles.image', 'articles.video_url', 'articles.video_duration',
         'articles.is_premium', 'articles.is_lead', 'articles.published_at',
         'articles.views', 'articles.comments_count', 'articles.reading_time',
         'articles.locale',
@@ -32,6 +32,9 @@ class ArticleQuery
             ->with([
                 'category:id,name,slug,path,color',
                 'author:id,name,slug,avatar,designation',
+                // Only the columns Media::srcset() and the CLS-reserving
+                // width/height need. `conversions` is the JSON ladder.
+                'featuredImage:id,disk,path,conversions,width,height',
             ]);
     }
 
@@ -50,7 +53,11 @@ class ArticleQuery
         $curated = $article->relatedArticles()
             ->select(self::CARD_COLUMNS)
             ->published()
-            ->with(['category:id,name,slug,path,color', 'author:id,name,slug,avatar'])
+            ->with([
+                'category:id,name,slug,path,color',
+                'author:id,name,slug,avatar',
+                'featuredImage:id,disk,path,conversions,width,height',
+            ])
             ->get();
 
         if ($curated->count() >= $limit) {

@@ -20,6 +20,10 @@ class ArticleController extends Controller
                 'tags:id,name,slug',
                 'topics:id,name,slug,color',
                 'gallery.images',
+                // Feeds the hero's srcset and its width/height. Without this
+                // the accessors return null under strict mode rather than
+                // lazy-loading, so the hero silently loses its ladder.
+                'featuredImage:id,disk,path,conversions,width,height',
             ])
             ->withCount(['comments' => fn ($q) => $q->where('status', 'approved')])
             ->find($article);

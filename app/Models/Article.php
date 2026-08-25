@@ -301,6 +301,45 @@ class Article extends Model
         ]));
     }
 
+    /**
+     * srcset for the lead image, or null when there is nothing to offer.
+     *
+     * Only the linked Media carries derivatives. The denormalised `image`
+     * column is a bare path — often an external URL or a legacy import — so it
+     * gets a plain `src` and no srcset. Returning null rather than a
+     * single-candidate srcset matters: a srcset listing one width tells the
+     * browser that is the only option, which is worse than omitting it.
+     */
+    protected function imageSrcset(): Attribute
+    {
+        return Attribute::get(function (): ?string {
+            // Lazy loading is disabled outside production, so never touch the
+            // relation unless a listing eager-loaded it. ArticleQuery::cards()
+            // does; an ad-hoc query may not.
+            if (! $this->relationLoaded('featuredImage') || ! $this->featuredImage) {
+                return null;
+            }
+
+            return $this->featuredImage->srcset() ?: null;
+        });
+    }
+
+    /**
+     * Intrinsic dimensions of the lead image, for reserving layout space.
+     *
+     * @return array{0:?int,1:?int}
+     */
+    protected function imageDimensions(): Attribute
+    {
+        return Attribute::get(function (): array {
+            if (! $this->relationLoaded('featuredImage') || ! $this->featuredImage) {
+                return [null, null];
+            }
+
+            return [$this->featuredImage->width, $this->featuredImage->height];
+        });
+    }
+
     protected function imageUrl(): Attribute
     {
         return Attribute::get(function (): ?string {

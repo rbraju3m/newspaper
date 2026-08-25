@@ -159,8 +159,21 @@
                     @if ($article->video_url)
                         <x-article.video-embed :url="$article->video_url" class="mt-5" />
                     @elseif ($article->image_url)
+                        @php([$heroW, $heroH] = $article->image_dimensions)
                         <figure class="mt-5">
+                            {{-- The hero is the LCP element on this page: eager,
+                                 high priority, and never lazy. width/height are
+                                 emitted when known so the browser reserves the
+                                 box before the bytes arrive — without them this
+                                 image is the page's main source of CLS. --}}
                             <img src="{{ $article->image_url }}" alt="{{ $article->image_caption }}"
+                                 @if ($article->image_srcset)
+                                     srcset="{{ $article->image_srcset }}"
+                                     sizes="(min-width: 1024px) 760px, 100vw"
+                                 @endif
+                                 @if ($heroW && $heroH)
+                                     width="{{ $heroW }}" height="{{ $heroH }}"
+                                 @endif
                                  fetchpriority="high" decoding="async"
                                  class="w-full rounded-lg bg-surface-2 object-cover">
                             @if ($article->image_caption || $article->image_credit)

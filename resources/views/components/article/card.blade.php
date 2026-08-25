@@ -68,9 +68,15 @@
         @if ($c['figure'] ?? null)
             <figure class="{{ $c['figure'] }}">
                 @if ($article->image_url)
+                    {{-- srcset only when the linked Media actually has a
+                         derivative ladder. `sizes` without `srcset` is inert,
+                         so both are emitted together or not at all. --}}
                     <img src="{{ $article->image_url }}"
                          alt=""
-                         sizes="{{ $c['sizes'] }}"
+                         @if ($article->image_srcset)
+                             srcset="{{ $article->image_srcset }}"
+                             sizes="{{ $c['sizes'] }}"
+                         @endif
                          loading="{{ $eager ? 'eager' : 'lazy' }}"
                          fetchpriority="{{ $eager ? 'high' : 'auto' }}"
                          decoding="async"

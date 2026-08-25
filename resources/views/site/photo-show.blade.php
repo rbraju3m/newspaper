@@ -35,7 +35,10 @@
                 <button type="button" @click="show({{ $i }})"
                         class="group relative block aspect-square overflow-hidden rounded-lg bg-surface-2">
                     <img src="{{ $image->url }}" alt="{{ $image->caption }}" loading="lazy"
-                         decoding="async" sizes="(min-width:1024px) 300px, 45vw"
+                         decoding="async"
+                         @if ($image->srcset)
+                             srcset="{{ $image->srcset }}" sizes="(min-width:1024px) 300px, 45vw"
+                         @endif
                          class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
                 </button>
             @endforeach

@@ -22,6 +22,18 @@ class GalleryImage extends Model
         return $this->belongsTo(Media::class);
     }
 
+    /** srcset from the linked media, or null when there is no ladder. */
+    protected function srcset(): Attribute
+    {
+        return Attribute::get(function (): ?string {
+            if (! $this->relationLoaded('media') || ! $this->media) {
+                return null;
+            }
+
+            return $this->media->srcset() ?: null;
+        });
+    }
+
     protected function url(): Attribute
     {
         return Attribute::get(fn (): string => str_starts_with($this->path, 'http')

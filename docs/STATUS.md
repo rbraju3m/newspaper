@@ -16,7 +16,7 @@
 | 3 | Auth & reader features — accounts, bookmarks, comments | **Done** |
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
-| 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Not started** |
+| 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — srcset wired, blocked on seed imagery |
 | 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — test harness fixed, no coverage yet |
 
 ### By the numbers
@@ -42,10 +42,9 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 These are ad-hoc scripts run during development, **not** a committed test
-suite. The committed suite is `tests/Feature/HarnessTest.php` only — four tests
-that verify the harness itself (right database, FULLTEXT index present,
-factories and model events firing, strict mode on). Building real coverage is
-Phase 7's first job.
+suite. The committed suite is 13 tests: `HarnessTest` (the harness itself) and
+`ResponsiveImageTest` (the srcset wiring). Broad coverage of routes, policies,
+search and moderation is still Phase 7's first job.
 
 ---
 
@@ -95,10 +94,12 @@ caches, update banner.
 
 ### Feature-incomplete
 
-6. **Images ship a single `src`.** `ImageService` already generates a
-   320/640/960/1600 WebP ladder and `Media::srcset()` exists, but templates do
-   not use them yet. This is the largest single mobile performance win
-   available and is the first item in Phase 6.
+6. **No images exist to serve.** `storage/app/public` is empty and the `media`
+   table has zero rows, so all 374 seeded articles point at `storage/seed/N.jpg`
+   paths that 404 — every image on the site is currently broken. The srcset
+   wiring is done and covered by tests, but cannot take effect until real
+   uploads (or generated seed imagery) exist. Fixing the seed data is the
+   prerequisite for any Lighthouse or LCP measurement.
 7. **Push notifications are half-present.** The service worker has `push` and
    `notificationclick` handlers, but there is no subscription storage, no VAPID
    configuration and no sending side. Either finish it (`minishlink/web-push`)
@@ -130,14 +131,17 @@ caches, update banner.
 
 In rough order of value:
 
-1. Wire `srcset`/`sizes` through `ArticleCard` and the article hero using the
-   existing WebP ladder. Biggest mobile win available.
-2. Serve AVIF alongside WebP where the source justifies it.
-3. Lighthouse pass on homepage and article, mobile profile. Target ≥ 90.
-4. Measure Core Web Vitals against the budget in `PLAN.md`
-   (LCP < 2.5s, CLS < 0.1).
-5. Reduce cold-homepage query count.
-6. `hreflang` + canonical review once a second locale exists.
+1. ~~Wire `srcset`/`sizes` through `ArticleCard` and the article hero.~~ **Done**
+   — also the gallery grid. Inert on current data: see gap 6.
+2. Generate or import real seed imagery so the ladder is exercised. Blocks
+   items 4 and 5 — there is nothing to measure without it.
+3. Serve AVIF alongside WebP where the source justifies it.
+4. Lighthouse pass on homepage and article, mobile profile. Target ≥ 90.
+5. Measure Core Web Vitals against the budget in `PLAN.md`
+   (LCP < 2.5s, CLS < 0.1). The article hero now emits `width`/`height`, which
+   removes its CLS contribution once images load.
+6. Reduce cold-homepage query count.
+7. `hreflang` + canonical review once a second locale exists.
 
 Then Phase 7: test suite, sanitising, backups, error tracking, deploy runbook.
 
