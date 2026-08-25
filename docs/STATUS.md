@@ -16,25 +16,26 @@
 | 3 | Auth & reader features — accounts, bookmarks, comments | **Done** |
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
-| 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — srcset wired, blocked on seed imagery |
+| 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — srcset wired and now live on real imagery |
 | 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — test harness fixed, no coverage yet |
 
 ### By the numbers
 
 | | |
 |---|---|
-| PHP files (app/database/routes/config) | 129 |
+| PHP files (app/database/routes/config) | 132 |
 | Models · Enums · Policies · Services | 23 · 5 · 3 · 4 |
 | Controllers | 44 |
 | Blade templates | 93 |
 | Routes (115 total, 52 admin) | 115 |
 | Database tables | 38 |
 | Seeded content | 55 categories · 374 articles · 107 comments · 36 users |
+| Seeded imagery | 60 media · 285 WebP derivatives · 50 MB on disk |
 | Bundle (gzipped) | 16.0 KB CSS · 23.3 KB JS |
 
 ### Verification currently passing
 
-- PHP lint clean across all 129 files; all JS parses
+- PHP lint clean across all 132 files; all JS parses
 - All 93 Blade templates compile; every `@include`/`<x-component>` resolves
 - 20/20 authorisation unit assertions (`CommentPolicy`, roles, OAuth gate)
 - All 23 models boot and every relationship instantiates
@@ -94,12 +95,19 @@ caches, update banner.
 
 ### Feature-incomplete
 
-6. **No images exist to serve.** `storage/app/public` is empty and the `media`
-   table has zero rows, so all 374 seeded articles point at `storage/seed/N.jpg`
-   paths that 404 — every image on the site is currently broken. The srcset
-   wiring is done and covered by tests, but cannot take effect until real
-   uploads (or generated seed imagery) exist. Fixing the seed data is the
-   prerequisite for any Lighthouse or LCP measurement.
+6. **Galleries and e-paper still have no imagery.** ~~No images exist to
+   serve.~~ `MediaSeeder` now draws a section-coloured plate library, runs it
+   through `ImageService`, and links all 374 articles, so the ladder renders
+   and Lighthouse is unblocked. What it does *not* cover: `galleries` and
+   `gallery_images` are still empty (so `/photo` renders an empty hub) and
+   `epapers` has no rows — both are blocked on their missing admin CRUD, gaps
+   8 and 9, not on imagery.
+
+   Two caveats on the generated plates. They are abstract compositions, not
+   photographs: fine for layout, byte-weight and CLS work, useless for judging
+   crops or focal points. And their lower rungs are lean — roughly 45 KB at
+   w960 against 60–90 KB for real photojournalism — so LCP measured on them
+   will read a little optimistic.
 7. **Push notifications are half-present.** The service worker has `push` and
    `notificationclick` handlers, but there is no subscription storage, no VAPID
    configuration and no sending side. Either finish it (`minishlink/web-push`)
@@ -132,16 +140,31 @@ caches, update banner.
 In rough order of value:
 
 1. ~~Wire `srcset`/`sizes` through `ArticleCard` and the article hero.~~ **Done**
-   — also the gallery grid. Inert on current data: see gap 6.
-2. Generate or import real seed imagery so the ladder is exercised. Blocks
-   items 4 and 5 — there is nothing to measure without it.
-3. Serve AVIF alongside WebP where the source justifies it.
+   — also the gallery grid. No longer inert: the homepage renders 39 responsive
+   images and the article hero its full four-rung ladder.
+2. ~~Generate or import real seed imagery so the ladder is exercised.~~
+   **Done** — `database/seeders/MediaSeeder.php`, drawn by
+   `Support/SeedImagery.php`. Idempotent: re-running relinks against the
+   existing library rather than redrawing (~90s cold, <1s warm).
+3. Serve AVIF alongside WebP where the source justifies it. **Blocked on the
+   box, not the code:** this PHP has no `imageavif()` and no Imagick, so
+   `ImageService` cannot write AVIF here at all. Needs a rebuilt GD or
+   `php-imagick` before the code is worth writing.
 4. Lighthouse pass on homepage and article, mobile profile. Target ≥ 90.
 5. Measure Core Web Vitals against the budget in `PLAN.md`
    (LCP < 2.5s, CLS < 0.1). The article hero now emits `width`/`height`, which
    removes its CLS contribution once images load.
 6. Reduce cold-homepage query count.
 7. `hreflang` + canonical review once a second locale exists.
+
+Two things the Lighthouse pass will surface that are decisions, not bugs:
+
+- **Author avatars are third-party.** `User::avatar_url` falls back to
+  `ui-avatars.com` for all 36 seeded users, so every author page and comment
+  thread makes external requests. Seeding local avatars would remove them.
+- **Seeded ads are inactive.** All six ship `is_active = 0`, so `Ad::live()`
+  returns none and every slot renders its placeholder. The creatives now
+  exist; flip the flag if the pass should measure filled slots.
 
 Then Phase 7: test suite, sanitising, backups, error tracking, deploy runbook.
 

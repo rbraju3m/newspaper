@@ -65,8 +65,10 @@ class ResponsiveImageTest extends TestCase
 
     public function test_article_exposes_no_srcset_without_a_linked_media(): void
     {
-        // Every seeded article is in this state: a denormalised `image` path
-        // and no media row.
+        // The state an imported or hand-entered article is left in: a
+        // denormalised `image` path and no media row. MediaSeeder no longer
+        // leaves the demo database this way, but the factory default still
+        // does, and the accessor has to cope.
         $article = $this->publishedArticleWithImage();
 
         $this->assertNull($article->image_srcset);
