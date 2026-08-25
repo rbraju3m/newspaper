@@ -160,13 +160,21 @@ class SiteSeeder extends Seeder
         }
     }
 
-    /** Inactive placeholders so every slot is visible in the admin ads screen. */
+    /**
+     * A house ad in every slot, live.
+     *
+     * These were seeded inactive because there was no creative to show — the
+     * point was only to make each slot visible in the admin ads screen.
+     * MediaSeeder now fills `asset`, and leaving them switched off meant the
+     * CLS-with-ads criterion in PLAN.md could never be reproduced from a fresh
+     * seed: every slot would measure as an empty reserved box.
+     */
     private function adPlaceholders(): void
     {
         foreach (array_keys(config('site.ad_slots')) as $position) {
             Ad::firstOrCreate(
                 ['position' => $position, 'title' => 'ডেমো বিজ্ঞাপন — '.$position],
-                ['type' => 'image', 'is_active' => false],
+                ['type' => 'image', 'is_active' => true],
             );
         }
     }

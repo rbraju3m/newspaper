@@ -278,6 +278,6 @@ before touching this code:
 |---|---|
 | Reader can register, verify, log in, bookmark, comment, see history — end to end | **Met** — verified end to end |
 | Editor can publish a story from admin to homepage in under 2 minutes | **Met** — one request, front page updated |
-| Lighthouse ≥ 90 on home + article, mobile | **Not measured** — Phase 6 |
-| LCP < 2.5s, CLS < 0.1 with ads rendered | **Not measured** — ad slots are zero-CLS by construction; LCP unverified |
-| WCAG 2.1 AA | **Partial** — skip links, focus states, ARIA, reduced-motion and semantic landmarks are in; no audit run |
+| Lighthouse ≥ 90 on home + article, mobile | **Met** — 98 home / 99 article with ads live, mobile profile, median of repeated runs |
+| LCP < 2.5s, CLS < 0.1 with ads rendered | **Met** — LCP 1.8–2.2s. With every slot's creative loaded (verified by scrolling the page until the lazy images arrive, not by Lighthouse alone) both pages record zero layout-shift entries; harness validated against a control that registers 0.2673 |
+| WCAG 2.1 AA | **Partial** — Lighthouse a11y 92 home / 96 article. Three real failures found: `text-muted` on `bg-surface-2` is 4.34:1 against a 4.5:1 requirement, opinion-block links are 16–22px tall against a 24px minimum, and the article's font-size buttons have `aria-label`s that do not contain their visible text |

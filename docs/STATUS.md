@@ -16,7 +16,7 @@
 | 3 | Auth & reader features — accounts, bookmarks, comments | **Done** |
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
-| 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — srcset wired and now live on real imagery |
+| 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
 | 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — test harness fixed, no coverage yet |
 
 ### By the numbers
@@ -150,10 +150,11 @@ In rough order of value:
    box, not the code:** this PHP has no `imageavif()` and no Imagick, so
    `ImageService` cannot write AVIF here at all. Needs a rebuilt GD or
    `php-imagick` before the code is worth writing.
-4. Lighthouse pass on homepage and article, mobile profile. Target ≥ 90.
-5. Measure Core Web Vitals against the budget in `PLAN.md`
-   (LCP < 2.5s, CLS < 0.1). The article hero now emits `width`/`height`, which
-   removes its CLS contribution once images load.
+4. ~~Lighthouse pass on homepage and article, mobile profile. Target ≥ 90.~~
+   **Done** — see below.
+5. ~~Measure Core Web Vitals against the budget in `PLAN.md`
+   (LCP < 2.5s, CLS < 0.1).~~ **Done** — LCP 1.8–2.2s, CLS 0.000 on every run.
+   The `width`/`height` on the article hero did what it was added for.
 6. Reduce cold-homepage query count.
 7. `hreflang` + canonical review once a second locale exists.
 
@@ -167,6 +168,85 @@ Two things the Lighthouse pass will surface that are decisions, not bugs:
   exist; flip the flag if the pass should measure filled slots.
 
 Then Phase 7: test suite, sanitising, backups, error tracking, deploy runbook.
+
+---
+
+## Lighthouse, 25 August 2026
+
+Mobile profile, Lighthouse 12, simulated throttling. Medians of repeated runs.
+
+Ads are live in every slot (`is_active = 1`, creatives from `MediaSeeder`).
+
+| | Perf | A11y | Best Practices | SEO | LCP | CLS | TBT |
+|---|---|---|---|---|---|---|---|
+| Homepage | **98** | 92 | 100 | 100 | 2.1 s | 0.000 | 72 ms |
+| Article | **99** | 96 | 100 | 100 | 2.0 s | 0.000 | 36 ms |
+
+Both clear the ≥ 90 target and the CWV budget. Turning the ads on cost nothing
+measurable — one point on the homepage, one gained on the article, inside run
+variance.
+
+### CLS with ads, measured properly
+
+Lighthouse's 0.000 was not enough to call the ad slots proven. It does not
+scroll, and the creatives are `loading="lazy"`, so only 1 of 3 homepage slots
+ever loaded during a run — the other two were still empty boxes when CLS was
+recorded. A separate Puppeteer harness loads each page, walks it in
+viewport-sized steps until every lazy creative has arrived, and attributes each
+`layout-shift` entry to the element that moved.
+
+With all three slots loaded on both pages: **zero layout-shift entries.** Not a
+small CLS — no shift events at all.
+
+That number is only worth reporting because the harness was checked against a
+control: injecting a 220px block at the top of the document while the viewport
+is at the top registers 0.2673. The first version of the control injected after
+scrolling to the bottom, where a top-of-page insert moves nothing on screen, and
+so reported a false 0.0000 — a broken instrument reads exactly like a page with
+no shift.
+
+**Measure against a server that compresses, or the number is meaningless.** The
+first run scored 83, and the entire gap was `Content-Encoding`. PHP's built-in
+server sends none, and uncompressed the homepage document is 276 KB and the
+built CSS 83 KB — Lighthouse charged ~1.6s for "enable text compression" and
+LCP came out at 3.8s instead of 1.9s. Nothing about the application changed
+between the two runs. The vhost in `docs/newspaper.local.conf` now carries the
+`mod_deflate` and cache-header blocks; to reproduce without installing it, put
+a router in front of the dev server that gzips text responses and run PHP with
+`-d zlib.output_compression=1`.
+
+Worth knowing about the run itself: it used the built assets with `APP_DEBUG=false`
+and warm caches, but `APP_ENV` stayed `local`, so `Model::shouldBeStrict()` was
+still active. `APP_ENV=production` would have been more representative and is
+*not* usable here — `AppServiceProvider` calls `URL::forceScheme('https')` in
+production, which breaks a plain-HTTP dev server.
+
+### What it found
+
+Nothing performance-related in the application, and three real accessibility
+defects:
+
+1. **`text-muted` on `bg-surface-2` is 4.34:1**, against the 4.5:1 that 13px
+   text requires. `#6b7280` on `#f1f3f5`. Both pages; it is a token pairing,
+   so it is wherever that combination appears.
+2. **Opinion-block links are 16–22px tall**, against a 24px minimum tap target.
+   Homepage.
+3. **The article's font-size buttons fail WCAG 2.5.3** — `aria-label="ফন্ট বড়
+   করুন"` does not contain the visible label, so speech control cannot address
+   the button by what it says.
+
+Two smaller diagnostics. The homepage ships 1,329 DOM elements. And the article
+hero was flagged for 26 KB of oversize, which turns out **not** to be a `sizes`
+defect: Lighthouse emulates 412 CSS px at DPR 1.75, so the hero needs 721 device
+px, and with rungs at 640 and 960 the browser correctly took 960 rather than
+upscale a 640. The ladder's spacing is the cause, not its wiring — a `w768` rung
+in `ImageService::WIDTHS` would close most of the gap. Worth doing alongside
+AVIF, since both are changes to the same ladder.
+
+`SiteSeeder` now creates the house ads active rather than inactive. They were
+switched off because there was no creative to show; `MediaSeeder` fills `asset`,
+and leaving them off meant a fresh seed could not reproduce the CLS-with-ads
+result recorded in `PLAN.md`.
 
 ---
 
