@@ -179,12 +179,19 @@ Ads are live in every slot (`is_active = 1`, creatives from `MediaSeeder`).
 
 | | Perf | A11y | Best Practices | SEO | LCP | CLS | TBT |
 |---|---|---|---|---|---|---|---|
-| Homepage | **98** | 92 | 100 | 100 | 2.1 s | 0.000 | 72 ms |
-| Article | **99** | 96 | 100 | 100 | 2.0 s | 0.000 | 36 ms |
+| Homepage | 95–99 | **100** | 100 | 100 | 2.1 s | 0.000 | 40–200 ms |
+| Article | 95–99 | **100** | 100 | 100 | 2.0 s | 0.000 | 40–210 ms |
+
+Performance is quoted as a range because this box is a working desktop:
+PhpStorm, Chrome and Brave keep the load average near 4 on 8 cores, and TBT
+swings between 40 ms and 210 ms across byte-identical runs. Before and after the
+accessibility fixes the payload was the same 223 KB over 15 requests, so treat
+the spread as machine noise and re-measure on an idle machine before quoting a
+single number.
 
 Both clear the ≥ 90 target and the CWV budget. Turning the ads on cost nothing
-measurable — one point on the homepage, one gained on the article, inside run
-variance.
+measurable, and neither did the accessibility fixes — the built CSS grew 0.1 KB
+gzipped and the request count did not change.
 
 ### CLS with ads, measured properly
 
@@ -221,19 +228,28 @@ still active. `APP_ENV=production` would have been more representative and is
 *not* usable here — `AppServiceProvider` calls `URL::forceScheme('https')` in
 production, which breaks a plain-HTTP dev server.
 
-### What it found
+### What it found, and what was done
 
 Nothing performance-related in the application, and three real accessibility
-defects:
+defects. All three are fixed; a11y is 100 on both pages.
 
-1. **`text-muted` on `bg-surface-2` is 4.34:1**, against the 4.5:1 that 13px
-   text requires. `#6b7280` on `#f1f3f5`. Both pages; it is a token pairing,
-   so it is wherever that combination appears.
-2. **Opinion-block links are 16–22px tall**, against a 24px minimum tap target.
-   Homepage.
-3. **The article's font-size buttons fail WCAG 2.5.3** — `aria-label="ফন্ট বড়
-   করুন"` does not contain the visible label, so speech control cannot address
-   the button by what it says.
+1. **`text-muted` on `bg-surface-2` was 4.34:1**, against the 4.5:1 that 13px
+   text requires. A token pairing, so it failed wherever that combination
+   appeared, not in one component. `--color-muted` moves from `#6B7280` to
+   `#616874`, which lands at 5.05:1 on `surface-2`, 5.28 on `canvas` and 5.61
+   on `surface`. A full matrix of every semantic foreground against every
+   semantic background was checked in both themes: this was the only failing
+   pair, and `muted` on `canvas` was next closest at 4.55. Dark mode passed
+   throughout and is unchanged.
+2. **Opinion-block links were 16–22px tall**, against a 24px minimum tap
+   target. `opinion-row` now pads both links and pulls the space back with a
+   negative margin, so the targets measure 30px and 28px while the card keeps
+   its shape.
+3. **The article's font-size buttons failed WCAG 2.5.3** — `aria-label="ফন্ট বড়
+   করুন"` did not contain the visible `অ+`, so speech control could not address
+   the button by what it says. The labels now lead with the visible glyph. The
+   same control on the account preferences screen had no label at all and got
+   the same treatment.
 
 Two smaller diagnostics. The homepage ships 1,329 DOM elements. And the article
 hero was flagged for 26 KB of oversize, which turns out **not** to be a `sizes`

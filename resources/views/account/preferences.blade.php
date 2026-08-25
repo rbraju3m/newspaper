@@ -98,13 +98,15 @@
                         <button type="button" @click="$store.reader.smaller()"
                                 :disabled="!$store.reader.canShrink"
                                 class="rounded-lg border border-line px-3 py-2 text-sm font-bold
-                                       text-body hover:border-brand disabled:opacity-40">অ−</button>
+                                       text-body hover:border-brand disabled:opacity-40"
+                                aria-label="অ− ফন্ট ছোট করুন">অ−</button>
                         <span class="lat min-w-10 text-center text-sm text-muted"
                               x-text="$store.reader.fontSize.toUpperCase()"></span>
                         <button type="button" @click="$store.reader.bigger()"
                                 :disabled="!$store.reader.canGrow"
                                 class="rounded-lg border border-line px-3 py-2 text-base font-bold
-                                       text-body hover:border-brand disabled:opacity-40">অ+</button>
+                                       text-body hover:border-brand disabled:opacity-40"
+                                aria-label="অ+ ফন্ট বড় করুন">অ+</button>
                         <button type="button" @click="$store.reader.reset()"
                                 class="ms-2 text-sm text-muted underline hover:text-brand">রিসেট</button>
                     </div>

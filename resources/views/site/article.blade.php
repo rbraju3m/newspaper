@@ -135,12 +135,12 @@
                                         :disabled="!$store.reader.canShrink"
                                         class="rounded-md border border-line px-2 py-1 text-xs font-bold
                                                text-body hover:border-brand hover:text-brand disabled:opacity-40"
-                                        aria-label="ফন্ট ছোট করুন">অ−</button>
+                                        aria-label="অ− ফন্ট ছোট করুন">অ−</button>
                                 <button type="button" @click="$store.reader.bigger()"
                                         :disabled="!$store.reader.canGrow"
                                         class="rounded-md border border-line px-2 py-1 text-sm font-bold
                                                text-body hover:border-brand hover:text-brand disabled:opacity-40"
-                                        aria-label="ফন্ট বড় করুন">অ+</button>
+                                        aria-label="অ+ ফন্ট বড় করুন">অ+</button>
 
                                 <button type="button"
                                         @click="$store.reader.toggleBookmark({{ $article->id }}, '{{ route('account.bookmarks.toggle', $article) }}')"
