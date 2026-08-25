@@ -30,6 +30,10 @@ order. Verify ordering by matching a `Request` against the route collection.
 - **No mass-assigning guarded attributes.** `email_verified_at`,
   `moderated_by`, `moderated_at`, every `*_count` — use `forceFill()` or a
   query-builder `update()`.
+- **No reading attributes a model never loaded.** This bites tests rather than
+  requests: `User::factory()->create()` returns a model holding only the
+  attributes the factory set, so `avatar_url` throws where a user hydrated from
+  the row returns null. `->fresh()` anything you hand to `actingAs()`.
 
 Before adding a `create()`/`update()`/`fill()` call, check the model's
 `$fillable`. This bug class appeared five times.

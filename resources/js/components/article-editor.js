@@ -17,6 +17,12 @@ Alpine.data('articleEditor', (config) => ({
     tagDraft: '',
 
     image: config.image ?? null,
+    // The media row behind `image`. Both have to travel together: `image`
+    // feeds the plain src and `image_id` feeds the srcset, so posting one
+    // without the other leaves the article serving the old picture's
+    // derivative ladder while claiming the new one's src — and a browser
+    // given both attributes reads srcset and ignores src.
+    imageId: config.imageId ?? null,
     imageUrl: config.imageUrl ?? null,
     uploading: false,
     uploadError: '',
@@ -39,6 +45,7 @@ Alpine.data('articleEditor', (config) => ({
 
     clearImage() {
         this.image = null;
+        this.imageId = null;
         this.imageUrl = null;
     },
 
@@ -76,6 +83,7 @@ Alpine.data('articleEditor', (config) => ({
 
             // Store the relative path (what the model persists), preview the URL.
             this.image = data.path;
+            this.imageId = data.id ?? null;
             this.imageUrl = data.card ?? data.url;
         } catch {
             this.uploadError = 'আপলোড করা যায়নি, আবার চেষ্টা করুন।';

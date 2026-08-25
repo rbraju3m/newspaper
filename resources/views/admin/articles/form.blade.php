@@ -8,6 +8,7 @@
       x-data="articleEditor({{ Js::from([
           'title' => old('title', $article->title),
           'image' => old('image', $article->image),
+          'imageId' => old('image_id', $article->image_id),
           'imageUrl' => $article->image_url,
           'tags' => old('tags', $article->exists ? $article->tags->pluck('name')->all() : []),
           'mediaEndpoint' => route('admin.media.index'),
@@ -322,6 +323,7 @@
                 <h2 class="font-headline text-base font-bold text-ink">প্রধান ছবি</h2>
 
                 <input type="hidden" name="image" :value="image">
+                <input type="hidden" name="image_id" :value="imageId">
 
                 <div class="mt-3">
                     <template x-if="imageUrl">
