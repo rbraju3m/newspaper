@@ -11,6 +11,7 @@ use App\Models\Media;
 use App\Models\User;
 use App\Services\ArticleQuery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -115,6 +116,107 @@ class ArticleImageSyncTest extends TestCase
 
         $this->assertNull($card->image_url);
         $this->assertNull($card->image_srcset);
+    }
+
+    public function test_changing_the_image_deletes_the_old_one(): void
+    {
+        Storage::fake('public');
+
+        $old = Media::factory()->create(['disk' => 'public', 'path' => 'uploads/x/old.jpg']);
+        $new = Media::factory()->create(['disk' => 'public', 'path' => 'uploads/x/new.jpg']);
+
+        Storage::disk('public')->put('uploads/x/old.jpg', 'original');
+        Storage::disk('public')->put($old->conversions['w768'], 'derivative');
+
+        $article = Article::factory()->create([
+            'category_id' => Category::factory(),
+            'image_id' => $old->id,
+            'image' => $old->path,
+        ]);
+
+        $this->actingAs($this->editor())
+            ->put(route('admin.articles.update', $article), $this->payloadFor($article, [
+                'image' => $new->path,
+                'image_id' => $new->id,
+            ]))
+            ->assertRedirect();
+
+        // Row, original and derivatives all go: otherwise every image change an
+        // editor makes leaks six files and a row nothing will point at again.
+        $this->assertDatabaseMissing('media', ['id' => $old->id]);
+        Storage::disk('public')->assertMissing('uploads/x/old.jpg');
+        Storage::disk('public')->assertMissing($old->conversions['w768']);
+    }
+
+    public function test_changing_the_image_keeps_a_file_another_article_shares(): void
+    {
+        Storage::fake('public');
+
+        $shared = Media::factory()->create(['disk' => 'public', 'path' => 'uploads/x/shared.jpg']);
+        $new = Media::factory()->create(['disk' => 'public', 'path' => 'uploads/x/new.jpg']);
+
+        Storage::disk('public')->put('uploads/x/shared.jpg', 'original');
+
+        $article = Article::factory()->create([
+            'category_id' => Category::factory(),
+            'image_id' => $shared->id,
+            'image' => $shared->path,
+        ]);
+
+        // image_id is nullOnDelete, so reaping the row here would silently
+        // blank this second article's lead image.
+        $other = Article::factory()->create([
+            'category_id' => Category::factory(),
+            'image_id' => $shared->id,
+            'image' => $shared->path,
+        ]);
+
+        $this->actingAs($this->editor())
+            ->put(route('admin.articles.update', $article), $this->payloadFor($article, [
+                'image' => $new->path,
+                'image_id' => $new->id,
+            ]))
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('media', ['id' => $shared->id]);
+        Storage::disk('public')->assertExists('uploads/x/shared.jpg');
+        $this->assertSame($shared->id, $other->fresh()->image_id);
+    }
+
+    public function test_a_soft_deleted_article_still_protects_its_image(): void
+    {
+        Storage::fake('public');
+
+        $shared = Media::factory()->create(['disk' => 'public', 'path' => 'uploads/x/shared.jpg']);
+        $new = Media::factory()->create(['disk' => 'public', 'path' => 'uploads/x/new.jpg']);
+
+        Storage::disk('public')->put('uploads/x/shared.jpg', 'original');
+
+        $article = Article::factory()->create([
+            'category_id' => Category::factory(),
+            'image_id' => $shared->id,
+            'image' => $shared->path,
+        ]);
+
+        // Trashed, not gone. Restoring it after the file was reaped would leave
+        // it pointing at nothing, which is why the reference check runs on the
+        // query builder rather than through Eloquent's scopes.
+        $trashed = Article::factory()->create([
+            'category_id' => Category::factory(),
+            'image_id' => $shared->id,
+            'image' => $shared->path,
+        ]);
+        $trashed->delete();
+
+        $this->actingAs($this->editor())
+            ->put(route('admin.articles.update', $article), $this->payloadFor($article, [
+                'image' => $new->path,
+                'image_id' => $new->id,
+            ]))
+            ->assertRedirect();
+
+        Storage::disk('public')->assertExists('uploads/x/shared.jpg');
+        $this->assertDatabaseHas('media', ['id' => $shared->id]);
     }
 
     public function test_the_editor_form_posts_the_media_id(): void

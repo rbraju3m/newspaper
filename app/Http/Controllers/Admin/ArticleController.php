@@ -12,6 +12,7 @@ use App\Models\Tag;
 use App\Models\Topic;
 use App\Models\User;
 use App\Services\HomepageService;
+use App\Services\ImageService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -88,14 +89,23 @@ class ArticleController extends Controller
         return view('admin.articles.form', $this->formData($article));
     }
 
-    public function update(ArticleRequest $request, Article $article): RedirectResponse
+    public function update(ArticleRequest $request, Article $article, ImageService $images): RedirectResponse
     {
         Gate::authorize('update', $article);
+
+        $previousImage = $article->image;
 
         DB::transaction(function () use ($request, $article) {
             $article->update($this->payload($request, $article));
             $this->syncRelations($article, $request);
         });
+
+        // After the write, so the article's own old value is gone and does not
+        // read as a reference to itself. release() keeps the file if anything
+        // else still points at it.
+        if ($article->image !== $previousImage) {
+            $images->release($previousImage);
+        }
 
         HomepageService::flush();
 

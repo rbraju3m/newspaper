@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Media;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -205,6 +206,88 @@ class ImageService
         $info = @getimagesize($path);
 
         return [$info[0] ?? null, $info[1] ?? null];
+    }
+
+    /**
+     * Everything that can hold a reference to a stored file.
+     *
+     * Two columns point at `media` by id; the rest keep a bare path, because
+     * most of these modules predate the media library. A file is only safe to
+     * delete once none of them mention it.
+     *
+     * @var array<string, list<string>>
+     */
+    private const PATH_REFERENCES = [
+        'articles' => ['image'],
+        'topics' => ['image'],
+        'live_entries' => ['image'],
+        'galleries' => ['cover'],
+        'gallery_images' => ['path'],
+        'epapers' => ['pdf', 'cover'],
+        'epaper_pages' => ['image', 'pdf'],
+        'ads' => ['asset'],
+        'users' => ['avatar'],
+    ];
+
+    /**
+     * Drops a file that nothing points at any more, media row and all.
+     *
+     * Call it *after* the owning row has been updated, so the caller's own old
+     * value is already gone and does not count as a reference to itself.
+     *
+     * Reference counted rather than unconditional: `articles.image_id` and
+     * `gallery_images.media_id` are `nullOnDelete`, so deleting a media row two
+     * articles share would silently blank the other one's lead image. The same
+     * file can also be reached by path from nine more columns.
+     *
+     * Returns whether anything was removed.
+     */
+    public function release(?string $path): bool
+    {
+        // An external URL is not ours, and neither is an empty column.
+        if (! $path || str_starts_with($path, 'http')) {
+            return false;
+        }
+
+        $media = Media::query()->where('path', $path)->first();
+
+        if ($this->isReferenced($path, $media?->id)) {
+            return false;
+        }
+
+        if ($media) {
+            $this->delete($media);
+
+            return true;
+        }
+
+        // Untracked: a legacy upload that never went through this service. The
+        // file is still ours to remove, there is just no row or ladder with it.
+        return Storage::disk('public')->delete($path);
+    }
+
+    /** Whether any row anywhere still points at this file. */
+    private function isReferenced(string $path, ?int $mediaId): bool
+    {
+        // Deliberately the query builder, not Eloquent: soft-deleted articles
+        // still reference their image, and restoring one whose media had been
+        // reaped would leave it with a dead path.
+        if ($mediaId && (
+            DB::table('articles')->where('image_id', $mediaId)->exists()
+            || DB::table('gallery_images')->where('media_id', $mediaId)->exists()
+        )) {
+            return true;
+        }
+
+        foreach (self::PATH_REFERENCES as $table => $columns) {
+            foreach ($columns as $column) {
+                if (DB::table($table)->where($column, $path)->exists()) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /** Removes the original and every derivative. */

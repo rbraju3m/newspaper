@@ -43,10 +43,11 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 These are ad-hoc scripts run during development, **not** a committed test
-suite. The committed suite is 20 tests: `HarnessTest` (the harness itself),
-`ResponsiveImageTest` (the srcset wiring) and `MediaBackfillTest` (the ladder
-backfill). Broad coverage of routes, policies, search and moderation is still
-Phase 7's first job.
+suite. The committed suite is 27 tests: `HarnessTest` (the harness itself),
+`ResponsiveImageTest` (the srcset wiring), `MediaBackfillTest` (the ladder
+backfill), `ArticleImageSyncTest` (`image` and `image_id` moving together) and
+`AdAssetTest` (who owns an ad creative's file). Broad coverage of routes,
+policies, search and moderation is still Phase 7's first job.
 
 ---
 
@@ -74,6 +75,33 @@ and backs off on failure.
 
 **PWA** — installable, offline fallback, network-first navigations, bounded
 caches, update banner.
+
+---
+
+## Replaced images are reaped
+
+Changing an article's lead image or an ad's creative deletes the old one — media
+row, original and every derivative — through `ImageService::release()`. Without
+it each edit leaked six files and a row nothing would ever point at again.
+
+It is reference counted, not unconditional, and that is not caution: two columns
+point at `media` by id (`articles.image_id`, `gallery_images.media_id`) and both
+are `nullOnDelete`, so reaping a row two articles share would silently blank the
+other one's lead image. Nine further columns reach the same file by bare path —
+`topics.image`, `live_entries.image`, `galleries.cover`, `gallery_images.path`,
+`epapers.pdf`/`cover`, `epaper_pages.image`/`pdf`, `ads.asset`, `users.avatar` —
+because most of those modules predate the media library.
+
+Two details worth keeping:
+
+- `release()` runs **after** the owning row is written, so the caller's own old
+  value is already gone and does not read as a reference to itself.
+- The reference check uses the query builder, not Eloquent. A soft-deleted
+  article still references its image, and restoring one whose media had been
+  reaped would leave it pointing at nothing.
+
+`MediaSeeder` is unaffected: it relinks with query-builder updates rather than
+going through the controller, so a re-seed never reaps.
 
 ---
 
@@ -129,22 +157,17 @@ caches, update banner.
 13. Scheduled articles need a cron entry (`status=scheduled` past its
     `published_at` is counted on the dashboard but never auto-publishes).
 14. Ad impressions are never incremented — only clicks are.
-15. **Ad creatives bypass the image pipeline, and deleting one orphans a
-    `Media` row.** `AdController` stores uploads with
-    `$file->store('ads', 'public')` — no `Media` row, no derivative ladder, no
-    resizing — so a creative uploaded through the admin is served at whatever
-    dimensions it arrived in. One uploaded during the Phase 6 work is the only
-    remaining "properly size images" offender on the article page, at 57 KB for
-    a 728x90 slot.
+15. **Ad creatives are tracked now, but still served at full size.**
+    ~~`AdController` stores uploads with `$file->store('ads', 'public')`~~ —
+    uploads go through `ImageService` and get a `Media` row and a ladder.
 
-    The worse half: on replacement it runs
-    `Storage::disk('public')->delete($ad->asset)` against the raw path, without
-    asking whether a `Media` row owns it. `MediaSeeder` points ad assets at
-    media-managed paths, so that upload deleted the original behind media row
-    55, left its three derivatives on disk and the row pointing at nothing.
-    `php artisan media:backfill` reports it. `ImageService::delete()` exists to
-    remove an original, its derivatives and the row together — `AdController`
-    should either use it or refuse to delete a path a `Media` row claims.
+    What is left: `<x-ui.ad-slot>` renders `asset_url`, which is the original,
+    so a creative is still served at whatever size it was uploaded at even
+    though the derivatives now exist. Using them needs the slot to reach the
+    media row — `ads` has no `media_id`, only a path string. One legacy creative
+    from before the fix is still untracked at `ads/qSLsw9…jpg`, 57 KB in a
+    728x90 slot; re-uploading it through the admin now routes it correctly.
+
 16. `ArticleQuery::related()` runs a correlated `EXISTS` subquery for topic
     matching; fine at this size, worth watching as content grows.
 17. Cold homepage is ~1.4s / 80 queries; warm is ~340ms / 15. The cold path

@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Ad;
+use App\Models\Media;
 use App\Services\AdService;
+use App\Services\ImageService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -23,41 +25,51 @@ class AdController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, ImageService $images): RedirectResponse
     {
         Gate::authorize('manage-site');
 
-        Ad::create($this->validated($request));
+        Ad::create($this->validated($request, $images));
         AdService::flush();
 
         return back()->with('status', 'বিজ্ঞাপন যুক্ত হয়েছে।');
     }
 
-    public function update(Request $request, Ad $ad): RedirectResponse
+    public function update(Request $request, Ad $ad, ImageService $images): RedirectResponse
     {
         Gate::authorize('manage-site');
 
-        $ad->update($this->validated($request, $ad));
+        $previousAsset = $ad->asset;
+
+        $ad->update($this->validated($request, $images, $ad));
+
+        // After the write, so the ad's own old asset is gone and does not read
+        // as a reference to itself. release() keeps the file if any other row
+        // still points at it.
+        if ($ad->asset !== $previousAsset) {
+            $images->release($previousAsset);
+        }
+
         AdService::flush();
 
         return back()->with('status', 'বিজ্ঞাপন হালনাগাদ হয়েছে।');
     }
 
-    public function destroy(Ad $ad): RedirectResponse
+    public function destroy(Ad $ad, ImageService $images): RedirectResponse
     {
         Gate::authorize('manage-site');
 
-        if ($ad->asset && ! str_starts_with($ad->asset, 'http')) {
-            Storage::disk('public')->delete($ad->asset);
-        }
-
         $ad->delete();
+
+        // After the delete, so the ad's own asset no longer counts as a
+        // reference to itself.
+        $images->release($ad->asset);
         AdService::flush();
 
         return back()->with('status', 'বিজ্ঞাপন মুছে ফেলা হয়েছে।');
     }
 
-    private function validated(Request $request, ?Ad $ad = null): array
+    private function validated(Request $request, ImageService $images, ?Ad $ad = null): array
     {
         $data = $request->validate([
             'title' => ['required', 'string', 'max:150'],
@@ -74,11 +86,13 @@ class AdController extends Controller
         ]);
 
         if ($file = $request->file('file')) {
-            if ($ad?->asset && ! str_starts_with($ad->asset, 'http')) {
-                Storage::disk('public')->delete($ad->asset);
-            }
-
-            $data['asset'] = $file->store('ads', 'public');
+            // Through the media library rather than straight to disk. A
+            // creative stored with $file->store('ads', 'public') had no Media
+            // row at all: nothing tracked it, nothing could re-derive it, and
+            // media:backfill could not see it.
+            $data['asset'] = $images->store($file, $request->user()?->id, [
+                'alt' => $data['title'],
+            ])->path;
         }
 
         unset($data['file']);
