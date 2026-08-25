@@ -91,6 +91,31 @@ class ImageService
     }
 
     /**
+     * Whether a stored row already carries everything this service would
+     * produce for it today.
+     *
+     * The one place that decides "is this ladder current" — the seeder's
+     * self-heal and the backfill command both ask here, so a WIDTHS change
+     * cannot leave the two disagreeing about what needs rebuilding.
+     *
+     * A row this service would never convert (an SVG, a PDF) counts as current:
+     * there is no ladder to be behind on.
+     */
+    public function hasCurrentLadder(Media $media): bool
+    {
+        if (! $this->isConvertible($media->mime)) {
+            return true;
+        }
+
+        $have = array_keys($media->conversions ?? []);
+
+        // `thumb` is not a rendering width, so rungsFor() omits it, but every
+        // convertible source earns one and the admin grid falls back to the
+        // full-size original without it.
+        return ! array_diff([...$this->rungsFor($media->width), 'thumb'], $have);
+    }
+
+    /**
      * The rung keys this service would produce for a source of the given width.
      *
      * Lets a caller tell a media row whose ladder predates a WIDTHS change from
@@ -109,7 +134,8 @@ class ImageService
         ));
     }
 
-    private function isConvertible(?string $mime): bool
+    /** Whether this service can derive a ladder from the given mime type. */
+    public function isConvertible(?string $mime): bool
     {
         return in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true)
             && function_exists('imagecreatefromstring');

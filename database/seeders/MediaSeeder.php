@@ -128,9 +128,7 @@ class MediaSeeder extends Seeder
             return null;
         }
 
-        $missing = array_diff($service->rungsFor($media->width), array_keys($media->conversions ?? []));
-
-        return $missing ? $service->regenerate($media) : $media;
+        return $service->hasCurrentLadder($media) ? $media : $service->regenerate($media);
     }
 
     /**

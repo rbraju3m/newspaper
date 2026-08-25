@@ -23,7 +23,7 @@
 
 | | |
 |---|---|
-| PHP files (app/database/routes/config) | 132 |
+| PHP files (app/database/routes/config) | 133 |
 | Models · Enums · Policies · Services | 23 · 5 · 3 · 4 |
 | Controllers | 44 |
 | Blade templates | 93 |
@@ -35,7 +35,7 @@
 
 ### Verification currently passing
 
-- PHP lint clean across all 132 files; all JS parses
+- PHP lint clean across all 133 files; all JS parses
 - All 93 Blade templates compile; every `@include`/`<x-component>` resolves
 - 20/20 authorisation unit assertions (`CommentPolicy`, roles, OAuth gate)
 - All 23 models boot and every relationship instantiates
@@ -43,9 +43,10 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 These are ad-hoc scripts run during development, **not** a committed test
-suite. The committed suite is 13 tests: `HarnessTest` (the harness itself) and
-`ResponsiveImageTest` (the srcset wiring). Broad coverage of routes, policies,
-search and moderation is still Phase 7's first job.
+suite. The committed suite is 20 tests: `HarnessTest` (the harness itself),
+`ResponsiveImageTest` (the srcset wiring) and `MediaBackfillTest` (the ladder
+backfill). Broad coverage of routes, policies, search and moderation is still
+Phase 7's first job.
 
 ---
 
@@ -128,13 +129,22 @@ caches, update banner.
 13. Scheduled articles need a cron entry (`status=scheduled` past its
     `published_at` is counted on the dashboard but never auto-publishes).
 14. Ad impressions are never incremented — only clicks are.
-15. **Ad creatives bypass the image pipeline.** `AdController` stores uploads
-    with `$file->store('ads', 'public')` — no `Media` row, no derivative ladder,
-    no resizing. A creative uploaded through the admin is served at whatever
-    dimensions it arrived in; one uploaded during the Phase 6 work is now the
-    only remaining "properly size images" offender on the article page, at 57 KB
-    for a 728x90 slot. `<x-ui.ad-slot>` renders a plain `src` with no srcset, so
-    nothing is broken — it is just unoptimised.
+15. **Ad creatives bypass the image pipeline, and deleting one orphans a
+    `Media` row.** `AdController` stores uploads with
+    `$file->store('ads', 'public')` — no `Media` row, no derivative ladder, no
+    resizing — so a creative uploaded through the admin is served at whatever
+    dimensions it arrived in. One uploaded during the Phase 6 work is the only
+    remaining "properly size images" offender on the article page, at 57 KB for
+    a 728x90 slot.
+
+    The worse half: on replacement it runs
+    `Storage::disk('public')->delete($ad->asset)` against the raw path, without
+    asking whether a `Media` row owns it. `MediaSeeder` points ad assets at
+    media-managed paths, so that upload deleted the original behind media row
+    55, left its three derivatives on disk and the row pointing at nothing.
+    `php artisan media:backfill` reports it. `ImageService::delete()` exists to
+    remove an original, its derivatives and the row together — `AdController`
+    should either use it or refuse to delete a path a `Media` row claims.
 16. `ArticleQuery::related()` runs a correlated `EXISTS` subquery for topic
     matching; fine at this size, worth watching as content grows.
 17. Cold homepage is ~1.4s / 80 queries; warm is ~340ms / 15. The cold path
@@ -161,11 +171,11 @@ In rough order of value:
    The `w768` rung this item was paired with is **done**. Adding it surfaced
    that a rung change is inert on everything already stored — srcset is built
    from the `conversions` a row recorded, not from `WIDTHS`. `ImageService`
-   gained `regenerate()` and `rungsFor()`, and `MediaSeeder` self-heals the demo
-   library when the two disagree. **There is still no backfill for real editor
-   uploads**: `regenerate()` exists but nothing calls it outside the seeder, so
-   adding a rung in production would leave every existing upload behind. An
-   artisan command is the missing piece.
+   gained `regenerate()`, `rungsFor()` and `hasCurrentLadder()`, the last being
+   the single place that decides whether a row is behind. `php artisan
+   media:backfill` brings real uploads forward (`--dry-run`, `--force`,
+   `--chunk`); `MediaSeeder` asks the same question for the demo library. Both
+   skip rows already current, so a no-op run costs one query per chunk.
 4. ~~Lighthouse pass on homepage and article, mobile profile. Target ≥ 90.~~
    **Done** — see below.
 5. ~~Measure Core Web Vitals against the budget in `PLAN.md`

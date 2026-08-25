@@ -45,6 +45,17 @@ request, not the one that wrote it.
 Inside model events, `getOriginal('status')` returns the **enum**, not the
 stored string. Compare against the enum, or use `getRawOriginal()`.
 
+### MySQL reorders JSON object keys
+
+A `json`-cast column does not come back in the order it went in — MySQL stores
+objects sorted by key length, then value. `conversions` is written
+`w320, w640, w768, w960, w1600, thumb` and reads back
+`w320, w640, w768, w960, thumb, w1600`.
+
+Nothing that reads by key cares, but `assertSame()` on the array fails on
+ordering alone while every key and value matches. Use `assertEquals()`, which
+compares arrays with `==` and ignores order.
+
 ### Bulk updates skip model events
 
 `Comment::whereIn(...)->update()` will not fire the counter hooks. The admin's
