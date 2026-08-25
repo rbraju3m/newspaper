@@ -162,6 +162,14 @@ class Article extends Model
         return $this->hasOne(Gallery::class);
     }
 
+    /** Live-blog timeline: pinned entries first, then newest. */
+    public function liveEntries(): HasMany
+    {
+        return $this->hasMany(LiveEntry::class)
+            ->orderByDesc('is_pinned')
+            ->orderByDesc('published_at');
+    }
+
     public function comments(): HasMany
     {
         return $this->hasMany(Comment::class);

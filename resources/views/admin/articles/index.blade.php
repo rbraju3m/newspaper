@@ -108,6 +108,13 @@
                                         @endif
                                     @endcan
 
+                                    @if ($article->type === App\Enums\ArticleType::Live)
+                                        <a href="{{ route('admin.live.index', $article) }}" title="লাইভ আপডেট"
+                                           class="rounded-md p-1.5 text-brand hover:bg-surface-2">
+                                            <x-ui.icon name="clock" class="h-4 w-4" />
+                                        </a>
+                                    @endif
+
                                     @if ($article->isVisible())
                                         <a href="{{ $article->url }}" target="_blank" title="সাইটে দেখুন"
                                            class="rounded-md p-1.5 text-muted hover:bg-surface-2 hover:text-brand">

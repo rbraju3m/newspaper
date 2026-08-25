@@ -74,7 +74,9 @@
             ])
 
             <div class="grid gap-8 lg:grid-cols-12 lg:gap-10">
-                <article class="lg:col-span-8">
+                <article class="relative lg:col-span-8">
+
+                    <x-article.share-rail :article="$article" />
 
                     <header>
                         @if ($article->kicker)
@@ -173,6 +175,12 @@
                     @endif
 
                     <x-article.share-bar :article="$article" class="mt-5" />
+
+                    {{-- A live blog's timeline carries the story; the body is
+                         just the standing intro above it. --}}
+                    @if ($article->type === App\Enums\ArticleType::Live)
+                        <x-article.live-timeline :article="$article" />
+                    @endif
 
                     {{-- Body. `.article-body` is what the font-size control scales. --}}
                     <div x-ref="body"

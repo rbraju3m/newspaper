@@ -46,6 +46,10 @@ Route::get('/epaper/{date}', [Site\EpaperController::class, 'show'])
 
 Route::get('/live', Site\LiveController::class)->name('live');
 
+// Fallback shown by the service worker when a navigation cannot reach the
+// network. Must render without touching the database.
+Route::view('/offline', 'site.offline')->name('offline');
+
 Route::get('/page/{page:slug}', Site\PageController::class)->name('page.show');
 
 // ── Feeds ────────────────────────────────────────────────────────────────
@@ -56,6 +60,7 @@ Route::get('/news-sitemap.xml', [Site\FeedController::class, 'newsSitemap'])->na
 // ── Small JSON/action endpoints used by the front end ────────────────────
 Route::get('/api/breaking', [Site\ApiController::class, 'breaking'])->name('api.breaking');
 Route::post('/api/articles/{article}/share', [Site\ApiController::class, 'share'])->name('api.share');
+Route::get('/api/articles/{article}/live', [Site\ApiController::class, 'liveEntries'])->name('api.live');
 Route::post('/newsletter/subscribe', [Site\NewsletterController::class, 'store'])->name('newsletter.subscribe');
 Route::get('/newsletter/verify/{subscriber:token}', [Site\NewsletterController::class, 'verify'])->name('newsletter.verify');
 Route::get('/newsletter/unsubscribe/{subscriber:token}', [Site\NewsletterController::class, 'unsubscribe'])->name('newsletter.unsubscribe');

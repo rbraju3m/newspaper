@@ -30,6 +30,10 @@
 
         <div class="grid gap-x-8 gap-y-5 lg:grid-cols-2" x-ref="list">
             @include('site.partials.article-list-items')
+
+            <template x-if="loading">
+                <x-ui.skeleton variant="list" :count="4" />
+            </template>
         </div>
 
         @if ($articles->isEmpty())

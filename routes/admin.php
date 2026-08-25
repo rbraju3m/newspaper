@@ -29,6 +29,14 @@ Route::middleware(['auth', 'staff'])->prefix('admin')->name('admin.')->group(fun
         Route::delete('/{article}', 'destroy')->name('destroy');
     });
 
+    // ── Live blog entries ────────────────────────────────────────────────
+    Route::controller(Admin\LiveEntryController::class)->group(function () {
+        Route::get('/articles/{article}/live', 'index')->name('live.index');
+        Route::post('/articles/{article}/live', 'store')->name('live.store');
+        Route::put('/live/{entry}', 'update')->name('live.update');
+        Route::delete('/live/{entry}', 'destroy')->name('live.destroy');
+    });
+
     // ── Media library ────────────────────────────────────────────────────
     Route::controller(Admin\MediaController::class)->prefix('media')->name('media.')->group(function () {
         Route::get('/', 'index')->name('index');

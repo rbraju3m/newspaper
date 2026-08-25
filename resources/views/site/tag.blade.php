@@ -13,6 +13,11 @@
 
         <div class="grid gap-x-6 gap-y-7 sm:grid-cols-2 lg:grid-cols-4" x-ref="list">
             @include('site.partials.article-grid-items')
+
+            {{-- Occupies the same grid cells the incoming cards will fill. --}}
+            <template x-if="loading">
+                <x-ui.skeleton variant="card" :count="4" />
+            </template>
         </div>
 
         @if ($articles->isEmpty())

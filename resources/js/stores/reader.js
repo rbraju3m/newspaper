@@ -67,9 +67,12 @@ Alpine.store('reader', {
             this.bookmarks = data.bookmarked
                 ? [...new Set([...this.bookmarks, id])]
                 : this.bookmarks.filter((b) => b !== id);
+
+            if (data.message) Alpine.store('toast')?.success(data.message);
         } catch {
             // Network failed — roll back so the UI does not lie.
             this.bookmarks = had ? [...new Set([...this.bookmarks, id])] : this.bookmarks.filter((b) => b !== id);
+            Alpine.store('toast')?.error('সংরক্ষণ করা যায়নি, আবার চেষ্টা করুন।');
         }
     },
 });

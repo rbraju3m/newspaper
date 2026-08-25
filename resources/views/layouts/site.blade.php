@@ -34,9 +34,22 @@
     <meta property="og:image" content="@yield('og_image', asset('images/og-default.jpg'))">
     <meta name="twitter:card" content="summary_large_image">
 
-    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    <link rel="icon" href="{{ asset('images/favicon-32.png') }}" sizes="32x32">
     <link rel="apple-touch-icon" href="{{ asset('images/icon-180.png') }}">
     <link rel="manifest" href="{{ asset('manifest.webmanifest') }}">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="{{ config('site.name_bn') }}">
+
+    {{-- Read by the pwa store. Scope is derived from the worker's own URL, not
+         from APP_URL: asset() follows the actual request root, so deriving them
+         separately breaks whenever the two disagree (dev server vs subdirectory
+         install), and a scope the worker cannot claim silently controls nothing. --}}
+    @php
+        $swUrl = asset('sw.js');
+        $swScope = rtrim(dirname(parse_url($swUrl, PHP_URL_PATH)), '/').'/';
+    @endphp
+    <meta name="sw-url" content="{{ $swUrl }}">
+    <meta name="sw-scope" content="{{ $swScope }}">
     <meta name="theme-color" content="#C8102E" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0E1113" media="(prefers-color-scheme: dark)">
 
@@ -48,7 +61,12 @@
     @stack('schema')
 </head>
 
-<body class="min-h-screen bg-canvas text-body antialiased">
+<body class="min-h-screen bg-canvas text-body antialiased"
+      x-data="shortcuts({{ Js::from([
+          'home' => route('home'),
+          'latest' => route('latest'),
+          'bookmarks' => route('account.bookmarks'),
+      ]) }})">
     <a href="#main"
        class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100]
               focus:rounded-md focus:bg-brand focus:px-4 focus:py-2 focus:text-white">
@@ -62,6 +80,9 @@
     </main>
 
     @include('partials.footer')
+
+    @include('partials.app-chrome')
+    @include('partials.flash-toasts')
 
     @stack('modals')
     @stack('scripts')
