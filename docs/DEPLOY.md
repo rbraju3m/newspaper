@@ -70,16 +70,16 @@ the ISO strings in feeds and JSON-LD now carry `+06:00`, so historical items
 shift six hours in absolute terms. Do this before real publishing begins and
 the question does not arise.
 
-### Scheduled articles do not publish themselves
+### Scheduled publishing depends entirely on cron
 
-An article saved with status `scheduled` and a future `published_at` stays
-invisible until a human sets it to `published`. Nothing flips it: there are no
-queued jobs and no scheduled tasks in this application at all.
+`articles:publish-due` runs every minute and moves a `scheduled` article to
+`published` once its time has passed. That is the whole mechanism — there is no
+other trigger — so **if the cron entry below is missing, scheduling silently
+does nothing** and stories sit unpublished with no error anywhere.
 
-The admin dashboard counts overdue ones (`scheduled_due`) so the newsroom
-notices, and that is the whole mechanism today. Install the cron entry below
-anyway — it costs nothing and is the hook an auto-publish command would use —
-but do not promise an editor that scheduling works unattended.
+The admin dashboard's `scheduled_due` count is the canary: it counts articles
+whose time has passed and which are still scheduled. On a healthy install it is
+zero. If it is climbing, `schedule:run` is not running.
 
 ---
 
@@ -256,10 +256,12 @@ which is why a per-project vhost is needed at all — Laravel's
 * * * * * cd /var/www/newspaper && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-This is not optional any more: the nightly backup is registered through the
-scheduler, and without this line it never runs. `php artisan schedule:list`
-tells you what is registered — it cannot tell you whether cron is calling it,
-so check that `storage/logs/backup.log` grows overnight.
+This is not optional. Three things run through the scheduler — publishing due
+articles every minute, the nightly backup, and the morning error digest — and
+without this line none of them fire. `php artisan schedule:list` tells you what
+is registered; it cannot tell you whether cron is calling it. Check two things
+after a deploy: that `storage/logs/backup.log` grows overnight, and that the
+dashboard's `scheduled_due` count is not climbing.
 
 ### 9. Warm the caches
 

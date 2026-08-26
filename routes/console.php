@@ -19,6 +19,17 @@ Artisan::command('inspire', function () {
  * Output goes to its own log rather than the application log, so a failed
  * dump is legible instead of buried among request errors.
  */
+/*
+ * Scheduled stories, published on time.
+ *
+ * Every minute, because a newsroom that schedules to the minute expects the
+ * minute — and because the query is one indexed lookup that almost always
+ * returns nothing. withoutOverlapping() so a slow run cannot double-publish.
+ */
+Schedule::command('articles:publish-due')
+    ->everyMinute()
+    ->withoutOverlapping();
+
 Schedule::command('backup:run')
     ->dailyAt('03:00')
     ->withoutOverlapping()

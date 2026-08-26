@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 346 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups and error alerting; off-site backup copies and real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 355 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting and scheduled publishing; off-site backup copies and real branding still open |
 
 ### By the numbers
 
@@ -43,7 +43,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 346 tests, 821 assertions, ~70s:
+tests.** The suite is 355 tests, 843 assertions, ~70s:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -65,6 +65,7 @@ tests.** The suite is 346 tests, 821 assertions, ~70s:
 | `PollVotingTest` | 10 | guest fingerprinting, double-vote refusal, cross-poll option rejection, total equals sum of options |
 | imagery suite | 33 | `ResponsiveImageTest`, `MediaBackfillTest`, `ArticleImageSyncTest`, `AdAssetTest`, `MediaUploadTest` |
 | `Unit/HtmlSanitizerTest` | 68 | the HTML allow-list: script, handler, `javascript:`, entity-encoded and tab-split URLs, `data:` images, conditional comments, foreign content, off-host iframes — and that every verdict is idempotent |
+| `ScheduledPublishingTest` | 9 | that a due article publishes and a future one does not, that the editor's chosen time survives, that drafts are untouched, and that a guest goes from 404 to reading it |
 | `ErrorAlertTest` | 16 | what is recorded, what is pushed and — mostly — what is not: the per-fault throttle, the hourly cap across fingerprints, the framework's own filtering of 404s and validation failures, that a failing channel never escapes into the exception handler, the Slack/Discord payload split, and `errors:digest` grouping |
 | `BackupTest` | 10 | that `backup:run` writes a dump holding rows and not just schema, that Bangla survives it, that the archive uses relative paths, the completion-marker check, the public-disk refusal, and that pruning never takes the last backup |
 | `DemoPurgeTest` | 12 | what `demo:purge` deletes and what it keeps, the seeded logins going even when one is an admin, `--keep`, the lockout refusal, the media ladder coming off disk, and the counter and cache resets |
@@ -237,7 +238,7 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 346 tests cover both halves of
+1. **Test coverage is started, not finished.** 355 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, and the whole reader path from registration
    through bookmarks, history, comments, the newsletter and polls. What is
@@ -301,11 +302,25 @@ lookup in front of every newsletter submission on the live site too.
   `created_at` with `useCurrent()`, MySQL's clock — were six hours apart from
   every row PHP stamped. It also fixes the admin's scheduling inputs, which are
   wall clock: an editor asking for 3 PM was getting 9 PM.
-- **Scheduled articles never publish themselves.** Still open. A `scheduled`
-  article waits for a human to set it to `published`; the dashboard's
-  `scheduled_due` count is the whole mechanism. The scheduler now exists (the
-  nightly backup and the error digest both run through it), so an auto-publish
-  command would have somewhere to live.
+- ~~**Scheduled articles never publish themselves.**~~ **Fixed.**
+  `articles:publish-due` runs every minute and moves a `scheduled` article to
+  `published` once its time has passed, then clears the homepage cache. It
+  does exactly what the admin's status flip does and nothing more, so the cron
+  and the button cannot drift apart, and it leaves `published_at` alone —
+  that is the time the editor chose, not the second cron got round to it.
+  The dashboard's `scheduled_due` count now means "cron is not running"
+  rather than "somebody needs to press a button".
+
+### Feature-incomplete
+
+### Known inaccuracy, not a blocker
+
+**`categories.articles_count` and `users.articles_count` drift.** Both are
+status-aware, and nothing recomputes them at runtime — only `ContentSeeder`
+does, at seed time. Publishing has always left them stale, by the admin button
+as much as by the new cron; `articles:publish-due` deliberately does not fix
+half of it. A periodic recompute alongside the nightly backup is the obvious
+home. `tags.articles_count` is fine: `ArticleController` recomputes it on save.
 
 ### Feature-incomplete
 
@@ -405,8 +420,7 @@ Phase 7 has since started ahead of the remaining Phase 6 items, because the
 only unblocked one left is the cold-homepage query count — AVIF needs a rebuilt
 GD or `php-imagick` on this box, and `hreflang` needs a second locale to exist.
 What remains of Phase 7: off-site copies of the nightly backup, an external
-uptime check, real branding, and deciding whether scheduled articles should
-publish themselves.
+uptime check, and real branding.
 
 ---
 
