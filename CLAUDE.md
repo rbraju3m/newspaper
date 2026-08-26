@@ -201,6 +201,24 @@ the front page simply comes out in an order nobody chose.
 Both append paths now go through `nextPosition()`. Anything that gives a block
 a column must give it a position in the same breath.
 
+### `ImageService::release()` runs *after* the owning row is gone
+
+It is reference counted across eleven columns — `articles.image`,
+`gallery_images.path`, `galleries.cover` and the rest — so calling it while the
+row still holds the path means the file is a reference to itself and nothing is
+ever freed.
+
+The failure is silent in the worst way: the rows do get deleted, the redirect
+is a 302, the screen shows what you expect. Only the disk disagrees, and only
+if you go and count. `GalleryController::destroy()` shipped this way for an
+hour and no test caught it, because the tests were asserting rows.
+
+Collect the paths, delete the rows, *then* release. And when a gallery is
+involved, move `cover` off the path first — it is one of the columns counted.
+
+`GalleryAdminTest` asserts the files are actually missing afterwards, and that
+a photograph an article still uses survives.
+
 ### Bulk updates skip model events
 
 `Comment::whereIn(...)->update()` will not fire the counter hooks. The admin's
@@ -451,7 +469,7 @@ to stop the request that never should have arrived.
 Every public method of an admin controller authorises. Gates:
 
 - `manage-site` — ads, pages, users, settings (admin only)
-- `manage-taxonomy` — categories, tags, topics, layout (editor and up)
+- `manage-taxonomy` — categories, tags, topics, layout, galleries (editor and up)
 - `ArticlePolicy` — per-article; reporters cannot publish, place or reassign
 - `CommentPolicy::moderate` — editors and up
 
@@ -461,7 +479,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 444 tests, ~76s. Behaviour coverage exists
+`php artisan test` runs and passes — 469 tests, ~173s. Behaviour coverage exists
 for both halves of the app:
 
 | File | Covers |
@@ -487,6 +505,7 @@ for both halves of the app:
 | `ArticleCounterTest` | the denormalised article counts through every transition, and the nightly reconcile |
 | `RateLimitTest` | every named limiter, its headroom, and that authenticated buckets are per-account |
 | `ErrorPageTest` | the Bangla error pages, and that the 5xx ones render with no database |
+| `GalleryAdminTest` | the photo gallery admin — uploads, ordering, the cover, deletion and its files, and the public hub |
 | `MediaSeederTest` | that `MediaSeeder` heals broken imagery without replacing imagery that works |
 | `PhotoImportTest` | `photos:import` — the transcode, the flattening, idempotency, and deterministic assignment |
 | `LiveBlogTest` | the live blog — appending, ordering, who may run one, and the polling cursor |

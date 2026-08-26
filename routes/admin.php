@@ -75,6 +75,24 @@ Route::middleware(['auth', 'staff', 'throttle:admin'])->prefix('admin')->name('a
         Route::delete('/tags/{tag}', 'destroyTag')->name('tags.destroy');
     });
 
+    // ── Photo galleries ──────────────────────────────────────────────────
+    // Bound by id, not slug: Gallery::getRouteKeyName() is `slug` for the
+    // public reader, and an editor renaming a gallery would otherwise change
+    // the URL of the form they are standing on.
+    Route::controller(Admin\GalleryController::class)->prefix('galleries')->name('galleries.')->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::post('/', 'store')->name('store');
+        Route::get('/{gallery:id}/edit', 'edit')->name('edit');
+        Route::put('/{gallery:id}', 'update')->name('update');
+        Route::delete('/{gallery:id}', 'destroy')->name('destroy');
+
+        Route::post('/{gallery:id}/images', 'storeImages')->name('images.store');
+        Route::post('/{gallery:id}/images/attach', 'attachImages')->name('images.attach');
+        Route::post('/{gallery:id}/images/reorder', 'reorderImages')->name('images.reorder');
+        Route::put('/images/{image}', 'updateImage')->name('images.update');
+        Route::delete('/images/{image}', 'destroyImage')->name('images.destroy');
+    });
+
     // ── Front page layout ────────────────────────────────────────────────
     Route::controller(Admin\LayoutController::class)->prefix('layout')->name('layout.')->group(function () {
         Route::get('/', 'index')->name('index');

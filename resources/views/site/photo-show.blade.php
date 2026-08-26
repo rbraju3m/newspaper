@@ -62,11 +62,15 @@
                     <figure x-show="index === {{ $i }}" x-cloak class="max-h-full">
                         <img src="{{ $image->url }}" alt="{{ $image->caption }}"
                              class="mx-auto max-h-[75vh] w-auto object-contain">
-                        @if ($image->caption)
+                        {{-- Credit is shown with or without a caption: a photo
+                             desk files plenty of frames that need attributing
+                             and have nothing to say, and nesting the credit
+                             inside the caption test dropped it silently. --}}
+                        @if ($image->caption || $image->credit)
                             <figcaption class="mt-3 text-center text-sm text-white/80">
                                 {{ $image->caption }}
                                 @if ($image->credit)
-                                    <span class="text-white/50">— {{ $image->credit }}</span>
+                                    <span class="text-white/50">@if ($image->caption)— @endif{{ $image->credit }}</span>
                                 @endif
                             </figcaption>
                         @endif

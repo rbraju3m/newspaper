@@ -12,6 +12,46 @@ class GalleryImage extends Model
 
     protected $fillable = ['gallery_id', 'media_id', 'path', 'caption', 'credit', 'position'];
 
+    /**
+     * `galleries.images_count` is denormalised, so it is maintained here the
+     * way `Comment::booted()` maintains `comments_count`.
+     *
+     * Every reader currently goes through `withCount('images')`, which sets an
+     * attribute of the same name and shadows the column — so a stale value is
+     * invisible right up until somebody queries the column directly. That is
+     * the trap worth closing rather than living with.
+     *
+     * The relation is stepped through with a query rather than
+     * `$image->gallery`, which would be a lazy load.
+     */
+    protected static function booted(): void
+    {
+        static::created(function (self $image) {
+            Gallery::whereKey($image->gallery_id)->increment('images_count');
+        });
+
+        static::updated(function (self $image) {
+            if (! $image->wasChanged('gallery_id')) {
+                return;
+            }
+
+            Gallery::whereKey($image->getRawOriginal('gallery_id'))
+                ->where('images_count', '>', 0)
+                ->decrement('images_count');
+
+            Gallery::whereKey($image->gallery_id)->increment('images_count');
+        });
+
+        // Guarded, because the column is unsignedSmallInteger: decrementing a
+        // drifted zero is an out-of-range *error* under strict mode, so it
+        // would be a 500 rather than a wrong number.
+        static::deleted(function (self $image) {
+            Gallery::whereKey($image->gallery_id)
+                ->where('images_count', '>', 0)
+                ->decrement('images_count');
+        });
+    }
+
     public function gallery(): BelongsTo
     {
         return $this->belongsTo(Gallery::class);

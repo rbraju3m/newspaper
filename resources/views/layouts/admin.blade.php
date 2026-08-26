@@ -55,6 +55,7 @@
                         ['admin.categories.index', 'menu', 'বিভাগ', $user->role->canPublish(), null],
                         ['admin.taxonomy.index', 'bookmark', 'ট্যাগ ও বিষয়', $user->role->canPublish(), null],
                         ['admin.layout.index', 'settings', 'প্রচ্ছদ সাজান', $user->role->canPublish(), null],
+                        ['admin.galleries.index', 'camera', 'ফটো গ্যালারি', $user->role->canPublish(), null],
                         ['admin.ads.index', 'eye', 'বিজ্ঞাপন', $user->role->canManageSite(), null],
                         ['admin.pages.index', 'copy', 'স্ট্যাটিক পাতা', $user->role->canManageSite(), null],
                         ['admin.users.index', 'user', 'ব্যবহারকারী', $user->role->canManageSite(), null],

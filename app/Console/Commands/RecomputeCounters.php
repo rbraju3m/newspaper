@@ -51,6 +51,11 @@ class RecomputeCounters extends Command
         'articles.comments_count' => ['articles', 'comments_count',
             'SELECT COUNT(*) FROM comments c WHERE c.article_id = t.id
              AND c.status = "approved" AND c.deleted_at IS NULL', ],
+
+        // Unconditional: a gallery image has no status and no soft delete, so
+        // every row counts.
+        'galleries.images_count' => ['galleries', 'images_count',
+            'SELECT COUNT(*) FROM gallery_images gi WHERE gi.gallery_id = t.id'],
     ];
 
     protected $signature = 'counters:recompute

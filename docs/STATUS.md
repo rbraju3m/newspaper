@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 444 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 469 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
 
 ### By the numbers
 
@@ -25,7 +25,7 @@
 |---|---|
 | PHP files (app/database/routes/config) | 133 |
 | Models · Enums · Policies · Services | 23 · 5 · 3 · 4 |
-| Controllers | 44 |
+| Controllers | 45 |
 | Blade templates | 93 |
 | Routes (115 total, 52 admin) | 115 |
 | Database tables | 38 |
@@ -43,7 +43,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 444 tests, 1,461 assertions, ~76s:
+tests.** The suite is 469 tests, 1,547 assertions, ~173s:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -73,6 +73,7 @@ tests.** The suite is 444 tests, 1,461 assertions, ~76s:
 | `BackupTest` | 10 | that `backup:run` writes a dump holding rows and not just schema, that Bangla survives it, that the archive uses relative paths, the completion-marker check, the public-disk refusal, and that pruning never takes the last backup |
 | `DemoPurgeTest` | 12 | what `demo:purge` deletes and what it keeps, the seeded logins going even when one is an admin, `--keep`, the lockout refusal, the media ladder coming off disk, and the counter and cache resets |
 | `ContentSanitizeTest` | 22 | that all three unescaped bodies are sanitised on write — the article model and editor form, live-blog append and edit (including the JSON the polling client feeds to `x-html`), and static pages — plus `content:sanitize` over every target, trashed rows included, leaving `updated_at` alone |
+| `GalleryAdminTest` | 25 | the photo gallery admin — creating, the Bangla slug, uploads writing both columns and building the ladder, attaching from the library, drag ordering, the cover that follows it, deletion taking its files off disk without reaping a photograph an article still uses, the denormalised count, and the public hub |
 | `MediaSeederTest` | 7 | what `MediaSeeder` heals and, more importantly, what it refuses to touch — imagery that is actually on disk |
 | `PhotoImportTest` | 8 | `photos:import` — the ladder built from a real folder, the transcode that stops a 2 MB PNG becoming the `src` fallback, transparency flattened onto white, idempotency by filename, deterministic assignment, and that a dry run writes nothing |
 | `LiveBlogTest` | 23 | the live blog end to end: appending, the backdated correction, pinned above newest, editing that must not move an entry, who may run one — and the polling endpoint's cursor, including a burst larger than one page |
@@ -290,7 +291,7 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 444 tests cover both halves of
+1. **Test coverage is started, not finished.** 469 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, and the whole reader path from registration
    through bookmarks, history, comments, the newsletter and polls. What is
@@ -452,7 +453,34 @@ comes to disagree about what drift is.
    or strip the handlers — a half-built version is worse than none.
 8. **E-paper has no upload UI.** Tables, models and the public reader exist;
    issues must currently be inserted by hand.
-9. **Photo galleries have no admin CRUD.** Same shape as e-paper.
+9. ~~**Photo galleries have no admin CRUD.**~~ **Done.** `Admin\GalleryController`
+   plus two screens: a list with a create form, and an editor with drag
+   ordering, multi-file upload, attach-from-library, per-image caption and
+   credit, and delete. Authorised with `manage-taxonomy` — editor and up —
+   rather than a policy of its own, because a gallery is curation more than
+   reporting and sits alongside topics and the front-page layout. If reporters
+   ever need to file their own, the upgrade is a `GalleryPolicy` shaped like
+   `ArticlePolicy`; nothing in the controller assumes otherwise.
+
+   `/photo` is no longer an empty hub — it renders whatever the desk publishes.
+
+   Three things the build turned up, all fixed:
+
+   - **`release()` has to run after the rows are gone.** Deleting a gallery
+     released each image's file first and deleted the rows second, so every
+     file was still a reference to itself and nothing was ever freed. The rows
+     did disappear, which is what made it look like it worked; only the disk
+     said otherwise. Found by deleting a real gallery over HTTP and counting
+     files, not by a test — the tests were asserting rows.
+   - **A credit with no caption rendered as nothing.** `photo-show` nested the
+     credit inside `@if ($image->caption)`. The upload form takes one credit
+     for a whole batch and captions one at a time, so "credited, uncaptioned"
+     is the normal state of a gallery just filled.
+   - **`galleries.images_count` was never maintained.** Every reader goes
+     through `withCount('images')`, which sets an attribute of the same name
+     and shadows the column, so a permanently-zero column was invisible. It is
+     now kept by `GalleryImage::booted()` the way `Comment::booted()` keeps
+     `comments_count`, and reconciled by `counters:recompute`.
 10. **Newsletter never sends.** Subscribers are captured and verified; there is
     no digest job or mail template.
 11. **Bilingual is scaffolded, not built.** `locale` and `translation_of`
