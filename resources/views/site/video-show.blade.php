@@ -1,6 +1,6 @@
 @extends('layouts.site')
 @section('title', $article->title.' — '.config('site.name_bn'))
-@section('description', $article->excerpt)
+@section('description', $article->excerpt ?? '')
 @section('canonical', route('video.show', $article))
 @section('og_type', 'video.other')
 

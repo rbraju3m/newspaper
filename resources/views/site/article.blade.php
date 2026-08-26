@@ -1,11 +1,11 @@
 @extends('layouts.site')
 
 @section('title', ($article->meta_title ?: $article->title).' — '.config('site.name_bn'))
-@section('description', $article->meta_description ?: $article->excerpt)
+@section('description', $article->meta_description ?: ($article->excerpt ?? ''))
 @section('canonical', $article->url)
 @section('og_type', 'article')
 @section('og_title', $article->title)
-@section('og_description', $article->excerpt)
+@section('og_description', $article->excerpt ?? '')
 @section('og_image', $article->image_url ?: asset('images/og-default.jpg'))
 
 @push('head')
@@ -114,9 +114,19 @@
                             @endif
 
                             <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-                                <time datetime="{{ $article->published_at?->toIso8601String() }}">
-                                    প্রকাশ: @bndate($article->published_at), @bntime($article->published_at)
-                                </time>
+                                {{-- An unpublished story has no published_at, and staff
+                                     may preview one. Bangla::date() is typed against
+                                     CarbonInterface, so an unguarded call here 500s the
+                                     whole preview. --}}
+                                @if ($article->published_at)
+                                    <time datetime="{{ $article->published_at->toIso8601String() }}">
+                                        প্রকাশ: @bndate($article->published_at), @bntime($article->published_at)
+                                    </time>
+                                @else
+                                    <span class="rounded bg-surface-2 px-1.5 py-0.5 font-semibold text-ink">
+                                        অপ্রকাশিত খসড়া
+                                    </span>
+                                @endif
                                 <span class="flex items-center gap-1">
                                     <x-ui.icon name="clock" class="h-3.5 w-3.5" />
                                     @bn($article->reading_time) মিনিট পড়া

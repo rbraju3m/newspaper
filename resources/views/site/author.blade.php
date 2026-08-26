@@ -1,6 +1,6 @@
 @extends('layouts.site')
 @section('title', $author->name.' — '.config('site.name_bn'))
-@section('description', $author->bio)
+@section('description', $author->bio ?? '')
 
 @push('schema')
 <script type="application/ld+json">

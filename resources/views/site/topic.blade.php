@@ -1,6 +1,6 @@
 @extends('layouts.site')
 @section('title', $topic->name.' — '.config('site.name_bn'))
-@section('description', $topic->description)
+@section('description', $topic->description ?? '')
 
 @section('content')
     <div class="mx-auto max-w-site px-4 py-5 lg:py-7"

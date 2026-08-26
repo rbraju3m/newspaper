@@ -1,6 +1,6 @@
 @extends('layouts.site')
 @section('title', ($page->meta_title ?: $page->title).' — '.config('site.name_bn'))
-@section('description', $page->meta_description)
+@section('description', $page->meta_description ?? '')
 
 @section('content')
     <div class="mx-auto max-w-3xl px-4 py-8 lg:py-12">

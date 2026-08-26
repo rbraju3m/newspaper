@@ -60,6 +60,82 @@ Nothing that reads by key cares, but `assertSame()` on the array fails on
 ordering alone while every key and value matches. Use `assertEquals()`, which
 compares arrays with `==` and ignores order.
 
+### `@section('x', $value)` is only inline when `$value` is not null
+
+Blade compares with `===`. A null second argument — an empty
+`meta_description`, a topic with no blurb, an author with no bio — silently
+switches the directive to its **block** form: `startSection()` opens an output
+buffer and waits for an `@endsection` the template never writes.
+
+The page still renders, which is why this survived every manual check. What it
+leaves behind is an unbalanced output buffer on every such request, and a
+`description` section that swallows whatever is emitted after it. Six templates
+shipped this way.
+
+Give every inline `@section` a `?? ''`. `PublicRoutesTest` asserts
+`ob_get_level()` is unchanged across a request built with all optional text
+nulled — that is the only cheap way to see it.
+
+### FULLTEXT is invisible inside `RefreshDatabase`
+
+InnoDB updates a FULLTEXT index at **COMMIT**. `RefreshDatabase` wraps each test
+in a transaction it rolls back, so a row created in the test is findable by
+`LIKE` and invisible to `MATCH ... AGAINST` in the same breath:
+
+```
+transactionLevel=1  rows=1  fts_hits=0  like_hits=1
+```
+
+Anything testing `Article::search()` must use `DatabaseTruncation` instead.
+`SearchTest` does. Get this wrong and the relevance assertions return nothing
+while every `assertDontSee` goes green against an empty result set.
+
+Related: the factory's generated body is **not** inert corpus. `BanglaContent`
+injects one of ten phrases as an `<h2>`, and one of them is
+`জলবায়ু পরিবর্তনের প্রভাব মোকাবিলায়`. Since the index covers `body`, about one
+article in ten matched a search for জলবায়ু by accident — a test that failed on
+roughly a tenth of runs. Search fixtures must pin `excerpt` and `body`.
+
+### `merge()` inside `after()` never reaches `validated()`
+
+`FormRequest::merge()` writes to the request's **input bag**. `validated()`
+reads back from the **validator's own data**. A `merge()` in a `prepareForValidation()`
+hook works because it runs before the validator collects; a `merge()` inside an
+`after()` closure does not, and fails silently.
+
+`CommentRequest` re-parents a reply-to-a-reply this way and the flattening
+never happened. Use `$validator->setValue('key', $value)` — `validated()`
+re-reads `getData()`, so that does land.
+
+### Pivot tables here have `created_at` and no `updated_at`
+
+`bookmarks`, `comment_likes` and friends stamp `created_at` with `useCurrent()`
+and deliberately carry no `updated_at`. A relation declaring `withTimestamps()`
+therefore writes a column that does not exist and every attach dies on
+`Unknown column 'updated_at' in 'field list'`.
+
+`Comment::likedBy()` shipped that way and every comment like was a 500. Declare
+`->withPivot('created_at')`, the way `User::bookmarks()` does.
+
+### `exists:` without a scope accepts a foreign row
+
+`'option_id' => ['exists:poll_options,id']` accepts an option belonging to a
+*different* poll. The vote is written, this poll's total is incremented, and no
+option's own count moves — the total stops equalling the sum of its options and
+every percentage is wrong.
+
+Scope it: `Rule::exists('poll_options', 'id')->where('poll_id', $poll->id)`.
+`CommentRequest` guards `parent_id` against the same graft by hand.
+
+### `@example.com` fails the `dns` rule
+
+egulias rejects the RFC 2606 reserved domains (`example.com/.org/.net`, `.test`,
+`.invalid`, `.localhost`) regardless of what DNS returns, so any test address
+hitting `email:rfc,dns` is refused before the controller sees it. The newsletter
+box is the one endpoint that uses it. `NewsletterTest` uses a resolvable domain
+and therefore needs working DNS — and that rule puts a blocking ~150ms lookup in
+front of every live submission too.
+
 ### Bulk updates skip model events
 
 `Comment::whereIn(...)->update()` will not fire the counter hooks. The admin's
@@ -178,8 +254,26 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes, but the suite is still only a harness
-smoke test (`tests/Feature/HarnessTest.php`) — real coverage is Phase 7.
+`php artisan test` runs and passes — 218 tests, ~48s. Behaviour coverage exists
+for both halves of the app:
+
+| File | Covers |
+|---|---|
+| `HarnessTest` | the harness itself — driver, FULLTEXT index, strict mode |
+| `PublicRoutesTest` | every public URL, canonicalisation, draft visibility, feeds, output-buffer balance |
+| `AdminAuthorizationTest` | the role matrix, by URL, plus publish/edit/delete actions |
+| `Unit/PolicyTest` | the decision tables, including CommentPolicy's edit window |
+| `SearchTest` | Bangla `MATCH ... AGAINST`, filters, LIKE fallback |
+| `CommentModerationTest` | moderation and the denormalised `comments_count` |
+| `RegistrationTest`, `LoginTest`, `EmailVerificationTest`, `PasswordResetTest` | the whole auth path, including phone login in both digit systems |
+| `AccountProfileTest` | profile, password, deletion, preferences, newsletter sync |
+| `BookmarkTest`, `ReadingHistoryTest` | saved stories and reading progress |
+| `CommentPostingTest` | the reader side of comments, both abuse controls |
+| `NewsletterTest`, `PollVotingTest` | subscribe/verify/unsubscribe, and poll voting |
+| `ResponsiveImageTest`, `MediaBackfillTest`, `ArticleImageSyncTest`, `AdAssetTest`, `MediaUploadTest` | the imagery ladder |
+
+Still uncovered: the live blog append path, the layout manager's reorder, feed
+*contents* as opposed to well-formedness, the e-paper reader, and OAuth sign-in.
 
 Tests run on **MySQL**, against `newspaper_test`, not SQLite in-memory:
 `Article::search()` silently falls back to `LIKE` on any non-MySQL driver, so

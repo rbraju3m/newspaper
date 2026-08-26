@@ -1,6 +1,6 @@
 @extends('layouts.site')
 @section('title', $gallery->title.' — '.config('site.name_bn'))
-@section('description', $gallery->description)
+@section('description', $gallery->description ?? '')
 
 @section('content')
     {{-- Lightbox: keyboard-navigable, focus-trapped, and it locks body scroll

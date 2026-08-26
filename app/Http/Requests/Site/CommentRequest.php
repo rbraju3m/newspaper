@@ -47,8 +47,14 @@ class CommentRequest extends FormRequest
 
                 // One level of nesting only — deeper threads are unreadable on
                 // a phone, which is where most of this traffic is.
+                //
+                // setValue() on the validator, not $this->merge(): merge()
+                // writes to the request's input bag, while validated() reads
+                // back from the validator's own data. Merging here left the
+                // reply pointing at the deep parent and the flattening never
+                // happened.
                 if ($parent->parent_id !== null) {
-                    $this->merge(['parent_id' => $parent->parent_id]);
+                    $validator->setValue('parent_id', $parent->parent_id);
                 }
             },
         ];

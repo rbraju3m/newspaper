@@ -95,9 +95,17 @@ class Comment extends Model
         return $this->belongsTo(User::class, 'moderated_by');
     }
 
+    /**
+     * `comment_likes` has `created_at` (stamped by the database with
+     * useCurrent()) and no `updated_at` — the same shape as `bookmarks`.
+     * withTimestamps() would write both columns and every like would fail with
+     * "Unknown column 'updated_at'", so the pivot is declared the way the
+     * bookmarks relation declares its own.
+     */
     public function likedBy(): BelongsToMany
     {
-        return $this->belongsToMany(User::class, 'comment_likes')->withTimestamps();
+        return $this->belongsToMany(User::class, 'comment_likes')
+            ->withPivot('created_at');
     }
 
     #[Scope]

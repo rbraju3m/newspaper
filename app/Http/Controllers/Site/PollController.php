@@ -8,6 +8,7 @@ use App\Models\PollVote;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class PollController extends Controller
 {
@@ -18,7 +19,17 @@ class PollController extends Controller
         }
 
         $validated = $request->validate([
-            'option_id' => ['required', 'integer', 'exists:poll_options,id'],
+            // Scoped to this poll, not just to the table. A bare
+            // exists:poll_options,id accepts an option belonging to a
+            // different poll: the vote row is written, this poll's total is
+            // incremented, and no option's own count moves — so the total
+            // stops equalling the sum of its options and every percentage on
+            // the results bar is wrong.
+            'option_id' => [
+                'required',
+                'integer',
+                Rule::exists('poll_options', 'id')->where('poll_id', $poll->id),
+            ],
         ]);
 
         // Guests are identified by a salted hash of IP+UA. Not bulletproof, but

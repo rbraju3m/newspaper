@@ -1,6 +1,6 @@
 # Project Status
 
-**Last updated:** 25 August 2026
+**Last updated:** 26 August 2026
 **Branch:** `feat/newspaper-platform` (2 commits ahead of `main`)
 **Environment:** running locally against MySQL, seeded with demo content
 
@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — test harness fixed, no coverage yet |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 218 tests; both halves of the app covered, sanitising and ops still open |
 
 ### By the numbers
 
@@ -42,12 +42,35 @@
 - 19/19 public routes and 12/12 admin screens return 200, zero errors logged
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
-These are ad-hoc scripts run during development, **not** a committed test
-suite. The committed suite is 27 tests: `HarnessTest` (the harness itself),
-`ResponsiveImageTest` (the srcset wiring), `MediaBackfillTest` (the ladder
-backfill), `ArticleImageSyncTest` (`image` and `image_id` moving together) and
-`AdAssetTest` (who owns an ad creative's file). Broad coverage of routes,
-policies, search and moderation is still Phase 7's first job.
+Those were ad-hoc scripts run during development. **They are now committed
+tests.** The suite is 218 tests, 599 assertions, ~48s:
+
+| File | Tests | Covers |
+|---|---|---|
+| `HarnessTest` | 4 | driver, FULLTEXT index, factories, strict mode |
+| `PublicRoutesTest` | 23 | every public URL, nested category paths, canonical redirect, draft visibility, staff preview, feeds parse as XML, output-buffer balance |
+| `AdminAuthorizationTest` | 22 | the role matrix requested by URL, plus publish, cross-author edit, media delete, self-delete |
+| `Unit/PolicyTest` | 14 | Article/Comment/User policy decision tables and the role ladder, no database |
+| `SearchTest` | 7 | Bangla `MATCH ... AGAINST`, category and date filters, LIKE fallback under three characters |
+| `CommentModerationTest` | 9 | who may moderate, and `comments_count` through approve, unapprove, delete and bulk |
+| `RegistrationTest` | 13 | registration, Bangla-digit phone normalisation and uniqueness, email lowercasing, newsletter as a separate consent |
+| `LoginTest` | 13 | login by email or phone (both digit systems), suspended accounts, session rotation, per-identifier throttling |
+| `EmailVerificationTest` | 8 | signed links, tampered hash, expired link, resend |
+| `PasswordResetTest` | 7 | request, reset, old password stops working, token cannot be reused |
+| `AccountProfileTest` | 15 | profile, email change invalidating verification, password change, account deletion, preferences and newsletter sync |
+| `BookmarkTest` | 6 | toggle, the 401-for-guests contract the Alpine store depends on, per-reader isolation |
+| `ReadingHistoryTest` | 9 | progress as a high-water mark, seconds accumulating, per-reader clearing |
+| `CommentPostingTest` | 17 | who may post, pending-by-default, rate limit, thread flattening, edit window, likes, report auto-hide |
+| `NewsletterTest` | 8 | subscribe, verify, unsubscribe, resubscribe |
+| `PollVotingTest` | 10 | guest fingerprinting, double-vote refusal, cross-poll option rejection, total equals sum of options |
+| imagery suite | 33 | `ResponsiveImageTest`, `MediaBackfillTest`, `ArticleImageSyncTest`, `AdAssetTest`, `MediaUploadTest` |
+
+Writing them turned up six defects that every manual pass had missed — see
+"What the test pass found" below.
+
+Still uncovered, in rough order of value: the live blog append path, the layout
+manager's reorder, feed *contents* as opposed to well-formedness, the e-paper
+reader, and OAuth sign-in (which needs the provider stubbed).
 
 ---
 
@@ -131,16 +154,90 @@ going through the controller, so a re-seed never reaps.
 
 ---
 
+## What the test pass found
+
+Three defects, none of which a lint pass, a route listing or a manual
+click-through would have surfaced. All three are fixed.
+
+1. **Staff preview of a draft returned 500.** `ArticleController::isViewable()`
+   deliberately lets staff see an unpublished story, and the article template
+   then called `@bndate($article->published_at)` on it. A draft has no
+   `published_at`, and `Bangla::date()` is typed against `CarbonInterface`, so
+   the whole page threw a `TypeError`. The meta tags a few lines above used
+   `?->` and were fine — only the visible byline was unguarded. The byline now
+   shows `অপ্রকাশিত খসড়া` instead.
+
+2. **Six templates leaked an output buffer on every request.**
+   `@section('description', $page->meta_description)` is only the inline form
+   when the value is not null; Blade compares with `===`, so a null switched it
+   to the block form, opening a buffer that nothing ever closed. The page still
+   rendered, which is why it survived. Found because PHPUnit flags an
+   unbalanced buffer as a risky test — the assertion that pins it is
+   `ob_get_level()` before and after the request. Full write-up in `CLAUDE.md`.
+
+3. **Any reporter could delete any image in the shared media library.**
+   `MediaController` had no `Gate::authorize()` on any method, against the
+   convention that every public method of an admin controller authorises.
+   Uploading and re-captioning are legitimately part of filing a story, so
+   those stay open to all staff; `destroy` now requires `manage-taxonomy`,
+   because `ImageService::delete()` removes the original and every derivative
+   from disk and a reporter could otherwise strip the lead image off somebody
+   else's published article with no way back.
+
+Three more came out of covering the reader-facing half.
+
+4. **Every comment "like" returned 500.** `Comment::likedBy()` declared
+   `withTimestamps()`, but `comment_likes` has only `created_at` — stamped by
+   the database with `useCurrent()` — and no `updated_at`. Every like therefore
+   died on `Unknown column 'updated_at' in 'field list'`. The sibling
+   `bookmarks` table carries a migration comment explaining this exact trap and
+   the `bookmarks()` relation avoids it; `likedBy()` did not. It now declares
+   `withPivot('created_at')` the same way. Verified over real HTTP against the
+   seeded database: `{"liked":true,"count":1}` where it previously threw.
+
+5. **Reply threads were never flattened.** `CommentRequest::after()` re-parents
+   a reply-to-a-reply so threads stay one level deep — on a phone, which is
+   most of this traffic, deeper nesting is unreadable. It did that with
+   `$this->merge()`, which writes to the request's input bag, while the
+   controller reads `$request->validated('parent_id')`, which comes from the
+   validator's own data. The merge was inert and every reply kept its deep
+   parent. Now `$validator->setValue()`.
+
+6. **A poll vote could be cast with another poll's option.** `option_id` was
+   validated with a bare `exists:poll_options,id`, unscoped. A crafted request
+   wrote a vote row against a foreign option and incremented *this* poll's
+   total, while no option's own count moved — so the total stopped equalling
+   the sum of its options and every percentage on the results bar was wrong.
+   The rule is now scoped to the poll. This is the same shape as the comment
+   `parent_id` graft, which `CommentRequest` had already guarded against.
+
+Two further findings were in the tests themselves and are worth keeping. The
+article factory's generated body is not inert corpus. `BanglaContent` injects one of
+ten phrases as an `<h2>`, one being `জলবায়ু পরিবর্তনের প্রভাব মোকাবিলায়`, and the
+full-text index covers `body` — so roughly one article in ten matched a search
+for জলবায়ু by accident. Search fixtures pin `excerpt` and `body` for that
+reason.
+
+And `@example.com` cannot be used anywhere the `dns` validation rule applies.
+The newsletter box validates `email:rfc,dns`, and egulias rejects the RFC 2606
+reserved domains outright regardless of what DNS returns — so the obvious test
+address is refused before it reaches the controller. `NewsletterTest` uses a
+resolvable domain, which does mean those four tests need working DNS and about
+150ms of real lookup each. Worth knowing that the rule puts a blocking DNS
+lookup in front of every newsletter submission on the live site too.
+
+---
+
 ## Known gaps
 
 ### Blocking a public launch
 
-1. **Almost no test suite.** The harness is fixed — `php artisan test` runs
-   green against the `newspaper_test` MySQL database — but it contains only
-   `tests/Feature/HarnessTest.php`, four tests that prove the plumbing works.
-   No application behaviour is covered yet; everything under "Verification
-   currently passing" above is still ad-hoc scripts. Writing real coverage is
-   Phase 7's first job.
+1. **Test coverage is started, not finished.** 218 tests cover both halves of
+   the app: public routes, the admin authorisation matrix, the policies, Bangla
+   search, comment moderation, and the whole reader path from registration
+   through bookmarks, history, comments, the newsletter and polls. What is
+   still uncovered is the live blog append path, the layout manager's reorder,
+   feed contents, the e-paper reader and OAuth sign-in.
 2. **Article bodies are raw HTML rendered unescaped.** Safe while only staff can
    write them. Must be sanitised before authorship widens.
 3. **Demo data and demo logins are in the database.** Purge before deploying.
@@ -242,7 +339,12 @@ Two things the Lighthouse pass will surface that are decisions, not bugs:
   returns none and every slot renders its placeholder. The creatives now
   exist; flip the flag if the pass should measure filled slots.
 
-Then Phase 7: test suite, sanitising, backups, error tracking, deploy runbook.
+Phase 7 has since started ahead of the remaining Phase 6 items, because the
+only unblocked one left is the cold-homepage query count — AVIF needs a rebuilt
+GD or `php-imagick` on this box, and `hreflang` needs a second locale to exist.
+What remains of Phase 7: coverage for the reader-facing half of the app,
+sanitising article bodies, purging demo data, backups, error tracking and a
+deploy runbook.
 
 ---
 

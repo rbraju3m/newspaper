@@ -8,6 +8,7 @@ use App\Services\ImageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
 class MediaController extends Controller
@@ -69,8 +70,17 @@ class MediaController extends Controller
         return back()->with('status', 'ছবির তথ্য হালনাগাদ হয়েছে।');
     }
 
+    /**
+     * Deleting is the one media action a reporter may not take. Uploading and
+     * re-captioning are part of filing a story, but `ImageService::delete()`
+     * removes the original and every derivative from disk, and the library is
+     * shared — a reporter could otherwise strip the lead image off somebody
+     * else's published article with no way back.
+     */
     public function destroy(Media $media, ImageService $images): RedirectResponse
     {
+        Gate::authorize('manage-taxonomy');
+
         $images->delete($media);
 
         return back()->with('status', 'ছবিটি মুছে ফেলা হয়েছে।');
