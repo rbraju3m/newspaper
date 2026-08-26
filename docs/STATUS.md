@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 491 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 496 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
 
 ### By the numbers
 
@@ -30,7 +30,7 @@
 | Routes (115 total, 52 admin) | 115 |
 | Database tables | 38 |
 | Seeded content | 55 categories · 374 articles · 107 comments · 36 users |
-| Imagery | 105 media · 521 WebP derivatives · 62 MB on disk |
+| Imagery | 153 media · 761 WebP derivatives · 79 MB on disk |
 | Bundle (gzipped) | 16.0 KB CSS · 23.3 KB JS |
 
 ### Verification currently passing
@@ -43,7 +43,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 491 tests, 1,623 assertions, ~82s:
+tests.** The suite is 496 tests, 1,670 assertions, ~114s:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -73,6 +73,7 @@ tests.** The suite is 491 tests, 1,623 assertions, ~82s:
 | `BackupTest` | 10 | that `backup:run` writes a dump holding rows and not just schema, that Bangla survives it, that the archive uses relative paths, the completion-marker check, the public-disk refusal, and that pruning never takes the last backup |
 | `DemoPurgeTest` | 12 | what `demo:purge` deletes and what it keeps, the seeded logins going even when one is an admin, `--keep`, the lockout refusal, the media ladder coming off disk, and the counter and cache resets |
 | `ContentSanitizeTest` | 22 | that all three unescaped bodies are sanitised on write — the article model and editor form, live-blog append and edit (including the JSON the polling client feeds to `x-html`), and static pages — plus `content:sanitize` over every target, trashed rows included, leaving `updated_at` alone |
+| `EpaperSeederTest` | 5 | `EpaperSeeder` — a complete drawn issue, the dates it skips, that a hand-made issue is left alone, and that a redraw reproduces the same paper |
 | `EpaperAdminTest` | 22 | the e-paper admin — one issue per edition per day, page uploads numbered in order with thumbnails, the whole-issue PDF and its replacement, renumbering against the unique constraint, deletion taking its files, and the public reader |
 | `GalleryAdminTest` | 25 | the photo gallery admin — creating, the Bangla slug, uploads writing both columns and building the ladder, attaching from the library, drag ordering, the cover that follows it, deletion taking its files off disk without reaping a photograph an article still uses, the denormalised count, and the public hub |
 | `MediaSeederTest` | 7 | what `MediaSeeder` heals and, more importantly, what it refuses to touch — imagery that is actually on disk |
@@ -292,7 +293,7 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 491 tests cover both halves of
+1. **Test coverage is started, not finished.** 496 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, and the whole reader path from registration
    through bookmarks, history, comments, the newsletter and polls. What is
@@ -423,9 +424,10 @@ comes to disagree about what drift is.
      without WebP ever fetch it, but it is the `src` fallback, so it is the
      number that matters if that ever stops being a rounding error.
 
-   `galleries` and `gallery_images` are still empty, so `/photo` renders an
-   empty hub, and `epapers` has no rows — both blocked on their missing admin
-   CRUD, gaps 8 and 9, not on imagery.
+   Both modules have an admin now (gaps 8 and 9), and `EpaperSeeder` fills
+   `/epaper` with six drawn back issues. `galleries` is still empty of demo
+   content: the CRUD exists, but nothing seeds through it, so a fresh
+   `db:seed` leaves `/photo` an empty hub.
 6b. ~~**The seeded plate library is gone from this box, and the ad slots point
    at nothing.**~~ **Fixed.** Found while importing the photographs, and it
    predated that import — `photos:import` only inserts media and updates
@@ -447,6 +449,24 @@ comes to disagree about what drift is.
    photographs alone, and drew nothing. Verified over HTTP: every ad slot on
    the homepage serves a real creative, all 200. `MediaSeederTest` pins both
    halves — what it heals and what it refuses to touch.
+
+9b. **`/epaper` has demo issues; `/photo` still does not.** `EpaperSeeder`
+   draws six back issues of eight pages each — masthead, column rules,
+   headline bars, a picture block — and files them through `ImageService`, so
+   the ladder and the grid thumbnails are real rather than stubbed. About 38
+   seconds cold and nothing on a re-run: an issue is looked up by the
+   `(date, edition)` pair the table already makes unique, so a hand-made issue
+   sitting on one of those dates is left exactly as it is.
+
+   The pages are drawn rather than photographed on purpose. What has to read at
+   the 200px the grid shows is the *shape* of a newspaper; a photograph in a
+   page slot reads as a mistake. The masthead carries no words, because GD does
+   no complex shaping and would set Bangla with its conjuncts unformed and its
+   vowel signs out of order — a wrong nameplate in front of a Bangla newsroom
+   being worse than a nameplate-shaped block.
+
+   Galleries have no equivalent seeder yet, which is the obvious next small
+   piece now that both admins exist.
 
 7. **Push notifications are half-present.** The service worker has `push` and
    `notificationclick` handlers, but there is no subscription storage, no VAPID

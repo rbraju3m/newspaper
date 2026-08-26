@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
             SiteSeeder::class,       // settings, homepage layout, pages, poll, ads
             ContentSeeder::class,    // articles, comments, tags, topics
             MediaSeeder::class,      // imagery last: it rewrites what the rest wrote
+            EpaperSeeder::class,     // after it, and only additive: nothing else touches epapers
         ]);
     }
 }

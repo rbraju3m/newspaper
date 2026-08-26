@@ -104,6 +104,137 @@ class SeedImagery
         return $im;
     }
 
+    /**
+     * A broadsheet page, portrait, as it reads at thumbnail size.
+     *
+     * Deliberately not a photograph: the e-paper grid is a wall of pages, and
+     * what has to be legible at 200px is the *shape* of a newspaper — masthead,
+     * column rules, headline bars, a picture block. Text is drawn as grey rules
+     * rather than set in a face, because at this size real Bangla would be a
+     * smear and at full size it would be lorem nobody asked for.
+     *
+     * `$front` gives page one its masthead and a wider lead; inside pages get
+     * a section strip instead.
+     *
+     * The masthead carries no words on purpose. GD's TTF renderer does no
+     * complex shaping, so Bangla comes out with its conjuncts unformed and its
+     * vowel signs in logical rather than visual order — and the one font on
+     * this box that has the glyphs at all renders দৈনিক wrong rather than not
+     * at all. A wrong Bangla nameplate in front of a Bangla newsroom is worse
+     * than a nameplate-shaped block, and at the 200px the grid shows it, the
+     * shape is the whole signal.
+     */
+    public function newspaperPage(string $hex, int $w, int $h, bool $front = false): \GdImage
+    {
+        $palette = $this->palette($hex);
+
+        $im = imagecreatetruecolor($w, $h);
+        imagealphablending($im, true);
+
+        // Newsprint, not white: a page that reads as paper against the grid's
+        // surface colour rather than as a hole in it.
+        imagefilledrectangle($im, 0, 0, $w, $h, imagecolorallocate($im, 246, 244, 238));
+
+        $ink = imagecolorallocate($im, 28, 28, 30);
+        $rule = imagecolorallocate($im, 168, 166, 160);
+        $text = imagecolorallocate($im, 122, 120, 116);
+
+        $margin = (int) round($w * 0.06);
+        $inner = $w - 2 * $margin;
+        $y = $margin;
+
+        if ($front) {
+            // Masthead: a solid bar in the section colour with a nameplate
+            // block centred in it, and a hairline under.
+            $bar = (int) round($h * 0.055);
+            imagefilledrectangle($im, $margin, $y, $margin + $inner, $y + $bar,
+                $this->colour($im, $palette['deep'], 100));
+
+            $plateWidth = (int) round($inner * 0.42);
+            $plateHeight = (int) round($bar * 0.42);
+            $plateX = $margin + (int) round(($inner - $plateWidth) / 2);
+            $plateY = $y + (int) round(($bar - $plateHeight) / 2);
+            imagefilledrectangle($im, $plateX, $plateY, $plateX + $plateWidth, $plateY + $plateHeight,
+                $this->colour($im, $palette['highlight'], 92));
+
+            $y += $bar + (int) round($h * 0.012);
+        } else {
+            $strip = (int) round($h * 0.018);
+            imagefilledrectangle($im, $margin, $y, $margin + (int) round($inner * 0.34), $y + $strip,
+                $this->colour($im, $palette['accent'], 100));
+            $y += $strip + (int) round($h * 0.014);
+        }
+
+        imagefilledrectangle($im, $margin, $y, $margin + $inner, $y + 2, $ink);
+        $y += (int) round($h * 0.016);
+
+        // Lead headline: two or three heavy bars, ragged right like real type.
+        foreach (range(1, $front ? 3 : 2) as $line) {
+            $height = (int) round($h * ($front ? 0.030 : 0.022));
+            $width = (int) round($inner * $this->rand(62, 100) / 100);
+            imagefilledrectangle($im, $margin, $y, $margin + $width, $y + $height, $ink);
+            $y += $height + (int) round($h * 0.010);
+        }
+
+        $y += (int) round($h * 0.008);
+
+        // Picture block, then columns filling whatever is left.
+        $picture = (int) round($h * ($front ? 0.26 : 0.20));
+        $pictureWidth = (int) round($inner * ($front ? 1.0 : 0.62));
+
+        // Composed larger than the ad creative's wash: this one is shown at
+        // page size, where a 40px source reads as visible blocks.
+        $wash = $this->wash($palette, 90, 68, $pictureWidth, $picture);
+        imagecopy($im, $wash, $margin, $y, 0, 0, $pictureWidth, $picture);
+        imagedestroy($wash);
+
+        imagerectangle($im, $margin, $y, $margin + $pictureWidth, $y + $picture, $rule);
+
+        // Caption rule under the picture.
+        $y += $picture + (int) round($h * 0.008);
+        imagefilledrectangle($im, $margin, $y, $margin + (int) round($pictureWidth * 0.7), $y + 2, $text);
+        $y += (int) round($h * 0.016);
+
+        $this->columns($im, $margin, $y, $inner, $h - $y - $margin, $front ? 4 : 3, $text, $rule);
+
+        $this->grain($im, $w, $h, 5);
+
+        return $im;
+    }
+
+    /** Body text as column rules, with a gutter hairline between each pair. */
+    private function columns(\GdImage $im, int $x, int $y, int $width, int $height, int $count, int $text, int $rule): void
+    {
+        if ($height < 20) {
+            return;
+        }
+
+        $gutter = (int) round($width * 0.03);
+        $column = (int) round(($width - $gutter * ($count - 1)) / $count);
+        $line = max(2, (int) round($height * 0.016));
+        $gap = max(2, (int) round($line * 0.9));
+
+        for ($c = 0; $c < $count; $c++) {
+            $left = $x + $c * ($column + $gutter);
+            $cursor = $y;
+
+            if ($c > 0) {
+                imageline($im, $left - (int) round($gutter / 2), $y,
+                    $left - (int) round($gutter / 2), $y + $height, $rule);
+            }
+
+            while ($cursor + $line < $y + $height) {
+                // A short line every so often reads as the end of a paragraph.
+                $length = $this->rand(1, 10) === 1
+                    ? (int) round($column * $this->rand(30, 60) / 100)
+                    : $column;
+
+                imagefilledrectangle($im, $left, $cursor, $left + $length, $cursor + $line - 1, $text);
+                $cursor += $line + $gap;
+            }
+        }
+    }
+
     // ── Layers ───────────────────────────────────────────────────────────
 
     /** Blurred colour field: gradient plus soft blobs, resampled up. */

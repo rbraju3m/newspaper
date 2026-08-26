@@ -499,7 +499,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 491 tests, ~82s. Behaviour coverage exists
+`php artisan test` runs and passes — 496 tests, ~114s. Behaviour coverage exists
 for both halves of the app:
 
 | File | Covers |
@@ -525,6 +525,7 @@ for both halves of the app:
 | `ArticleCounterTest` | the denormalised article counts through every transition, and the nightly reconcile |
 | `RateLimitTest` | every named limiter, its headroom, and that authenticated buckets are per-account |
 | `ErrorPageTest` | the Bangla error pages, and that the 5xx ones render with no database |
+| `EpaperSeederTest` | `EpaperSeeder` — a drawn issue, the dates it skips, and that a redraw reproduces it |
 | `EpaperAdminTest` | the e-paper admin — page numbering against its unique constraint, the PDF, and deletion |
 | `GalleryAdminTest` | the photo gallery admin — uploads, ordering, the cover, deletion and its files, and the public hub |
 | `MediaSeederTest` | that `MediaSeeder` heals broken imagery without replacing imagery that works |
