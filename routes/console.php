@@ -9,7 +9,7 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 /**
- * The first and only scheduled task in this application.
+ * Scheduled tasks.
  *
  * It fires only if the cron entry in `docs/DEPLOY.md` is installed —
  * `schedule:run` is what turns this file into anything at all, and nothing
@@ -23,3 +23,14 @@ Schedule::command('backup:run')
     ->dailyAt('03:00')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/backup.log'));
+
+/*
+ * The morning digest: what broke yesterday, grouped.
+ *
+ * The push alert answers "is something on fire right now" and deliberately
+ * says nothing twice — this is how the faults it silenced still get seen.
+ * Skipped entirely when no address is configured, rather than mailing nowhere.
+ */
+Schedule::command('errors:digest', ['--days' => 1, '--email' => (string) config('errors.alert.email')])
+    ->dailyAt('07:00')
+    ->when(fn () => filled(config('errors.alert.email')));

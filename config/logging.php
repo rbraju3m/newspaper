@@ -1,5 +1,6 @@
 <?php
 
+use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -78,6 +79,24 @@ return [
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'max_files' => 3,
+            'replace_placeholders' => true,
+        ],
+
+        /*
+         * Exceptions, one JSON object per line.
+         *
+         * Separate from the application log because it has two readers that
+         * both want structure: `errors:digest`, which groups a day's failures,
+         * and whoever is reading over their shoulder. A file rather than a
+         * table, so it still records the outage when the database is the thing
+         * that broke.
+         */
+        'errors' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/errors.log'),
+            'level' => 'error',
+            'days' => env('ERROR_LOG_DAYS', 30),
+            'formatter' => JsonFormatter::class,
             'replace_placeholders' => true,
         ],
 

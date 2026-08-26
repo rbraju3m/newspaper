@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 330 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook and verified nightly backups; off-site copies and error tracking still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 346 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups and error alerting; off-site backup copies and real branding still open |
 
 ### By the numbers
 
@@ -43,7 +43,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 330 tests, 782 assertions, ~69s:
+tests.** The suite is 346 tests, 821 assertions, ~70s:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -65,6 +65,7 @@ tests.** The suite is 330 tests, 782 assertions, ~69s:
 | `PollVotingTest` | 10 | guest fingerprinting, double-vote refusal, cross-poll option rejection, total equals sum of options |
 | imagery suite | 33 | `ResponsiveImageTest`, `MediaBackfillTest`, `ArticleImageSyncTest`, `AdAssetTest`, `MediaUploadTest` |
 | `Unit/HtmlSanitizerTest` | 68 | the HTML allow-list: script, handler, `javascript:`, entity-encoded and tab-split URLs, `data:` images, conditional comments, foreign content, off-host iframes — and that every verdict is idempotent |
+| `ErrorAlertTest` | 16 | what is recorded, what is pushed and — mostly — what is not: the per-fault throttle, the hourly cap across fingerprints, the framework's own filtering of 404s and validation failures, that a failing channel never escapes into the exception handler, the Slack/Discord payload split, and `errors:digest` grouping |
 | `BackupTest` | 10 | that `backup:run` writes a dump holding rows and not just schema, that Bangla survives it, that the archive uses relative paths, the completion-marker check, the public-disk refusal, and that pruning never takes the last backup |
 | `DemoPurgeTest` | 12 | what `demo:purge` deletes and what it keeps, the seeded logins going even when one is an admin, `--keep`, the lockout refusal, the media ladder coming off disk, and the counter and cache resets |
 | `ContentSanitizeTest` | 22 | that all three unescaped bodies are sanitised on write — the article model and editor form, live-blog append and edit (including the JSON the polling client feeds to `x-html`), and static pages — plus `content:sanitize` over every target, trashed rows included, leaving `updated_at` alone |
@@ -236,7 +237,7 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 330 tests cover both halves of
+1. **Test coverage is started, not finished.** 346 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, and the whole reader path from registration
    through bookmarks, history, comments, the newsletter and polls. What is
@@ -278,10 +279,18 @@ lookup in front of every newsletter submission on the live site too.
    - **Nothing monitors it.** If the nightly run stops, only
      `storage/logs/backup.log` will say so.
 
-   **Error tracking is still open**, and it is the same gap seen from the
-   other side: nothing reports an exception anywhere but
-   `storage/logs/laravel.log`, so nobody learns a backup failed — or that
-   anything else did — until someone reads a file.
+   ~~**Error tracking is still open.**~~ **Done.** Every reportable exception
+   is written to `storage/logs/errors-YYYY-MM-DD.log` as JSON, and the first
+   occurrence of each distinct fault pushes an alert to email, a webhook, or
+   both — throttled to one per fault per hour under a ceiling of twenty an
+   hour, because a thousand alerts is indistinguishable from silence.
+   `errors:digest` mails a grouped summary at 07:00, which is how the faults
+   the throttle silenced still get seen. Both are off until `.env` names a
+   destination.
+
+   What is *not* covered: nothing watches the watcher. If mail delivery
+   breaks, the alert about it goes to the same broken mail. An external uptime
+   check against `/up` is the honest complement, and is not in the repo.
 
 ### Decisions the runbook surfaced
 
@@ -393,8 +402,8 @@ Two things the Lighthouse pass will surface that are decisions, not bugs:
 Phase 7 has since started ahead of the remaining Phase 6 items, because the
 only unblocked one left is the cold-homepage query count — AVIF needs a rebuilt
 GD or `php-imagick` on this box, and `hreflang` needs a second locale to exist.
-What remains of Phase 7: error tracking, off-site copies of the nightly
-backup, and real branding.
+What remains of Phase 7: off-site copies of the nightly backup, an external
+uptime check, and real branding.
 
 ---
 

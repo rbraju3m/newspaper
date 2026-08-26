@@ -321,7 +321,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 330 tests, ~69s. Behaviour coverage exists
+`php artisan test` runs and passes — 346 tests, ~70s. Behaviour coverage exists
 for both halves of the app:
 
 | File | Covers |
@@ -342,6 +342,7 @@ for both halves of the app:
 | `ContentSanitizeTest` | that every write path applies it — articles, live entries, pages — and `content:sanitize` |
 | `DemoPurgeTest` | `demo:purge` — what it deletes, what it keeps, and that it will not lock you out |
 | `BackupTest` | `backup:run` — that the dump holds rows, not just schema, and that a bad one is discarded |
+| `ErrorAlertTest` | error alerting — the throttle, the hourly cap, and that a failing channel never escapes |
 
 Still uncovered: the live blog append path, the layout manager's reorder, feed
 *contents* as opposed to well-formedness, the e-paper reader, and OAuth sign-in.
@@ -390,5 +391,9 @@ and the browser are where the real bugs surfaced.
 - Apache runs as `www-data`; `storage/` and `bootstrap/cache/` are ACL-granted
 - Credentials live in `.env` (git-ignored). Never read another project's `.env`
   to obtain them — ask.
-- `MAIL_MAILER=log`; verification and reset links land in
-  `storage/logs/laravel.log`
+- **`.env` on this box points `MAIL_MAILER` at a real Gmail account**, not at
+  `log`. Anything that calls `Mail::` from tinker or a scratch script sends a
+  real message from a real address. Use `Mail::fake()` in tests — the suite
+  does — and leave mail out of manual probes, or set `MAIL_MAILER=log` first.
+  This bit once: a probe of the error-alerting path sent live mail to a
+  made-up address.

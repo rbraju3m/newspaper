@@ -6,8 +6,8 @@ requirements are unusually specific in three places, and each of them fails
 quietly rather than loudly.
 
 Read alongside [`STATUS.md`](STATUS.md) for what is still open before a public
-launch. Three of those are not deployment steps and are not covered here: real
-branding, error tracking, and the timezone decision below.
+launch. Two of those are not deployment steps and are not covered here: real
+branding, and the timezone decision below.
 
 ---
 
@@ -425,3 +425,61 @@ Then check the restore rather than assuming it: compare a row count against
 what you expected, open a story with an image on it, and search a Bangla term.
 A restore verified only by "the command exited 0" is the same mistake as an
 unverified backup.
+
+---
+
+## Error alerting
+
+Nothing is pushed until you configure somewhere to push to. Blank is the
+default, and a blank install behaves exactly as it did before.
+
+```dotenv
+ERROR_ALERT_EMAIL=oncall@example.com
+ERROR_ALERT_WEBHOOK=https://hooks.slack.com/services/…
+ERROR_ALERT_THROTTLE=60
+ERROR_ALERT_MAX_PER_HOUR=20
+```
+
+Both channels can be set; either can be left blank. Slack and Discord webhook
+URLs are both understood — they take different payload fields and the right one
+is chosen from the host.
+
+**Everything reportable is recorded regardless**, as one JSON object per line in
+`storage/logs/errors-YYYY-MM-DD.log`, kept for `ERROR_LOG_DAYS` days. That file
+is what the digest reads, and it is a file rather than a table on purpose: a
+database outage is the failure you most want recorded, and it is exactly when
+the database cannot record it. The throttle state is in the *file* cache for the
+same reason.
+
+**Alerts are throttled, hard.** One per distinct fault per hour, under a ceiling
+of twenty an hour across all faults. The fingerprint is the exception class,
+file and line — not the message, which usually carries an id and would make one
+broken line look like a thousand problems. A thousand alerts is
+indistinguishable from silence, and it takes the mail server with it.
+
+Laravel already declines to report 404s, validation failures, 419s and auth
+failures before any of this runs, so those never alert.
+
+### The morning digest
+
+```bash
+php artisan errors:digest                 # yesterday, printed
+php artisan errors:digest --days=7        # the week
+php artisan errors:digest --email=you@example.com
+```
+
+Scheduled for 07:00, and skipped entirely when `ERROR_ALERT_EMAIL` is blank.
+This is the counterpart to the throttle: the alert says a thing broke once, and
+the digest says it has been breaking three hundred times a day since Tuesday.
+
+### Two things to know
+
+**Alerts are sent synchronously from the exception handler**, because this
+deployment runs no queue worker. The webhook timeout is five seconds for that
+reason. If a worker ever exists, dispatching the send is the upgrade.
+
+**Nothing watches the watcher.** If mail delivery breaks, the alert about it
+goes to the same broken mail. `storage/logs/laravel.log` records
+`ErrorAlerter (email) failed` when a channel throws, and that is the only
+signal. An external uptime check on `/up` is the honest complement to this and
+is not in scope here.
