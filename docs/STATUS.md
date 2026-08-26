@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 308 tests; both halves of the app covered, every editor-written body sanitised, ops still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 320 tests; both halves of the app covered, every editor-written body sanitised, the demo purge written, ops still open |
 
 ### By the numbers
 
@@ -43,7 +43,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 308 tests, 720 assertions, ~43s:
+tests.** The suite is 320 tests, 757 assertions, ~51s:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -65,6 +65,7 @@ tests.** The suite is 308 tests, 720 assertions, ~43s:
 | `PollVotingTest` | 10 | guest fingerprinting, double-vote refusal, cross-poll option rejection, total equals sum of options |
 | imagery suite | 33 | `ResponsiveImageTest`, `MediaBackfillTest`, `ArticleImageSyncTest`, `AdAssetTest`, `MediaUploadTest` |
 | `Unit/HtmlSanitizerTest` | 68 | the HTML allow-list: script, handler, `javascript:`, entity-encoded and tab-split URLs, `data:` images, conditional comments, foreign content, off-host iframes — and that every verdict is idempotent |
+| `DemoPurgeTest` | 12 | what `demo:purge` deletes and what it keeps, the seeded logins going even when one is an admin, `--keep`, the lockout refusal, the media ladder coming off disk, and the counter and cache resets |
 | `ContentSanitizeTest` | 22 | that all three unescaped bodies are sanitised on write — the article model and editor form, live-blog append and edit (including the JSON the polling client feeds to `x-html`), and static pages — plus `content:sanitize` over every target, trashed rows included, leaving `updated_at` alone |
 
 Writing them turned up six defects that every manual pass had missed — see
@@ -234,7 +235,7 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 308 tests cover both halves of
+1. **Test coverage is started, not finished.** 320 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, and the whole reader path from registration
    through bookmarks, history, comments, the newsletter and polls. What is
@@ -248,7 +249,17 @@ lookup in front of every newsletter submission on the live site too.
    parser, and `content:sanitize` brings stored rows forward. The live-blog
    timeline is covered on both of its readers: the server-rendered list and
    the JSON the polling client injects with `x-html`.
-3. **Demo data and demo logins are in the database.** Purge before deploying.
+3. **Demo data and demo logins are in the database.** `demo:purge` now does
+   this — it deletes the seeded content and every user except the admins, the
+   three `@newspaper.test` logins included, and keeps the category tree, the
+   homepage layout, the settings and the six static pages. **It has not been
+   run here**, deliberately: this database is what manual verification uses.
+   Run it on the deployment target, not on the development box.
+
+   Two things it does not do, both by design. It leaves the sample imprint
+   settings and the six page bodies alone — that is item 4 below, not this one
+   — and it reports files left under `uploads/` rather than sweeping the
+   directory blind.
 4. **Placeholder branding** — GD-drawn app icons, no real logo artwork, imprint
    fields hold sample values.
 5. **No backups, no error tracking, no deploy runbook.**

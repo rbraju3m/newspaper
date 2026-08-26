@@ -206,6 +206,35 @@ parser disagrees with browsers about foreign content (`<svg>`, `<math>`), which
 is where every mutation-XSS bug lives, and it hands back numeric entities on
 some input — `&#2476;` where বাংলা used to be, in a column FULLTEXT covers.
 
+### `demo:purge` keeps the shell, not the content
+
+`demo:purge` is the pre-launch sweep: it deletes the seeded articles, comments,
+tags, topics, media, ads and polls, and every user except the admins — the three
+`@newspaper.test` logins included, because a known address whose password is the
+word "password" is the whole point of the exercise.
+
+It **keeps** the category tree, the homepage layout, the settings and the six
+static pages, so what is left is an empty newspaper rather than a blank
+database. That is the difference between it and `migrate:fresh --seed`, which is
+not a substitute in either direction.
+
+Three things it is easy to get wrong when editing it:
+
+- **Media has to go through `ImageService::delete()` before the table sweep.**
+  A row's derivatives live in its `conversions` column, so deleting the row
+  first strands the whole ladder on disk. This shipped broken for an hour and
+  `DemoPurgeTest` is why it did not ship at all.
+- **A new table needs adding to `PurgeDemoData::PURGE`.** Most of it would
+  cascade from `articles` and `users` anyway; the list is explicit so a table
+  added later reads as one the command does not know about, rather than as rows
+  that quietly survive.
+- **It refuses to delete every user.** Ending a purge with nobody who can sign
+  in is not recoverable short of tinker.
+
+Safe by default: it prompts unless given `--force`, and `--dry-run` prints the
+whole plan and changes nothing. `--keep=a@b.com` preserves an account that is
+not an admin.
+
 ### Response return types
 
 `Illuminate\Http\Response` is **not** a supertype of `JsonResponse` or
@@ -290,7 +319,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 308 tests, ~43s. Behaviour coverage exists
+`php artisan test` runs and passes — 320 tests, ~51s. Behaviour coverage exists
 for both halves of the app:
 
 | File | Covers |
@@ -309,6 +338,7 @@ for both halves of the app:
 | `ResponsiveImageTest`, `MediaBackfillTest`, `ArticleImageSyncTest`, `AdAssetTest`, `MediaUploadTest` | the imagery ladder |
 | `Unit/HtmlSanitizerTest` | the HTML allow-list — the vector table, and that cleaning is idempotent |
 | `ContentSanitizeTest` | that every write path applies it — articles, live entries, pages — and `content:sanitize` |
+| `DemoPurgeTest` | `demo:purge` — what it deletes, what it keeps, and that it will not lock you out |
 
 Still uncovered: the live blog append path, the layout manager's reorder, feed
 *contents* as opposed to well-formedness, the e-paper reader, and OAuth sign-in.
