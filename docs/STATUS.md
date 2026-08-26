@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 379 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 392 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
 
 ### By the numbers
 
@@ -43,7 +43,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 379 tests, 1,246 assertions, ~82s:
+tests.** The suite is 392 tests, 1,283 assertions, ~82s:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -65,6 +65,7 @@ tests.** The suite is 379 tests, 1,246 assertions, ~82s:
 | `PollVotingTest` | 10 | guest fingerprinting, double-vote refusal, cross-poll option rejection, total equals sum of options |
 | imagery suite | 33 | `ResponsiveImageTest`, `MediaBackfillTest`, `ArticleImageSyncTest`, `AdAssetTest`, `MediaUploadTest` |
 | `Unit/HtmlSanitizerTest` | 68 | the HTML allow-list: script, handler, `javascript:`, entity-encoded and tab-split URLs, `data:` images, conditional comments, foreign content, off-host iframes — and that every verdict is idempotent |
+| `ErrorPageTest` | 13 | every error page in Bangla, the 404's search box, the 429's retry window — and that the 5xx pages render with the database gone |
 | `RateLimitTest` | 10 | every named limiter, the headroom below each ceiling, that authenticated buckets are per-account rather than per-address, and that logout is deliberately exempt |
 | `ArticleCounterTest` | 14 | `categories.articles_count` and `users.articles_count` through publish, unpublish, category move, byline change, trash, restore and both force-delete shapes — plus `counters:recompute` correcting drift a bulk update caused |
 | `ScheduledPublishingTest` | 9 | that a due article publishes and a future one does not, that the editor's chosen time survives, that drafts are untouched, and that a guest goes from 404 to reading it |
@@ -240,7 +241,7 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 379 tests cover both halves of
+1. **Test coverage is started, not finished.** 392 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, and the whole reader path from registration
    through bookmarks, history, comments, the newsletter and polls. What is
@@ -321,10 +322,10 @@ Before it, five routes were throttled — all of them in `auth.php` — out of 6
 that change state. Sixty are now covered; `logout` is the deliberate exception.
 The numbers and the reasoning are in [`DEPLOY.md`](DEPLOY.md).
 
-Two things the review turned up and did not fix, both noted there: there is no
-global limiter on the `web` group (volumetric limiting belongs at the proxy),
-and a 429 renders Laravel's stock English error page — the application ships no
-`resources/views/errors/` at all, so the same is true of 404 and 500.
+One thing the review turned up and did not fix, noted there: there is no
+global limiter on the `web` group, because volumetric limiting belongs at the
+proxy. ~~The other — a 429 rendering Laravel's stock English page — is now
+fixed: the application ships a full set of Bangla error pages.~~
 
 ### ~~Known inaccuracy~~ — fixed
 

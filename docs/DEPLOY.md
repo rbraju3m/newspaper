@@ -532,10 +532,41 @@ There is **no global limiter** on the `web` group. One would have to be loose
 enough for a shared office connection and would then be too loose to matter;
 volumetric limiting belongs at the reverse proxy or CDN, not in PHP.
 
-A throttled request gets Laravel's stock 429 page, in English. The application
-ships no `resources/views/errors/` at all, so that is true of 404 and 500 as
-well — a gap worth closing for a Bangla-first site, and not one specific to
-rate limiting.
+A throttled request gets the Bangla 429 page in `resources/views/errors/`,
+which reads the `Retry-After` header and tells the reader how long to wait.
 
 If a limit turns out to be wrong for real traffic, the numbers are all in that
 one method. Raise it there rather than removing the middleware.
+
+---
+
+## Error pages
+
+`resources/views/errors/` carries a Bangla page for every code a reader can
+reach. They come in two families with opposite requirements, and the split is
+the only thing here worth remembering.
+
+**4xx — the application is healthy.** `404`, `403`, `419`, `429` and a `4xx`
+fallback extend the site layout, so a reader keeps the masthead and the nav and
+is one click from somewhere useful. The 404 carries a search box: a reader who
+lands there was looking for something specific, and offering only the front
+page throws that away.
+
+**5xx — it is not.** `500`, `503` and a `5xx` fallback are self-contained: no
+layout, no composers, no database, no JavaScript, no webfonts, and their CSS is
+inline. That is not tidiness. `layouts.site` builds its header and footer from
+view composers that query the category tree, and `CACHE_STORE` is the database
+— so at the moment a 500 renders, none of it can be relied on, and a layout
+that throws while rendering an error page loses the error page.
+
+Inline CSS rather than `@vite` for the same class of reason: `artisan down
+--render="errors::503"` bakes a static file that is served without booting the
+application, and a deploy that rebuilds assets between `down` and `up` would
+leave it pointing at a hashed bundle that no longer exists.
+
+Verified by rendering the 5xx views against a dead database, and over HTTP with
+`APP_DEBUG=false DB_PORT=1`: Bangla, self-contained, and no stack trace.
+
+`APP_DEBUG=false` is what makes the 500 page appear at all — with debug on you
+get the stack trace instead, which is the other reason that setting is not
+optional.

@@ -349,6 +349,25 @@ AdService::flush();                 // ad edits
 Setting::flush();                   // settings (also clears the per-request memo)
 ```
 
+### Error pages come in two families
+
+`resources/views/errors/` splits deliberately. `404`, `403`, `419`, `429` and
+`4xx` extend `layouts.site`, because at those codes the application is healthy
+and the reader should keep the nav.
+
+`500`, `503` and `5xx` extend `errors/standalone.blade.php` and must stay that
+way: no layout, no composers, no database, no `@vite`, inline CSS. The site
+layout's header and footer are built by view composers that query the category
+tree, and `CACHE_STORE` is the database — at 500 none of it can be relied on,
+and a layout that throws while rendering an error page loses the error page.
+`artisan down` also pre-renders 503 to a static file served without booting the
+app, so an asset reference there would break on the next build.
+
+If you touch the 5xx views, re-run the check that proves it: render them with
+`config(['database.connections.mysql.port' => 1])` and `DB::purge('mysql')`.
+`ErrorPageTest` does exactly that, and restores the port in a `finally` — a
+dead connection left behind fails the *next* test instead.
+
 ### Rate limits
 
 Named limiters live in `AppServiceProvider::registerRateLimiters()` and are
@@ -379,7 +398,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 379 tests, ~82s. Behaviour coverage exists
+`php artisan test` runs and passes — 392 tests, ~82s. Behaviour coverage exists
 for both halves of the app:
 
 | File | Covers |
@@ -404,6 +423,7 @@ for both halves of the app:
 | `ScheduledPublishingTest` | `articles:publish-due` — that a due story becomes readable and a future one does not |
 | `ArticleCounterTest` | the denormalised article counts through every transition, and the nightly reconcile |
 | `RateLimitTest` | every named limiter, its headroom, and that authenticated buckets are per-account |
+| `ErrorPageTest` | the Bangla error pages, and that the 5xx ones render with no database |
 
 Still uncovered: the live blog append path, the layout manager's reorder, feed
 *contents* as opposed to well-formedness, the e-paper reader, and OAuth sign-in.
