@@ -138,6 +138,25 @@ box is the one endpoint that uses it. `NewsletterTest` uses a resolvable domain
 and therefore needs working DNS — and that rule puts a blocking ~150ms lookup in
 front of every live submission too.
 
+### `MediaSeeder` reassigns every article, so it undoes `photos:import`
+
+Two things write `articles.image_id` across the whole table and neither knows
+about the other.
+
+`photos:import <dir> --assign` spreads a folder of real photographs over every
+article. `MediaSeeder::assignToArticles()` spreads its drawn section plates
+over every article. Both are deterministic, both use a query-builder `update()`,
+and whichever ran last wins for all 374 rows.
+
+So `db:seed`, or `db:seed --class=MediaSeeder`, silently reverts an import.
+That is the right behaviour for a seeder — it is repairing the demo library —
+but it is not obvious from either file. Re-run `photos:import <dir> --assign`
+afterwards to put the photographs back.
+
+Also worth knowing before reaching for that seeder: **hand it a directory of
+photographs and it will not use them.** It draws its own plates from each
+section's colour; the import command is the only thing that reads a folder.
+
 ### The live-blog cursor may only advance as far as what was sent
 
 `ApiController::liveEntries()` answers two different questions and they want
@@ -434,7 +453,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 429 tests, ~86s. Behaviour coverage exists
+`php artisan test` runs and passes — 437 tests, ~78s. Behaviour coverage exists
 for both halves of the app:
 
 | File | Covers |
@@ -460,6 +479,7 @@ for both halves of the app:
 | `ArticleCounterTest` | the denormalised article counts through every transition, and the nightly reconcile |
 | `RateLimitTest` | every named limiter, its headroom, and that authenticated buckets are per-account |
 | `ErrorPageTest` | the Bangla error pages, and that the 5xx ones render with no database |
+| `PhotoImportTest` | `photos:import` — the transcode, the flattening, idempotency, and deterministic assignment |
 | `LiveBlogTest` | the live blog — appending, ordering, who may run one, and the polling cursor |
 | `LayoutReorderTest` | the front-page layout manager — drags within and across columns, the cache flush, and that a column change cannot collide |
 

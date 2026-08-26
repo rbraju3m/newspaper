@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 429 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 437 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
 
 ### By the numbers
 
@@ -30,7 +30,7 @@
 | Routes (115 total, 52 admin) | 115 |
 | Database tables | 38 |
 | Seeded content | 55 categories · 374 articles · 107 comments · 36 users |
-| Seeded imagery | 60 media · 285 WebP derivatives · 50 MB on disk |
+| Imagery | 105 media · 521 WebP derivatives · 62 MB on disk |
 | Bundle (gzipped) | 16.0 KB CSS · 23.3 KB JS |
 
 ### Verification currently passing
@@ -43,7 +43,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 429 tests, 1,398 assertions, ~86s:
+tests.** The suite is 437 tests, 1,447 assertions, ~78s:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -73,6 +73,7 @@ tests.** The suite is 429 tests, 1,398 assertions, ~86s:
 | `BackupTest` | 10 | that `backup:run` writes a dump holding rows and not just schema, that Bangla survives it, that the archive uses relative paths, the completion-marker check, the public-disk refusal, and that pruning never takes the last backup |
 | `DemoPurgeTest` | 12 | what `demo:purge` deletes and what it keeps, the seeded logins going even when one is an admin, `--keep`, the lockout refusal, the media ladder coming off disk, and the counter and cache resets |
 | `ContentSanitizeTest` | 22 | that all three unescaped bodies are sanitised on write — the article model and editor form, live-blog append and edit (including the JSON the polling client feeds to `x-html`), and static pages — plus `content:sanitize` over every target, trashed rows included, leaving `updated_at` alone |
+| `PhotoImportTest` | 8 | `photos:import` — the ladder built from a real folder, the transcode that stops a 2 MB PNG becoming the `src` fallback, transparency flattened onto white, idempotency by filename, deterministic assignment, and that a dry run writes nothing |
 | `LiveBlogTest` | 23 | the live blog end to end: appending, the backdated correction, pinned above newest, editing that must not move an entry, who may run one — and the polling endpoint's cursor, including a burst larger than one page |
 | `LayoutReorderTest` | 14 | the front-page layout manager: a drag rewriting positions within a column and across them, the emptied column the form omits entirely, the homepage cache flushing so the new order is what renders, unknown block ids refused with nothing moved, the role matrix — and the collision the settings form's own column select used to cause |
 
@@ -288,7 +289,7 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 429 tests cover both halves of
+1. **Test coverage is started, not finished.** 437 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, and the whole reader path from registration
    through bookmarks, history, comments, the newsletter and polls. What is
@@ -397,16 +398,45 @@ comes to disagree about what drift is.
 6. **Galleries and e-paper still have no imagery.** ~~No images exist to
    serve.~~ `MediaSeeder` now draws a section-coloured plate library, runs it
    through `ImageService`, and links all 374 articles, so the ladder renders
-   and Lighthouse is unblocked. What it does *not* cover: `galleries` and
-   `gallery_images` are still empty (so `/photo` renders an empty hub) and
-   `epapers` has no rows — both are blocked on their missing admin CRUD, gaps
-   8 and 9, not on imagery.
+   and Lighthouse is unblocked.
 
-   Two caveats on the generated plates. They are abstract compositions, not
-   photographs: fine for layout, byte-weight and CLS work, useless for judging
-   crops or focal points. And their lower rungs are lean — roughly 45 KB at
-   w960 against 60–90 KB for real photojournalism — so LCP measured on them
-   will read a little optimistic.
+   ~~Two caveats on the generated plates. They are abstract compositions, not
+   photographs.~~ **Superseded for articles.** All 374 now carry real
+   photojournalism: 99 Prothom Alo frames imported with `photos:import` and
+   spread deterministically across the table. The plates were only ever a
+   stand-in for this, and the caveats they carried — useless for judging a
+   crop or a focal point, lower rungs too lean for an honest LCP — no longer
+   apply to any article page.
+
+   Two things the real photographs changed, both worth knowing:
+
+   - **The ladder stops at w960.** The sources are ~1380px wide and
+     `ImageService` will not upscale, so `rungsFor()` produces w320 through
+     w960 and no w1600. The article hero asks for 1600 and gets 960. That is
+     correct behaviour on these files, not a regression, but it means the hero
+     is no longer measuring the top rung — larger sources would restore it.
+   - **The stored original is heavier.** A photograph at quality 88 lands
+     between 200 and 500 KB where a flat plate was ~45 KB. Only browsers
+     without WebP ever fetch it, but it is the `src` fallback, so it is the
+     number that matters if that ever stops being a rounding error.
+
+   `galleries` and `gallery_images` are still empty, so `/photo` renders an
+   empty hub, and `epapers` has no rows — both blocked on their missing admin
+   CRUD, gaps 8 and 9, not on imagery.
+6b. **The seeded plate library is gone from this box, and the ad slots point
+   at nothing.** Found while importing the photographs, and it predates that
+   import — `photos:import` only inserts media and updates articles, and the
+   six admin uploads that share the table survived untouched. The `media`
+   table holds no `seed-*` rows and `storage/app/public/uploads/2026/08/ads/`
+   does not exist, while all five house ads still carry
+   `uploads/2026/08/ads/seed-ad-*.jpg` in `asset`. Every ad slot on the site
+   is therefore rendering a broken image rather than its reserved placeholder.
+
+   `php artisan db:seed --class=MediaSeeder` redraws them. **Read the trap in
+   `CLAUDE.md` first:** that seeder also reassigns every article to a freshly
+   drawn plate, so running it now replaces the photographs. Re-running
+   `photos:import <dir> --assign` puts them back.
+
 7. **Push notifications are half-present.** The service worker has `push` and
    `notificationclick` handlers, but there is no subscription storage, no VAPID
    configuration and no sending side. Either finish it (`minishlink/web-push`)
