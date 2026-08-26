@@ -138,6 +138,26 @@ box is the one endpoint that uses it. `NewsletterTest` uses a resolvable domain
 and therefore needs working DNS — and that rule puts a blocking ~150ms lookup in
 front of every live submission too.
 
+### The live-blog cursor may only advance as far as what was sent
+
+`ApiController::liveEntries()` answers two different questions and they want
+opposite ends of the timeline.
+
+Without a cursor it is a first load: the **top** of the timeline, pinned above
+newest, capped at 30. Nothing below the fold matters, because the client is
+seeded with `$entries->max('id')` from the server-rendered timeline — so it
+only ever asks without a cursor when the page rendered nothing.
+
+With a cursor it is an incremental poll, and it wants the **oldest** entries
+above that cursor, not the newest. `latest` returned as `max(id)` over the
+whole timeline while `entries` was capped stepped the client straight over any
+burst bigger than one page, and since it only ever asks for ids above its
+cursor, those updates were gone for good.
+
+Both branches return newest-first, because `live-blog.js` prepends the array as
+it arrives — the response order *is* the display order. Change the ordering on
+either branch and check that file first.
+
 ### Two ways to change a block's column
 
 The front page layout manager has a drag handle *and* a `column` select in each
@@ -414,7 +434,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 406 tests, ~103s. Behaviour coverage exists
+`php artisan test` runs and passes — 429 tests, ~86s. Behaviour coverage exists
 for both halves of the app:
 
 | File | Covers |
@@ -440,10 +460,11 @@ for both halves of the app:
 | `ArticleCounterTest` | the denormalised article counts through every transition, and the nightly reconcile |
 | `RateLimitTest` | every named limiter, its headroom, and that authenticated buckets are per-account |
 | `ErrorPageTest` | the Bangla error pages, and that the 5xx ones render with no database |
+| `LiveBlogTest` | the live blog — appending, ordering, who may run one, and the polling cursor |
 | `LayoutReorderTest` | the front-page layout manager — drags within and across columns, the cache flush, and that a column change cannot collide |
 
-Still uncovered: the live blog append path, feed *contents* as opposed to
-well-formedness, the e-paper reader, and OAuth sign-in.
+Still uncovered: feed *contents* as opposed to well-formedness, the e-paper
+reader, and OAuth sign-in.
 
 Tests run on **MySQL**, against `newspaper_test`, not SQLite in-memory:
 `Article::search()` silently falls back to `LIKE` on any non-MySQL driver, so

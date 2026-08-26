@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 406 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 429 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
 
 ### By the numbers
 
@@ -43,7 +43,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 406 tests, 1,323 assertions, ~103s:
+tests.** The suite is 429 tests, 1,398 assertions, ~86s:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -73,14 +73,15 @@ tests.** The suite is 406 tests, 1,323 assertions, ~103s:
 | `BackupTest` | 10 | that `backup:run` writes a dump holding rows and not just schema, that Bangla survives it, that the archive uses relative paths, the completion-marker check, the public-disk refusal, and that pruning never takes the last backup |
 | `DemoPurgeTest` | 12 | what `demo:purge` deletes and what it keeps, the seeded logins going even when one is an admin, `--keep`, the lockout refusal, the media ladder coming off disk, and the counter and cache resets |
 | `ContentSanitizeTest` | 22 | that all three unescaped bodies are sanitised on write — the article model and editor form, live-blog append and edit (including the JSON the polling client feeds to `x-html`), and static pages — plus `content:sanitize` over every target, trashed rows included, leaving `updated_at` alone |
+| `LiveBlogTest` | 23 | the live blog end to end: appending, the backdated correction, pinned above newest, editing that must not move an entry, who may run one — and the polling endpoint's cursor, including a burst larger than one page |
 | `LayoutReorderTest` | 14 | the front-page layout manager: a drag rewriting positions within a column and across them, the emptied column the form omits entirely, the homepage cache flushing so the new order is what renders, unknown block ids refused with nothing moved, the role matrix — and the collision the settings form's own column select used to cause |
 
 Writing them turned up six defects that every manual pass had missed — see
 "What the test pass found" below.
 
-Still uncovered, in rough order of value: the live blog append path, feed
-*contents* as opposed to well-formedness, the e-paper reader, and OAuth sign-in
-(which needs the provider stubbed).
+Still uncovered, in rough order of value: feed *contents* as opposed to
+well-formedness, the e-paper reader, and OAuth sign-in (which needs the
+provider stubbed).
 
 ---
 
@@ -244,6 +245,28 @@ A seventh came out of covering the layout manager.
    The seeded layout was checked against the live database and is clean —
    contiguous and 0-based in both columns.
 
+An eighth came out of covering the live blog.
+
+8. **A burst of updates could be skipped by the polling client, for good.**
+   The polling endpoint returns `entries` — capped at 30 — and `latest`, the
+   cursor the client stores and sends back. `latest` was `max(id)` over the
+   whole timeline while `entries` was the newest 30 by `published_at`. So if
+   more than 30 updates landed between two polls — a goal, a verdict, a
+   result, the minutes when a live blog is worth having — the client received
+   30, advanced its cursor past all 35, and then only ever asked for ids above
+   it. The ones in the gap were never sent and never asked for again.
+
+   The two branches want opposite ends of the timeline, which is what the
+   single query got wrong. A first load wants the *top* — pinned above newest —
+   and does not care what is below the fold, because the server-rendered
+   timeline already put it there. An incremental poll wants the *oldest*
+   updates above the cursor, so a burst drains over successive round trips.
+   Both now come back newest-first, which is the order the client prepends in,
+   and the cursor may only advance as far as what was actually sent.
+
+   Verified over real HTTP against a 35-entry blog: two polls, 30 then 4, each
+   batch newest-first, cursor landing on the last id and stopping.
+
 Two further findings were in the tests themselves and are worth keeping. The
 article factory's generated body is not inert corpus. `BanglaContent` injects one of
 ten phrases as an `<h2>`, one being `জলবায়ু পরিবর্তনের প্রভাব মোকাবিলায়`, and the
@@ -265,12 +288,11 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 406 tests cover both halves of
+1. **Test coverage is started, not finished.** 429 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, and the whole reader path from registration
    through bookmarks, history, comments, the newsletter and polls. What is
-   still uncovered is the live blog append path, feed contents, the e-paper
-   reader and OAuth sign-in.
+   still uncovered is feed contents, the e-paper reader and OAuth sign-in.
 2. ~~**Editor-written bodies are raw HTML rendered unescaped.**~~ **Done.**
    All three — `articles.body`, `live_entries.body` and `pages.body` — are
    still stored as HTML and still printed with `{!! !!}`, but nothing unsafe

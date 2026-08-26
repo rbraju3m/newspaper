@@ -27,10 +27,21 @@ class ApiController extends Controller
         return response()->json(['items' => $items]);
     }
 
+    /** One page of live-blog updates. */
+    private const LIVE_PAGE = 30;
+
     /**
      * Live-blog polling. The client sends the newest entry id it already has,
      * so a quiet minute costs one indexed lookup and an empty array rather
      * than re-sending the whole timeline.
+     *
+     * The two branches want opposite ends of the timeline. A first load wants
+     * the top of it — pinned above newest — and does not care what is below
+     * the fold. An incremental poll wants the *oldest* updates above the
+     * cursor, because the cursor may only advance as far as what was actually
+     * sent: a burst larger than one page has to drain over successive polls
+     * rather than be stepped over. Both come back newest-first, which is the
+     * order the client prepends in.
      */
     public function liveEntries(Request $request, Article $article): JsonResponse
     {
@@ -38,17 +49,29 @@ class ApiController extends Controller
 
         $since = $request->integer('since');
 
-        $entries = LiveEntry::where('article_id', $article->id)
-            ->when($since, fn ($q) => $q->where('id', '>', $since))
-            ->with('author:id,name')
-            ->orderByDesc('is_pinned')
-            ->orderByDesc('published_at')
-            ->limit(30)
-            ->get();
+        $query = LiveEntry::where('article_id', $article->id)->with('author:id,name');
+
+        if ($since) {
+            $entries = $query->where('id', '>', $since)
+                ->orderBy('id')
+                ->limit(self::LIVE_PAGE)
+                ->get()
+                ->reverse()
+                ->values();
+
+            $latest = (int) ($entries->max('id') ?: $since);
+        } else {
+            $entries = $query->orderByDesc('is_pinned')
+                ->orderByDesc('published_at')
+                ->limit(self::LIVE_PAGE)
+                ->get();
+
+            $latest = (int) LiveEntry::where('article_id', $article->id)->max('id');
+        }
 
         return response()->json([
             'entries' => $entries->map->payload()->values(),
-            'latest' => (int) LiveEntry::where('article_id', $article->id)->max('id'),
+            'latest' => $latest,
         ]);
     }
 
