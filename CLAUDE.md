@@ -138,6 +138,22 @@ box is the one endpoint that uses it. `NewsletterTest` uses a resolvable domain
 and therefore needs working DNS — and that rule puts a blocking ~150ms lookup in
 front of every live submission too.
 
+### Two ways to change a block's column
+
+The front page layout manager has a drag handle *and* a `column` select in each
+block's settings form. `LayoutController::reorder()` handles the drag and is
+safe by construction: it rewrites `column` and `position` together for every id
+posted, so it renumbers 0..n-1 per column and cannot collide.
+
+`update()` is the other door, and it used to write the new `column` while
+leaving `position` alone — which drops the block onto whatever already holds
+that index in the destination. `HomeBlock::active()` orders by `position` and
+nothing else, so a tie is broken by whatever InnoDB returns. Nothing throws;
+the front page simply comes out in an order nobody chose.
+
+Both append paths now go through `nextPosition()`. Anything that gives a block
+a column must give it a position in the same breath.
+
 ### Bulk updates skip model events
 
 `Comment::whereIn(...)->update()` will not fire the counter hooks. The admin's
@@ -398,7 +414,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 392 tests, ~82s. Behaviour coverage exists
+`php artisan test` runs and passes — 406 tests, ~103s. Behaviour coverage exists
 for both halves of the app:
 
 | File | Covers |
@@ -424,9 +440,10 @@ for both halves of the app:
 | `ArticleCounterTest` | the denormalised article counts through every transition, and the nightly reconcile |
 | `RateLimitTest` | every named limiter, its headroom, and that authenticated buckets are per-account |
 | `ErrorPageTest` | the Bangla error pages, and that the 5xx ones render with no database |
+| `LayoutReorderTest` | the front-page layout manager — drags within and across columns, the cache flush, and that a column change cannot collide |
 
-Still uncovered: the live blog append path, the layout manager's reorder, feed
-*contents* as opposed to well-formedness, the e-paper reader, and OAuth sign-in.
+Still uncovered: the live blog append path, feed *contents* as opposed to
+well-formedness, the e-paper reader, and OAuth sign-in.
 
 Tests run on **MySQL**, against `newspaper_test`, not SQLite in-memory:
 `Article::search()` silently falls back to `LIKE` on any non-MySQL driver, so

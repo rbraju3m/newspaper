@@ -42,7 +42,7 @@ class LayoutController extends Controller
         $data = $this->validated($request);
 
         // Append to the end of whichever column it was dropped into.
-        $data['position'] = (int) HomeBlock::where('column', $data['column'])->max('position') + 1;
+        $data['position'] = $this->nextPosition($data['column']);
 
         HomeBlock::create($data);
         HomepageService::flush();
@@ -54,7 +54,19 @@ class LayoutController extends Controller
     {
         Gate::authorize('manage-taxonomy');
 
-        $block->update($this->validated($request));
+        $data = $this->validated($request);
+
+        // The settings form carries a column select, so a block can cross
+        // columns without the drag handle ever being touched. Its old position
+        // means nothing in the destination: keeping it drops the block on top
+        // of whatever already holds that index, and `orderBy('position')`
+        // breaks the tie however InnoDB feels like it. Append instead, exactly
+        // as a drop into that column would.
+        if ($data['column'] !== $block->column) {
+            $data['position'] = $this->nextPosition($data['column']);
+        }
+
+        $block->update($data);
         HomepageService::flush();
 
         return back()->with('status', 'ব্লক হালনাগাদ হয়েছে।');
@@ -94,6 +106,21 @@ class LayoutController extends Controller
         HomepageService::flush();
 
         return back()->with('status', 'সাজানো সংরক্ষিত হয়েছে।');
+    }
+
+    /**
+     * Where a block appended to this column lands.
+     *
+     * One past the current maximum rather than the row count: a delete leaves
+     * a gap behind, and counting would hand out a position something else is
+     * already sitting on. Both the append paths — a new block and a block
+     * changing column — go through here, so they cannot drift apart.
+     */
+    private function nextPosition(string $column): int
+    {
+        $max = HomeBlock::where('column', $column)->max('position');
+
+        return $max === null ? 0 : (int) $max + 1;
     }
 
     private function validated(Request $request): array

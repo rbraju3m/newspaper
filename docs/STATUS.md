@@ -1,7 +1,7 @@
 # Project Status
 
 **Last updated:** 26 August 2026
-**Branch:** `feat/newspaper-platform` (2 commits ahead of `main`)
+**Branch:** `main`
 **Environment:** running locally against MySQL, seeded with demo content
 
 ---
@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 392 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 406 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
 
 ### By the numbers
 
@@ -43,7 +43,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 392 tests, 1,283 assertions, ~82s:
+tests.** The suite is 406 tests, 1,323 assertions, ~103s:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -73,13 +73,14 @@ tests.** The suite is 392 tests, 1,283 assertions, ~82s:
 | `BackupTest` | 10 | that `backup:run` writes a dump holding rows and not just schema, that Bangla survives it, that the archive uses relative paths, the completion-marker check, the public-disk refusal, and that pruning never takes the last backup |
 | `DemoPurgeTest` | 12 | what `demo:purge` deletes and what it keeps, the seeded logins going even when one is an admin, `--keep`, the lockout refusal, the media ladder coming off disk, and the counter and cache resets |
 | `ContentSanitizeTest` | 22 | that all three unescaped bodies are sanitised on write — the article model and editor form, live-blog append and edit (including the JSON the polling client feeds to `x-html`), and static pages — plus `content:sanitize` over every target, trashed rows included, leaving `updated_at` alone |
+| `LayoutReorderTest` | 14 | the front-page layout manager: a drag rewriting positions within a column and across them, the emptied column the form omits entirely, the homepage cache flushing so the new order is what renders, unknown block ids refused with nothing moved, the role matrix — and the collision the settings form's own column select used to cause |
 
 Writing them turned up six defects that every manual pass had missed — see
 "What the test pass found" below.
 
-Still uncovered, in rough order of value: the live blog append path, the layout
-manager's reorder, feed *contents* as opposed to well-formedness, the e-paper
-reader, and OAuth sign-in (which needs the provider stubbed).
+Still uncovered, in rough order of value: the live blog append path, feed
+*contents* as opposed to well-formedness, the e-paper reader, and OAuth sign-in
+(which needs the provider stubbed).
 
 ---
 
@@ -220,6 +221,29 @@ Three more came out of covering the reader-facing half.
    The rule is now scoped to the poll. This is the same shape as the comment
    `parent_id` graft, which `CommentRequest` had already guarded against.
 
+A seventh came out of covering the layout manager.
+
+7. **A block could be moved between columns onto another block's position.**
+   `reorder()` — the drag handle — was correct: it rewrites every posted id's
+   `column` and `position` together, so a drag can never collide. But the
+   per-block settings form carries a `column` select of its own, and
+   `LayoutController::update()` wrote the new column while leaving `position`
+   untouched. Moving a main-column block at position 1 into a sidebar that
+   already had blocks at 0 and 1 left two rows sharing position 1, and
+   `HomeBlock::active()` orders by `position` alone — so which of the two came
+   first on the front page was whatever InnoDB returned that day. Nothing threw
+   and nothing was logged; the page just came out in an order nobody chose.
+
+   `update()` now appends to the end of the destination column, exactly as a
+   drop into that column would. Both append paths go through one
+   `nextPosition()` helper rather than repeating the expression, which also
+   fixed a smaller disagreement: `store()` computed `(int) max(...) + 1`, and
+   `max()` on an empty column returns null, so the first block added to an
+   empty column started at position 1 while a reorder numbers from 0.
+
+   The seeded layout was checked against the live database and is clean —
+   contiguous and 0-based in both columns.
+
 Two further findings were in the tests themselves and are worth keeping. The
 article factory's generated body is not inert corpus. `BanglaContent` injects one of
 ten phrases as an `<h2>`, one being `জলবায়ু পরিবর্তনের প্রভাব মোকাবিলায়`, and the
@@ -241,12 +265,12 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 392 tests cover both halves of
+1. **Test coverage is started, not finished.** 406 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, and the whole reader path from registration
    through bookmarks, history, comments, the newsletter and polls. What is
-   still uncovered is the live blog append path, the layout manager's reorder,
-   feed contents, the e-paper reader and OAuth sign-in.
+   still uncovered is the live blog append path, feed contents, the e-paper
+   reader and OAuth sign-in.
 2. ~~**Editor-written bodies are raw HTML rendered unescaped.**~~ **Done.**
    All three — `articles.body`, `live_entries.body` and `pages.body` — are
    still stored as HTML and still printed with `{!! !!}`, but nothing unsafe
@@ -547,7 +571,7 @@ result recorded in `PLAN.md`.
 
 ```bash
 cd /var/www/html/newspaper
-git checkout feat/newspaper-platform
+git checkout main
 php artisan serve --port=8899        # or use the Apache vhost
 ```
 
