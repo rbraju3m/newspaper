@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 320 tests; both halves of the app covered, every editor-written body sanitised, the demo purge written, ops still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 320 tests; both halves covered, every editor-written body sanitised, demo purge and deploy runbook written, backups and error tracking still open |
 
 ### By the numbers
 
@@ -262,7 +262,21 @@ lookup in front of every newsletter submission on the live site too.
    directory blind.
 4. **Placeholder branding** — GD-drawn app icons, no real logo artwork, imprint
    fields hold sample values.
-5. **No backups, no error tracking, no deploy runbook.**
+5. **No backups and no error tracking.** ~~No deploy runbook.~~ The runbook
+   is [`DEPLOY.md`](DEPLOY.md). Writing it turned up two things that are
+   decisions rather than steps, and both are still open:
+
+   - **`config/app.php` sets `'timezone' => 'UTC'`.** `@bntime` therefore
+     prints six hours behind Dhaka on every byline and live-blog entry. Left
+     unchanged deliberately — it shifts what every existing timestamp displays,
+     and the tests assert the current behaviour. Decide before launch.
+   - **Scheduled articles never publish themselves.** There are no queued jobs
+     and no scheduled tasks in the application at all; a `scheduled` article
+     waits for a human to set it to `published`, and the dashboard's
+     `scheduled_due` count is the whole mechanism.
+
+   `uploads/` is not in the database dump and not in git, so it needs a backup
+   of its own.
 
 ### Feature-incomplete
 

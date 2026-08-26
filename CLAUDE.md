@@ -1,9 +1,11 @@
 # Working in this repo
 
 A Bangla-first newspaper platform on Laravel 13 + Blade + Tailwind 4 + Alpine.
-Read [`docs/STATUS.md`](docs/STATUS.md) for where things stand and
+Read [`docs/STATUS.md`](docs/STATUS.md) for where things stand,
 [`docs/DECISIONS.md`](docs/DECISIONS.md) for why things are shaped the way they
-are.
+are, and [`docs/DEPLOY.md`](docs/DEPLOY.md) before putting it on a server —
+PHP 8.4 is a hard floor, the driver must be MySQL, and `db:seed` writes demo
+logins.
 
 ---
 
