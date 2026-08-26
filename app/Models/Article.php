@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class Article extends Model
@@ -75,6 +76,93 @@ class Article extends Model
                 $article->published_at = now();
             }
         });
+
+        // ------------------------------------------------------------------
+        // categories.articles_count and users.articles_count
+        //
+        // Both count *published, untrashed* articles, and until now nothing
+        // maintained them: `ContentSeeder` recomputed them at seed time and
+        // they drifted from the first publish onwards. `counters:recompute`
+        // is the reconcile; these hooks are what stop it having work to do.
+        //
+        // Comment::booted() does the same job for comments_count and is the
+        // shape to follow if a third counter ever appears.
+        // ------------------------------------------------------------------
+
+        static::created(function (self $article) {
+            if ($article->status === ArticleStatus::Published) {
+                static::shiftCounters($article->category_id, $article->author_id, 1);
+            }
+        });
+
+        static::updated(function (self $article) {
+            // Only three attributes can move a count. A headline fix or a new
+            // lead image must not cost two writes.
+            if (! $article->wasChanged(['status', 'category_id', 'author_id']) || $article->trashed()) {
+                return;
+            }
+
+            // Take the old owner off and put the new one on. One shape covers
+            // every transition: publishing, unpublishing, moving category and
+            // reassigning the byline, in any combination.
+            //
+            // getOriginal() applies casts and returns an ArticleStatus, so the
+            // comparison is against getRawOriginal() — the same trap as
+            // Comment::booted().
+            if ($article->getRawOriginal('status') === ArticleStatus::Published->value) {
+                static::shiftCounters(
+                    $article->getRawOriginal('category_id'),
+                    $article->getRawOriginal('author_id'),
+                    -1,
+                );
+            }
+
+            if ($article->status === ArticleStatus::Published) {
+                static::shiftCounters($article->category_id, $article->author_id, 1);
+            }
+        });
+
+        // `deleting`, not `deleted`: trashed() still describes the state being
+        // left behind, so force-deleting a row that was already in the bin is
+        // not decremented a second time.
+        static::deleting(function (self $article) {
+            if ($article->status === ArticleStatus::Published && ! $article->trashed()) {
+                static::shiftCounters($article->category_id, $article->author_id, -1);
+            }
+        });
+
+        static::restored(function (self $article) {
+            if ($article->status === ArticleStatus::Published) {
+                static::shiftCounters($article->category_id, $article->author_id, 1);
+            }
+        });
+    }
+
+    /**
+     * Move a category's and an author's published-article counts by one.
+     *
+     * Query builder rather than Eloquent: `articles_count` is guarded, User
+     * soft-deletes (an article outlives its author's account), and neither
+     * model wants events for this.
+     *
+     * The `> 0` guard on the way down is not defensive style. The column is
+     * `unsignedInteger`, so decrementing zero is an out-of-range error under
+     * strict mode — a drifted counter would become a 500 rather than a wrong
+     * number.
+     */
+    private static function shiftCounters(int|string|null $categoryId, int|string|null $authorId, int $delta): void
+    {
+        foreach (['categories' => $categoryId, 'users' => $authorId] as $table => $id) {
+            if (! $id) {
+                continue;
+            }
+
+            $query = DB::table($table)->where('id', $id);
+
+            $delta > 0
+                ? $query->increment('articles_count')
+                : $query->where('articles_count', '>', 0)->decrement('articles_count');
+        }
     }
 
     /**

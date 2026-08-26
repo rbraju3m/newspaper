@@ -255,7 +255,7 @@ Test suite — only Laravel's stock `ExampleTest` stubs exist, and
 `php artisan test` currently fails because `phpunit.xml` targets SQLite
 `:memory:` while `pdo_sqlite` is not installed. All verification so far has been
 ad-hoc scripts · ~~HTML sanitising for editor-written bodies~~ (done) · ~~purge demo data and logins~~ (`demo:purge`, run at deploy) ·
-real branding · rate-limit review · ~~scheduled publishing~~ (`articles:publish-due`, every minute) · ~~backups~~ (`backup:run`, nightly) · ~~error tracking~~ (`ErrorAlerter` + `errors:digest`) · ~~deploy runbook~~ (`docs/DEPLOY.md`).
+real branding · rate-limit review · ~~counter drift~~ (`counters:recompute`, nightly) · ~~scheduled publishing~~ (`articles:publish-due`, every minute) · ~~backups~~ (`backup:run`, nightly) · ~~error tracking~~ (`ErrorAlerter` + `errors:digest`) · ~~deploy runbook~~ (`docs/DEPLOY.md`).
 
 ---
 

@@ -30,6 +30,19 @@ Schedule::command('articles:publish-due')
     ->everyMinute()
     ->withoutOverlapping();
 
+/*
+ * Counters, reconciled before the backup rather than after — so what gets
+ * dumped is the corrected data, not a night-old drift.
+ *
+ * Article::booted() and Comment::booted() keep these right as they go; this
+ * is for what events cannot see (bulk updates, imports, a bug in the hooks).
+ * Quiet when there is nothing to fix, so a line in backup.log means something.
+ */
+Schedule::command('counters:recompute --quiet-when-clean')
+    ->dailyAt('02:45')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/backup.log'));
+
 Schedule::command('backup:run')
     ->dailyAt('03:00')
     ->withoutOverlapping()

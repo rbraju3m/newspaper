@@ -141,7 +141,23 @@ front of every live submission too.
 ### Bulk updates skip model events
 
 `Comment::whereIn(...)->update()` will not fire the counter hooks. The admin's
-bulk moderation deliberately saves row by row.
+bulk moderation deliberately saves row by row, and so does
+`articles:publish-due`.
+
+Four counters are maintained this way — `comments_count` in
+`Comment::booted()`, and `categories.articles_count` /
+`users.articles_count` in `Article::booted()`. Any write that goes round
+Eloquent leaves them wrong.
+
+`counters:recompute` is the reconcile, nightly at 02:45 and safe to run by
+hand. It prints how many rows were wrong before correcting them, which is the
+number worth watching: it should be zero every night, and the first night it
+is not, a hook is broken. `ContentSeeder` calls it rather than repeating the
+UPDATEs.
+
+Decrements are guarded with `where('articles_count', '>', 0)`. The column is
+`unsignedInteger`, so decrementing zero is an out-of-range *error* under strict
+mode — a drifted counter would become a 500 rather than a wrong number.
 
 ### Bangla slugs need `\p{M}`
 
@@ -348,7 +364,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 355 tests, ~70s. Behaviour coverage exists
+`php artisan test` runs and passes — 369 tests, ~51s. Behaviour coverage exists
 for both halves of the app:
 
 | File | Covers |
@@ -371,6 +387,7 @@ for both halves of the app:
 | `BackupTest` | `backup:run` — that the dump holds rows, not just schema, and that a bad one is discarded |
 | `ErrorAlertTest` | error alerting — the throttle, the hourly cap, and that a failing channel never escapes |
 | `ScheduledPublishingTest` | `articles:publish-due` — that a due story becomes readable and a future one does not |
+| `ArticleCounterTest` | the denormalised article counts through every transition, and the nightly reconcile |
 
 Still uncovered: the live blog append path, the layout manager's reorder, feed
 *contents* as opposed to well-formedness, the e-paper reader, and OAuth sign-in.

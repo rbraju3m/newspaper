@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Enums\ArticleType;
 use App\Enums\UserRole;
 use App\Models\Article;
 use App\Models\Category;
@@ -10,9 +9,7 @@ use App\Models\Comment;
 use App\Models\Tag;
 use App\Models\Topic;
 use App\Models\User;
-use Database\Seeders\Support\BanglaContent;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 
 class ContentSeeder extends Seeder
 {
@@ -123,44 +120,16 @@ class ContentSeeder extends Seeder
     }
 
     /**
-     * The denormalised counters are maintained incrementally at runtime, but
-     * factory-created rows bypass those paths, so recompute once at the end.
+     * The counters are maintained by model events at runtime, but a seed run
+     * writes plenty of rows past them — pivot syncs and query-builder inserts
+     * fire nothing — so reconcile once at the end.
+     *
+     * Calls the command rather than repeating its UPDATEs. Two definitions of
+     * a correct count is how the thing that fixes drift comes to disagree
+     * about what drift is.
      */
     private function syncCounters(): void
     {
-        $this->command->info('Recomputing counters…');
-
-        DB::statement('
-            UPDATE categories c SET articles_count = (
-                SELECT COUNT(*) FROM articles a
-                WHERE a.category_id = c.id AND a.status = "published" AND a.deleted_at IS NULL
-            )
-        ');
-
-        DB::statement('
-            UPDATE users u SET articles_count = (
-                SELECT COUNT(*) FROM articles a
-                WHERE a.author_id = u.id AND a.status = "published" AND a.deleted_at IS NULL
-            )
-        ');
-
-        DB::statement('
-            UPDATE tags t SET articles_count = (
-                SELECT COUNT(*) FROM article_tag at WHERE at.tag_id = t.id
-            )
-        ');
-
-        DB::statement('
-            UPDATE topics t SET articles_count = (
-                SELECT COUNT(*) FROM article_topic at WHERE at.topic_id = t.id
-            )
-        ');
-
-        DB::statement('
-            UPDATE articles a SET comments_count = (
-                SELECT COUNT(*) FROM comments c
-                WHERE c.article_id = a.id AND c.status = "approved" AND c.deleted_at IS NULL
-            )
-        ');
+        $this->command->call('counters:recompute');
     }
 }
