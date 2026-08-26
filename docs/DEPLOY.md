@@ -112,15 +112,27 @@ tends to be missing:
 php -r 'var_dump(function_exists("imagewebp"), gd_info()["WebP Support"] ?? false);'
 ```
 
-Raise the upload limits. The application and its UI both promise 8 MB, and PHP
-ships with 2 MB, so anything larger is discarded before Laravel ever runs:
+Raise the upload limits. PHP ships with 2 MB, and anything larger is discarded
+before Laravel ever runs — the request arrives with an empty `$_FILES`, so the
+rule that fires is `uploaded`, not `max`, and without a message for it the
+editor is told the field "must be a file".
+
+The media library promises 8 MB. The **e-paper is the constraint**: a page scan
+is routinely 6–10 MB and the whole-issue PDF can be 50, and `EpaperController`
+validates against those numbers. Sizing `php.ini` below them means an editor
+can only find out by failing:
 
 ```ini
 ; /etc/php/8.4/apache2/php.ini
-upload_max_filesize = 8M
-post_max_size = 10M
+upload_max_filesize = 12M   ; one e-paper page scan
+post_max_size = 60M         ; a whole-issue PDF, or a batch of pages
+max_file_uploads = 40       ; a full issue in one go
 memory_limit = 256M
 ```
+
+`post_max_size` must exceed `upload_max_filesize`, and a multi-page upload is
+bounded by `post_max_size` for the batch and `max_file_uploads` for the count —
+both are silent when exceeded.
 
 ### 2. Database
 

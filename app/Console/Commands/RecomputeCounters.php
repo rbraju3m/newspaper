@@ -56,6 +56,9 @@ class RecomputeCounters extends Command
         // every row counts.
         'galleries.images_count' => ['galleries', 'images_count',
             'SELECT COUNT(*) FROM gallery_images gi WHERE gi.gallery_id = t.id'],
+
+        'epapers.pages_count' => ['epapers', 'pages_count',
+            'SELECT COUNT(*) FROM epaper_pages ep WHERE ep.epaper_id = t.id'],
     ];
 
     protected $signature = 'counters:recompute

@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 469 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 491 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
 
 ### By the numbers
 
@@ -25,7 +25,7 @@
 |---|---|
 | PHP files (app/database/routes/config) | 133 |
 | Models · Enums · Policies · Services | 23 · 5 · 3 · 4 |
-| Controllers | 45 |
+| Controllers | 46 |
 | Blade templates | 93 |
 | Routes (115 total, 52 admin) | 115 |
 | Database tables | 38 |
@@ -43,7 +43,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 469 tests, 1,547 assertions, ~173s:
+tests.** The suite is 491 tests, 1,623 assertions, ~82s:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -73,6 +73,7 @@ tests.** The suite is 469 tests, 1,547 assertions, ~173s:
 | `BackupTest` | 10 | that `backup:run` writes a dump holding rows and not just schema, that Bangla survives it, that the archive uses relative paths, the completion-marker check, the public-disk refusal, and that pruning never takes the last backup |
 | `DemoPurgeTest` | 12 | what `demo:purge` deletes and what it keeps, the seeded logins going even when one is an admin, `--keep`, the lockout refusal, the media ladder coming off disk, and the counter and cache resets |
 | `ContentSanitizeTest` | 22 | that all three unescaped bodies are sanitised on write — the article model and editor form, live-blog append and edit (including the JSON the polling client feeds to `x-html`), and static pages — plus `content:sanitize` over every target, trashed rows included, leaving `updated_at` alone |
+| `EpaperAdminTest` | 22 | the e-paper admin — one issue per edition per day, page uploads numbered in order with thumbnails, the whole-issue PDF and its replacement, renumbering against the unique constraint, deletion taking its files, and the public reader |
 | `GalleryAdminTest` | 25 | the photo gallery admin — creating, the Bangla slug, uploads writing both columns and building the ladder, attaching from the library, drag ordering, the cover that follows it, deletion taking its files off disk without reaping a photograph an article still uses, the denormalised count, and the public hub |
 | `MediaSeederTest` | 7 | what `MediaSeeder` heals and, more importantly, what it refuses to touch — imagery that is actually on disk |
 | `PhotoImportTest` | 8 | `photos:import` — the ladder built from a real folder, the transcode that stops a 2 MB PNG becoming the `src` fallback, transparency flattened onto white, idempotency by filename, deterministic assignment, and that a dry run writes nothing |
@@ -291,7 +292,7 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 469 tests cover both halves of
+1. **Test coverage is started, not finished.** 491 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, and the whole reader path from registration
    through bookmarks, history, comments, the newsletter and polls. What is
@@ -451,8 +452,33 @@ comes to disagree about what drift is.
    `notificationclick` handlers, but there is no subscription storage, no VAPID
    configuration and no sending side. Either finish it (`minishlink/web-push`)
    or strip the handlers — a half-built version is worse than none.
-8. **E-paper has no upload UI.** Tables, models and the public reader exist;
-   issues must currently be inserted by hand.
+8. ~~**E-paper has no upload UI.**~~ **Done.** `Admin\EpaperController` plus two
+   screens, the same shape as galleries: a list with a create form, and an
+   editor with drag page ordering, multi-file page upload, a whole-issue PDF,
+   per-page section labels and delete. Editions come from
+   `config('site.epaper_editions')` and are unique per date.
+
+   The sharp edge is `unique(epaper_id, page_number)`. Writing a new order
+   straight out collides the moment two pages swap — setting page 2 to 1 while
+   a page 1 still exists is a duplicate key, not a reordering. Renumbering runs
+   in two passes inside a transaction, parking pages in a 100+ scratch band
+   that is free by construction because `MAX_PAGES` is 99 and the column is an
+   unsigned tinyint. Deleting a page closes the gap the same way, so the next
+   upload does not land on a hole.
+
+   Two things worth carrying forward:
+
+   - **The upload limits on this box cannot carry a real page scan.**
+     `upload_max_filesize` is 2M here while the controller validates 12 MB
+     pages and 50 MB PDFs. PHP discards an oversize upload before Laravel
+     runs, so the rule that fires is `uploaded`, not `max` — the messages now
+     say so in Bangla, and `DEPLOY.md` carries the ini block the e-paper
+     actually needs. Nothing in the code can work around it.
+   - **The public reader resolves an issue by date alone.** `/epaper/{date}`
+     takes the first published row for that date, so a second edition on the
+     same day is unreachable from the front end even though the admin can
+     create one. Pre-existing, out of scope here, and worth an `?edition=`
+     before anybody runs two editions.
 9. ~~**Photo galleries have no admin CRUD.**~~ **Done.** `Admin\GalleryController`
    plus two screens: a list with a create form, and an editor with drag
    ordering, multi-file upload, attach-from-library, per-image caption and

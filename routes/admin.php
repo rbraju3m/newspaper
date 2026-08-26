@@ -93,6 +93,24 @@ Route::middleware(['auth', 'staff', 'throttle:admin'])->prefix('admin')->name('a
         Route::delete('/images/{image}', 'destroyImage')->name('images.destroy');
     });
 
+    // ── E-paper ──────────────────────────────────────────────────────────
+    // Bound by id like galleries: the public reader addresses an issue by
+    // date, but an editor correcting a mistyped date would otherwise change
+    // the URL of the form they are standing on.
+    Route::controller(Admin\EpaperController::class)->prefix('epapers')->name('epapers.')->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::post('/', 'store')->name('store');
+        Route::get('/{epaper:id}/edit', 'edit')->name('edit');
+        Route::put('/{epaper:id}', 'update')->name('update');
+        Route::delete('/{epaper:id}', 'destroy')->name('destroy');
+
+        Route::post('/{epaper:id}/pages', 'storePages')->name('pages.store');
+        Route::post('/{epaper:id}/pdf', 'storePdf')->name('pdf.store');
+        Route::post('/{epaper:id}/pages/reorder', 'reorderPages')->name('pages.reorder');
+        Route::put('/pages/{page}', 'updatePage')->name('pages.update');
+        Route::delete('/pages/{page}', 'destroyPage')->name('pages.destroy');
+    });
+
     // ── Front page layout ────────────────────────────────────────────────
     Route::controller(Admin\LayoutController::class)->prefix('layout')->name('layout.')->group(function () {
         Route::get('/', 'index')->name('index');

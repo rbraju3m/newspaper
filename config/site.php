@@ -32,6 +32,17 @@ return [
     /** Homepage / listing pagination. */
     'per_page' => 20,
 
+    /**
+     * E-paper editions. The key is stored in `epapers.edition`, which is unique
+     * per date — one issue per edition per day. A single-edition paper only
+     * ever needs `main`.
+     */
+    'epaper_editions' => [
+        'main' => 'প্রধান সংস্করণ',
+        'dhaka' => 'ঢাকা',
+        'chittagong' => 'চট্টগ্রাম',
+    ],
+
     /** Ad slot dimensions — used to reserve space and prevent layout shift. */
     'ad_slots' => [
         'header_leaderboard' => ['w' => 728, 'h' => 90],

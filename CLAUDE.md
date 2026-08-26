@@ -201,6 +201,25 @@ the front page simply comes out in an order nobody chose.
 Both append paths now go through `nextPosition()`. Anything that gives a block
 a column must give it a position in the same breath.
 
+### Renumbering under a unique constraint needs two passes
+
+`epaper_pages` has `unique(epaper_id, page_number)`. Writing a new order
+straight out fails the moment two pages swap: setting page 2 to 1 while a page
+1 still holds it is a duplicate key, not a reordering. It is not a rare case —
+it is what every drag does.
+
+`EpaperController::renumber()` parks every page in a 100+ scratch band, then
+writes the final numbers, both inside one transaction so a failure between the
+passes cannot leave the issue parked. The band is free by construction:
+`MAX_PAGES` is 99, so no live page number can be in it, and 100+99 still fits
+the unsigned tinyint.
+
+Deleting a page renumbers too — a hole means the next upload computes
+`max + 1` and lands on a number that is already taken.
+
+`galleries.gallery_images` has no such constraint, which is why the gallery
+reorder can write straight through. Do not copy that one here.
+
 ### `ImageService::release()` runs *after* the owning row is gone
 
 It is reference counted across eleven columns — `articles.image`,
@@ -469,7 +488,8 @@ to stop the request that never should have arrived.
 Every public method of an admin controller authorises. Gates:
 
 - `manage-site` — ads, pages, users, settings (admin only)
-- `manage-taxonomy` — categories, tags, topics, layout, galleries (editor and up)
+- `manage-taxonomy` — categories, tags, topics, layout, galleries, e-paper
+  (editor and up)
 - `ArticlePolicy` — per-article; reporters cannot publish, place or reassign
 - `CommentPolicy::moderate` — editors and up
 
@@ -479,7 +499,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 469 tests, ~173s. Behaviour coverage exists
+`php artisan test` runs and passes — 491 tests, ~82s. Behaviour coverage exists
 for both halves of the app:
 
 | File | Covers |
@@ -505,6 +525,7 @@ for both halves of the app:
 | `ArticleCounterTest` | the denormalised article counts through every transition, and the nightly reconcile |
 | `RateLimitTest` | every named limiter, its headroom, and that authenticated buckets are per-account |
 | `ErrorPageTest` | the Bangla error pages, and that the 5xx ones render with no database |
+| `EpaperAdminTest` | the e-paper admin — page numbering against its unique constraint, the PDF, and deletion |
 | `GalleryAdminTest` | the photo gallery admin — uploads, ordering, the cover, deletion and its files, and the public hub |
 | `MediaSeederTest` | that `MediaSeeder` heals broken imagery without replacing imagery that works |
 | `PhotoImportTest` | `photos:import` — the transcode, the flattening, idempotency, and deterministic assignment |

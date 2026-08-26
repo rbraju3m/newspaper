@@ -315,10 +315,8 @@ class GalleryAdminTest extends TestCase
             ->post('/admin/galleries/'.$gallery->id.'/images', ['files' => [$this->upload()]]);
 
         $media = Media::sole();
-        $paths = array_merge([$media->path], array_map(
-            fn ($c) => $c['path'] ?? $c,
-            array_values($media->conversions ?? [])
-        ));
+        // `conversions` is a flat rung => path map.
+        $paths = array_merge([$media->path], array_values($media->conversions ?? []));
 
         $this->actingAs($this->editor())->delete('/admin/galleries/'.$gallery->id)->assertRedirect();
 
