@@ -349,6 +349,21 @@ AdService::flush();                 // ad edits
 Setting::flush();                   // settings (also clears the per-request memo)
 ```
 
+### Rate limits
+
+Named limiters live in `AppServiceProvider::registerRateLimiters()` and are
+applied as `throttle:<name>` in the route files. Add a state-changing route,
+give it one — `php artisan route:list --json` plus a filter on `method` is how
+the gaps were found the first time.
+
+Authenticated limiters key on **user id**, not IP. A newsroom is behind one
+NAT, so an IP bucket puts the whole desk in one editor's allowance.
+
+A limit a real person can hit is a bug. Anything needing a limit that tight
+belongs in the controller, where it can say so in Bangla — `CommentController`
+refuses a second comment inside a minute that way. The middleware is only there
+to stop the request that never should have arrived.
+
 ### Authorisation
 
 Every public method of an admin controller authorises. Gates:
@@ -364,7 +379,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 369 tests, ~51s. Behaviour coverage exists
+`php artisan test` runs and passes — 379 tests, ~82s. Behaviour coverage exists
 for both halves of the app:
 
 | File | Covers |
@@ -388,6 +403,7 @@ for both halves of the app:
 | `ErrorAlertTest` | error alerting — the throttle, the hourly cap, and that a failing channel never escapes |
 | `ScheduledPublishingTest` | `articles:publish-due` — that a due story becomes readable and a future one does not |
 | `ArticleCounterTest` | the denormalised article counts through every transition, and the nightly reconcile |
+| `RateLimitTest` | every named limiter, its headroom, and that authenticated buckets are per-account |
 
 Still uncovered: the live blog append path, the layout manager's reorder, feed
 *contents* as opposed to well-formedness, the e-paper reader, and OAuth sign-in.

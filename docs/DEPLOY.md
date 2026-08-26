@@ -491,3 +491,51 @@ goes to the same broken mail. `storage/logs/laravel.log` records
 `ErrorAlerter (email) failed` when a channel throws, and that is the only
 signal. An external uptime check on `/up` is the honest complement to this and
 is not in scope here.
+
+---
+
+## Rate limits
+
+Defined as named limiters in `AppServiceProvider::registerRateLimiters()` and
+applied as `throttle:<name>` in the route files. `php artisan route:list -v`
+shows which route wears which.
+
+| Limiter | Limit | Keyed by | Covers |
+|---|---|---|---|
+| `newsletter` | 5/hour | IP | subscribing — unauthenticated, writes a row, does a DNS lookup per attempt |
+| `vote` | 10/min | IP | poll votes; a guest's fingerprint is IP + user agent, so the IP is the real control |
+| `share` | 30/min | IP | the share counter, incremented by `sendBeacon` |
+| `search` | 30/min | IP | Bangla FULLTEXT against a `longText` column |
+| `polling` | 60/min | IP | the live-blog and ticker endpoints — roughly twenty open tabs |
+| `engagement` | 60/min | user | likes, reports, bookmarks, reading progress |
+| `comment-writes` | 20/min | user | posting and editing comments |
+| `account` | 10/min | user | password change, profile edit, account deletion |
+| `admin` | 120/min | user | the whole admin surface, as a backstop |
+
+**Authenticated limits are keyed by user id, not IP.** A newsroom sits behind
+one NAT; an IP bucket would put the whole desk in one editor's allowance, and
+the first person to work quickly would lock everyone else out.
+
+**`logout` is deliberately unlimited.** It takes an authenticated request to
+reach and destroys state rather than creating it; throttling it only leaves
+somebody unable to end their own session.
+
+These are a backstop, not the whole defence. Anything needing a limit tight
+enough for a person to notice gets it in the controller, where it can explain
+itself in Bangla — `CommentController` refuses a second comment inside a minute
+that way, and the middleware only stops the request that never should have
+arrived.
+
+### What this does not do
+
+There is **no global limiter** on the `web` group. One would have to be loose
+enough for a shared office connection and would then be too loose to matter;
+volumetric limiting belongs at the reverse proxy or CDN, not in PHP.
+
+A throttled request gets Laravel's stock 429 page, in English. The application
+ships no `resources/views/errors/` at all, so that is true of 404 and 500 as
+well — a gap worth closing for a Bangla-first site, and not one specific to
+rate limiting.
+
+If a limit turns out to be wrong for real traffic, the numbers are all in that
+one method. Raise it there rather than removing the middleware.

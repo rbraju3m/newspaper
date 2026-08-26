@@ -55,35 +55,53 @@ Route::middleware('auth')->group(function () {
     // ── Reader account ───────────────────────────────────────────────────
     Route::prefix('account')->name('account.')->group(function () {
         Route::get('/', [Account\ProfileController::class, 'index'])->name('index');
-        Route::patch('/', [Account\ProfileController::class, 'update'])->name('update');
-        Route::put('/password', [Account\ProfileController::class, 'updatePassword'])->name('password.update');
-        Route::delete('/', [Account\ProfileController::class, 'destroy'])->name('destroy');
+        // updatePassword() verifies the current password, which makes it an
+        // oracle worth guessing against; destroy() is irreversible.
+        Route::patch('/', [Account\ProfileController::class, 'update'])
+            ->middleware('throttle:account')->name('update');
+        Route::put('/password', [Account\ProfileController::class, 'updatePassword'])
+            ->middleware('throttle:account')->name('password.update');
+        Route::delete('/', [Account\ProfileController::class, 'destroy'])
+            ->middleware('throttle:account')->name('destroy');
 
         Route::get('/bookmarks', [Account\BookmarkController::class, 'index'])->name('bookmarks');
-        Route::delete('/bookmarks/{article}', [Account\BookmarkController::class, 'destroy'])->name('bookmarks.destroy');
+        Route::delete('/bookmarks/{article}', [Account\BookmarkController::class, 'destroy'])
+            ->middleware('throttle:engagement')->name('bookmarks.destroy');
 
         Route::get('/history', [Account\HistoryController::class, 'index'])->name('history');
-        Route::delete('/history/{article}', [Account\HistoryController::class, 'destroy'])->name('history.destroy');
-        Route::delete('/history', [Account\HistoryController::class, 'clear'])->name('history.clear');
+        Route::delete('/history/{article}', [Account\HistoryController::class, 'destroy'])
+            ->middleware('throttle:engagement')->name('history.destroy');
+        Route::delete('/history', [Account\HistoryController::class, 'clear'])
+            ->middleware('throttle:engagement')->name('history.clear');
 
         Route::get('/preferences', [Account\PreferenceController::class, 'edit'])->name('preferences');
-        Route::patch('/preferences', [Account\PreferenceController::class, 'update'])->name('preferences.update');
+        Route::patch('/preferences', [Account\PreferenceController::class, 'update'])
+            ->middleware('throttle:account')->name('preferences.update');
     });
 
     // ── Comments ─────────────────────────────────────────────────────────
-    Route::post('/articles/{article}/comments', [CommentController::class, 'store'])->name('comments.store');
-    Route::patch('/comments/{comment}', [CommentController::class, 'update'])->name('comments.update');
-    Route::delete('/comments/{comment}', [CommentController::class, 'destroy'])->name('comments.destroy');
-    Route::post('/comments/{comment}/like', [CommentController::class, 'like'])->name('comments.like');
-    Route::post('/comments/{comment}/report', [CommentController::class, 'report'])->name('comments.report');
+    // CommentController's own limiter is the one a reader meets, in Bangla,
+    // at five a minute. These stop a script ever reaching it.
+    Route::post('/articles/{article}/comments', [CommentController::class, 'store'])
+        ->middleware('throttle:comment-writes')->name('comments.store');
+    Route::patch('/comments/{comment}', [CommentController::class, 'update'])
+        ->middleware('throttle:comment-writes')->name('comments.update');
+    Route::delete('/comments/{comment}', [CommentController::class, 'destroy'])
+        ->middleware('throttle:comment-writes')->name('comments.destroy');
+    Route::post('/comments/{comment}/like', [CommentController::class, 'like'])
+        ->middleware('throttle:engagement')->name('comments.like');
+    Route::post('/comments/{comment}/report', [CommentController::class, 'report'])
+        ->middleware('throttle:engagement')->name('comments.report');
 
     // Reading progress, posted by sendBeacon from the article page.
-    Route::post('/articles/{article}/read', [Account\HistoryController::class, 'track'])->name('history.track');
+    Route::post('/articles/{article}/read', [Account\HistoryController::class, 'track'])
+        ->middleware('throttle:engagement')->name('history.track');
 });
 
 // Bookmark toggle answers 401 for guests so the Alpine store can roll back and
 // redirect; it therefore sits outside the auth group.
 Route::post('/account/bookmarks/{article}', [Account\BookmarkController::class, 'toggle'])
+    ->middleware('throttle:engagement')
     ->name('account.bookmarks.toggle');
 
 // The admin panel lives in its own route file.

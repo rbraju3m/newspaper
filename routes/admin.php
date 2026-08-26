@@ -14,7 +14,10 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::middleware(['auth', 'staff'])->prefix('admin')->name('admin.')->group(function () {
+// `throttle:admin` is a backstop rather than a control: 120 a minute is well
+// past what a busy editor does by hand, and well short of what a runaway
+// script or a taken-over reporter account does.
+Route::middleware(['auth', 'staff', 'throttle:admin'])->prefix('admin')->name('admin.')->group(function () {
 
     Route::get('/', Admin\DashboardController::class)->name('dashboard');
 

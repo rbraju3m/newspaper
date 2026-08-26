@@ -37,7 +37,8 @@ Route::get('/tag/{tag:slug}', Site\TagController::class)->name('tag.show');
 Route::get('/author/{user:slug}', Site\AuthorController::class)->name('author.show');
 
 Route::get('/archive', Site\ArchiveController::class)->name('archive');
-Route::get('/search', Site\SearchController::class)->name('search');
+// FULLTEXT against a longText column — the most expensive public GET.
+Route::get('/search', Site\SearchController::class)->middleware('throttle:search')->name('search');
 
 Route::get('/epaper', [Site\EpaperController::class, 'index'])->name('epaper.index');
 Route::get('/epaper/{date}', [Site\EpaperController::class, 'show'])
@@ -58,14 +59,23 @@ Route::get('/sitemap.xml', [Site\FeedController::class, 'sitemap'])->name('feed.
 Route::get('/news-sitemap.xml', [Site\FeedController::class, 'newsSitemap'])->name('feed.news-sitemap');
 
 // ── Small JSON/action endpoints used by the front end ────────────────────
-Route::get('/api/breaking', [Site\ApiController::class, 'breaking'])->name('api.breaking');
-Route::post('/api/articles/{article}/share', [Site\ApiController::class, 'share'])->name('api.share');
-Route::get('/api/articles/{article}/live', [Site\ApiController::class, 'liveEntries'])->name('api.live');
-Route::post('/newsletter/subscribe', [Site\NewsletterController::class, 'store'])->name('newsletter.subscribe');
+Route::get('/api/breaking', [Site\ApiController::class, 'breaking'])
+    ->middleware('throttle:polling')->name('api.breaking');
+Route::post('/api/articles/{article}/share', [Site\ApiController::class, 'share'])
+    ->middleware('throttle:share')->name('api.share');
+Route::get('/api/articles/{article}/live', [Site\ApiController::class, 'liveEntries'])
+    ->middleware('throttle:polling')->name('api.live');
+// Unauthenticated, writes a row, and validates with `email:rfc,dns` — a
+// blocking lookup per attempt.
+Route::post('/newsletter/subscribe', [Site\NewsletterController::class, 'store'])
+    ->middleware('throttle:newsletter')->name('newsletter.subscribe');
 Route::get('/newsletter/verify/{subscriber:token}', [Site\NewsletterController::class, 'verify'])->name('newsletter.verify');
 Route::get('/newsletter/unsubscribe/{subscriber:token}', [Site\NewsletterController::class, 'unsubscribe'])->name('newsletter.unsubscribe');
 Route::get('/ads/{ad}/click', [Site\AdController::class, 'click'])->name('ads.click');
-Route::post('/polls/{poll}/vote', [Site\PollController::class, 'vote'])->name('polls.vote');
+// A guest vote is fingerprinted on IP + user agent, so rotating the agent
+// buys another vote. The IP is what has to be limited.
+Route::post('/polls/{poll}/vote', [Site\PollController::class, 'vote'])
+    ->middleware('throttle:vote')->name('polls.vote');
 
 /*
 |--------------------------------------------------------------------------
