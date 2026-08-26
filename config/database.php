@@ -53,6 +53,14 @@ return [
             'username' => env('DB_USERNAME', 'root'),
             'password' => env('DB_PASSWORD', ''),
             'unix_socket' => env('DB_SOCKET', ''),
+            /*
+             * Pinned rather than inherited from the server's system time zone.
+             * TIMESTAMP columns are converted by MySQL on the way in and out
+             * using the *session* zone, so leaving it as SYSTEM means the
+             * application's behaviour changes with the box it is deployed on.
+             * Must agree with app.timezone.
+             */
+            'timezone' => env('DB_TIMEZONE', '+06:00'),
             'charset' => env('DB_CHARSET', 'utf8mb4'),
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
             'prefix' => '',

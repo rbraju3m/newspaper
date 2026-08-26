@@ -237,6 +237,33 @@ Safe by default: it prompts unless given `--force`, and `--dry-run` prints the
 whole plan and changes nothing. `--keep=a@b.com` preserves an account that is
 not an admin.
 
+### PHP and MySQL are two clocks
+
+`APP_TIMEZONE=Asia/Dhaka` and the mysql connection's `'timezone' => '+06:00'`
+are two halves of one setting. MySQL converts every `TIMESTAMP` column on the
+way in and out using the **session** zone, so changing one without the other
+puts the application and its own database six hours apart.
+
+That is not hypothetical — it is what was wrong. MySQL here runs with a system
+zone of `+06` while PHP ran on UTC, and `bookmarks` and `comment_likes` stamp
+`created_at` with `useCurrent()`, which is MySQL's clock. Two rows written in
+the same instant were six hours apart, and nothing said so.
+
+The cheap check, whenever timestamps look wrong:
+
+```php
+now()->toDateTimeString();                       // PHP's clock
+DB::select('SELECT NOW() n')[0]->n;              // MySQL's
+DB::select('SELECT @@session.time_zone s')[0]->s;
+```
+
+They must agree. `DB_TIMEZONE` is pinned rather than inherited from the
+server's system zone so this cannot vary with the box.
+
+Also: the admin's `datetime-local` inputs and the date archive are **wall
+clock**, not instants. They are the reason this is a behaviour bug and not a
+formatting one — an editor asking for 3 PM was getting 9 PM.
+
 ### Response return types
 
 `Illuminate\Http\Response` is **not** a supertype of `JsonResponse` or

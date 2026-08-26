@@ -294,16 +294,18 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Decisions the runbook surfaced
 
-Neither is a deployment step, and both are open:
-
-- **`config/app.php` sets `'timezone' => 'UTC'`.** `@bntime` therefore prints
-  six hours behind Dhaka on every byline and live-blog entry. Left unchanged
-  deliberately — it shifts what every existing timestamp displays, and the
-  tests assert the current behaviour. Decide before launch.
-- **Scheduled articles never publish themselves.** A `scheduled` article waits
-  for a human to set it to `published`; the dashboard's `scheduled_due` count
-  is the whole mechanism. The scheduler now exists (the nightly backup runs
-  through it), so an auto-publish command would have somewhere to live.
+- ~~**`config/app.php` sets `'timezone' => 'UTC'`.**~~ **Fixed.** It is
+  `Asia/Dhaka` now, with `DB_TIMEZONE=+06:00` pinned to match. This turned out
+  to be a bug rather than a preference: MySQL here runs with a system zone of
+  `+06` while PHP ran on UTC, so `bookmarks` and `comment_likes` — which stamp
+  `created_at` with `useCurrent()`, MySQL's clock — were six hours apart from
+  every row PHP stamped. It also fixes the admin's scheduling inputs, which are
+  wall clock: an editor asking for 3 PM was getting 9 PM.
+- **Scheduled articles never publish themselves.** Still open. A `scheduled`
+  article waits for a human to set it to `published`; the dashboard's
+  `scheduled_due` count is the whole mechanism. The scheduler now exists (the
+  nightly backup and the error digest both run through it), so an auto-publish
+  command would have somewhere to live.
 
 ### Feature-incomplete
 
@@ -403,7 +405,8 @@ Phase 7 has since started ahead of the remaining Phase 6 items, because the
 only unblocked one left is the cold-homepage query count — AVIF needs a rebuilt
 GD or `php-imagick` on this box, and `hreflang` needs a second locale to exist.
 What remains of Phase 7: off-site copies of the nightly backup, an external
-uptime check, and real branding.
+uptime check, real branding, and deciding whether scheduled articles should
+publish themselves.
 
 ---
 

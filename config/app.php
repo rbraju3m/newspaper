@@ -65,7 +65,24 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    /*
+     * Asia/Dhaka, not UTC.
+     *
+     * This is not a display preference. MySQL on this deployment runs with a
+     * system time zone of +06, so with PHP on UTC the two clocks disagreed by
+     * six hours: `bookmarks` and `comment_likes` stamp `created_at` with
+     * useCurrent(), which is MySQL's clock, while every other row was stamped
+     * by PHP's. Two rows written in the same instant differed by six hours.
+     *
+     * It is also the difference between an editor scheduling a story for 3 PM
+     * and it appearing at 9 PM: the admin's datetime-local inputs are wall
+     * clock, and so is the date archive's idea of "today".
+     *
+     * Timestamps written *before* this change keep their wall-clock reading
+     * and change meaning — a row saying 11:00 was 11:00 UTC and now reads as
+     * 11:00 Dhaka. See docs/DEPLOY.md.
+     */
+    'timezone' => env('APP_TIMEZONE', 'Asia/Dhaka'),
 
     /*
     |--------------------------------------------------------------------------

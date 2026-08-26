@@ -6,8 +6,8 @@ requirements are unusually specific in three places, and each of them fails
 quietly rather than loudly.
 
 Read alongside [`STATUS.md`](STATUS.md) for what is still open before a public
-launch. Two of those are not deployment steps and are not covered here: real
-branding, and the timezone decision below.
+launch. One of those is not a deployment step and is not covered here: real
+branding.
 
 ---
 
@@ -46,23 +46,29 @@ puts a blocking DNS lookup in front of every submission and **rejects
 `@example.com` outright** (egulias refuses the RFC 2606 reserved domains
 whatever DNS says). Test it with a real domain.
 
-### Decide the timezone before the first story publishes
+### Two clocks, and they must agree
 
-`config/app.php` sets `'timezone' => 'UTC'`. Timestamps are stored and rendered
-in it, so `@bntime` currently prints UTC — six hours behind Dhaka. For a
-Bangladeshi newspaper that is wrong on every byline and every live-blog entry.
+`APP_TIMEZONE` is `Asia/Dhaka` and `DB_TIMEZONE` is `+06:00`. **They have to
+match.** MySQL converts every `TIMESTAMP` column on the way in and out using
+the *session* zone, so the two settings are two halves of one decision.
 
-Changing it after publication reinterprets nothing (the stored values stay UTC)
-but shifts what every existing timestamp *displays*, so make the call before
-launch, not after:
+This was a real bug rather than a preference. MySQL on the development box runs
+with a system zone of `+06` while PHP ran on UTC, so the two clocks disagreed:
+`bookmarks` and `comment_likes` stamp `created_at` with `useCurrent()` — which
+is MySQL's clock — while every other row was stamped by PHP's. Two rows written
+in the same instant were six hours apart.
 
-```php
-// config/app.php
-'timezone' => 'Asia/Dhaka',
-```
+`DB_TIMEZONE` is pinned rather than left to the server's system zone precisely
+so this cannot vary with the box you deploy on. If you deploy somewhere the
+newsroom is not in Dhaka, change both together.
 
-This is deliberately not changed in the repo — it is a product decision, and
-the tests assert against the current behaviour.
+**Timestamps written before the change keep their wall-clock reading and change
+meaning.** A row saying `11:00` was 11:00 UTC and now reads as 11:00 Dhaka. In
+practice nothing visible moves — the displayed time and every relative time
+("৩৮ মিনিট আগে") are computed from the same wall clock and are unchanged — but
+the ISO strings in feeds and JSON-LD now carry `+06:00`, so historical items
+shift six hours in absolute terms. Do this before real publishing begins and
+the question does not arise.
 
 ### Scheduled articles do not publish themselves
 
