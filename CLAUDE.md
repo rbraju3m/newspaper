@@ -321,7 +321,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 320 tests, ~51s. Behaviour coverage exists
+`php artisan test` runs and passes — 330 tests, ~69s. Behaviour coverage exists
 for both halves of the app:
 
 | File | Covers |
@@ -341,6 +341,7 @@ for both halves of the app:
 | `Unit/HtmlSanitizerTest` | the HTML allow-list — the vector table, and that cleaning is idempotent |
 | `ContentSanitizeTest` | that every write path applies it — articles, live entries, pages — and `content:sanitize` |
 | `DemoPurgeTest` | `demo:purge` — what it deletes, what it keeps, and that it will not lock you out |
+| `BackupTest` | `backup:run` — that the dump holds rows, not just schema, and that a bad one is discarded |
 
 Still uncovered: the live blog append path, the layout manager's reorder, feed
 *contents* as opposed to well-formedness, the e-paper reader, and OAuth sign-in.

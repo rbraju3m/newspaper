@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 320 tests; both halves covered, every editor-written body sanitised, demo purge and deploy runbook written, backups and error tracking still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 330 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook and verified nightly backups; off-site copies and error tracking still open |
 
 ### By the numbers
 
@@ -43,7 +43,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 320 tests, 757 assertions, ~51s:
+tests.** The suite is 330 tests, 782 assertions, ~69s:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -65,6 +65,7 @@ tests.** The suite is 320 tests, 757 assertions, ~51s:
 | `PollVotingTest` | 10 | guest fingerprinting, double-vote refusal, cross-poll option rejection, total equals sum of options |
 | imagery suite | 33 | `ResponsiveImageTest`, `MediaBackfillTest`, `ArticleImageSyncTest`, `AdAssetTest`, `MediaUploadTest` |
 | `Unit/HtmlSanitizerTest` | 68 | the HTML allow-list: script, handler, `javascript:`, entity-encoded and tab-split URLs, `data:` images, conditional comments, foreign content, off-host iframes — and that every verdict is idempotent |
+| `BackupTest` | 10 | that `backup:run` writes a dump holding rows and not just schema, that Bangla survives it, that the archive uses relative paths, the completion-marker check, the public-disk refusal, and that pruning never takes the last backup |
 | `DemoPurgeTest` | 12 | what `demo:purge` deletes and what it keeps, the seeded logins going even when one is an admin, `--keep`, the lockout refusal, the media ladder coming off disk, and the counter and cache resets |
 | `ContentSanitizeTest` | 22 | that all three unescaped bodies are sanitised on write — the article model and editor form, live-blog append and edit (including the JSON the polling client feeds to `x-html`), and static pages — plus `content:sanitize` over every target, trashed rows included, leaving `updated_at` alone |
 
@@ -235,7 +236,7 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 320 tests cover both halves of
+1. **Test coverage is started, not finished.** 330 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, and the whole reader path from registration
    through bookmarks, history, comments, the newsletter and polls. What is
@@ -262,21 +263,38 @@ lookup in front of every newsletter submission on the live site too.
    directory blind.
 4. **Placeholder branding** — GD-drawn app icons, no real logo artwork, imprint
    fields hold sample values.
-5. **No backups and no error tracking.** ~~No deploy runbook.~~ The runbook
-   is [`DEPLOY.md`](DEPLOY.md). Writing it turned up two things that are
-   decisions rather than steps, and both are still open:
+5. ~~**No backups, no deploy runbook.**~~ **Both exist.** The runbook is
+   [`DEPLOY.md`](DEPLOY.md). `backup:run` dumps the database and archives
+   `uploads/` — which is in neither the dump nor git — nightly at 03:00, and
+   verifies both before reporting success. A truncated dump is a *valid* gzip
+   file, so the check is mysqldump's own completion marker; anything that
+   fails is deleted rather than left looking like a backup.
 
-   - **`config/app.php` sets `'timezone' => 'UTC'`.** `@bntime` therefore
-     prints six hours behind Dhaka on every byline and live-blog entry. Left
-     unchanged deliberately — it shifts what every existing timestamp displays,
-     and the tests assert the current behaviour. Decide before launch.
-   - **Scheduled articles never publish themselves.** There are no queued jobs
-     and no scheduled tasks in the application at all; a `scheduled` article
-     waits for a human to set it to `published`, and the dashboard's
-     `scheduled_due` count is the whole mechanism.
+   Two things keep this from being finished, and neither is a code change:
 
-   `uploads/` is not in the database dump and not in git, so it needs a backup
-   of its own.
+   - **The artifacts sit on the same disk as the database they came from.**
+     That survives a bad migration, not a dead server. Getting them off the
+     box is a manual `rsync` — `DEPLOY.md` has the cron line.
+   - **Nothing monitors it.** If the nightly run stops, only
+     `storage/logs/backup.log` will say so.
+
+   **Error tracking is still open**, and it is the same gap seen from the
+   other side: nothing reports an exception anywhere but
+   `storage/logs/laravel.log`, so nobody learns a backup failed — or that
+   anything else did — until someone reads a file.
+
+### Decisions the runbook surfaced
+
+Neither is a deployment step, and both are open:
+
+- **`config/app.php` sets `'timezone' => 'UTC'`.** `@bntime` therefore prints
+  six hours behind Dhaka on every byline and live-blog entry. Left unchanged
+  deliberately — it shifts what every existing timestamp displays, and the
+  tests assert the current behaviour. Decide before launch.
+- **Scheduled articles never publish themselves.** A `scheduled` article waits
+  for a human to set it to `published`; the dashboard's `scheduled_due` count
+  is the whole mechanism. The scheduler now exists (the nightly backup runs
+  through it), so an auto-publish command would have somewhere to live.
 
 ### Feature-incomplete
 
@@ -375,8 +393,8 @@ Two things the Lighthouse pass will surface that are decisions, not bugs:
 Phase 7 has since started ahead of the remaining Phase 6 items, because the
 only unblocked one left is the cold-homepage query count — AVIF needs a rebuilt
 GD or `php-imagick` on this box, and `hreflang` needs a second locale to exist.
-What remains of Phase 7: purging demo data, backups, error tracking and a
-deploy runbook.
+What remains of Phase 7: error tracking, off-site copies of the nightly
+backup, and real branding.
 
 ---
 

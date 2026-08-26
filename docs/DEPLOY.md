@@ -6,8 +6,8 @@ requirements are unusually specific in three places, and each of them fails
 quietly rather than loudly.
 
 Read alongside [`STATUS.md`](STATUS.md) for what is still open before a public
-launch. Four of those items are not deployment steps and are not covered here:
-real branding, backups, error tracking, and the timezone decision below.
+launch. Three of those are not deployment steps and are not covered here: real
+branding, error tracking, and the timezone decision below.
 
 ---
 
@@ -250,7 +250,10 @@ which is why a per-project vhost is needed at all — Laravel's
 * * * * * cd /var/www/newspaper && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-Nothing is scheduled today (see above). Install it so the hook exists.
+This is not optional any more: the nightly backup is registered through the
+scheduler, and without this line it never runs. `php artisan schedule:list`
+tells you what is registered — it cannot tell you whether cron is calling it,
+so check that `storage/logs/backup.log` grows overnight.
 
 ### 9. Warm the caches
 
@@ -355,12 +358,70 @@ php artisan up
 
 Migrations are the part that does not roll back cleanly. `migrate:rollback`
 runs the `down()` methods, which for anything that dropped or rewrote a column
-means data loss. Take a dump first, every time:
+means data loss. Take a backup first, every time — `php artisan backup:run`,
+below.
+
+---
+
+## Backups
 
 ```bash
-mysqldump --single-transaction --default-character-set=utf8mb4 newspaper \
-  | gzip > ~/newspaper-$(date +%F-%H%M).sql.gz
+php artisan backup:run              # both halves, verified
+php artisan backup:run --database   # dump only
+php artisan backup:run --files      # uploads only
+php artisan backup:run --keep=30    # change the retention window
 ```
 
-`storage/app/public/uploads` is not in that dump and is not in git. It needs its
-own backup, and no automated one exists yet — see `STATUS.md`.
+Writes to `storage/app/backups/`, which is outside the document root. The
+command refuses to write anywhere under `storage/app/public`, because
+`storage:link` symlinks that tree into `public/` — a dump written there is one
+guessed filename away from being downloaded by anyone.
+
+**Two halves, and you need both.** `uploads/` — originals plus the whole WebP
+derivative ladder — is in neither the SQL dump nor git. A restore from the
+database alone gives you a newspaper whose every image is a broken link.
+
+**It verifies before reporting success.** This matters more than it sounds. A
+truncated dump is a *valid* gzip file of a plausible size: `gzip -t` passes it
+without complaint, and it restores into a half-empty database. The only cheap
+proof the dump finished is mysqldump's own closing `Dump completed` line, so
+that is what is checked, along with the gzip integrity and a size floor.
+Anything that fails is **deleted**, so a bad backup never sits there looking
+like a good one.
+
+The nightly run is registered in `routes/console.php` for 03:00 and appends to
+`storage/logs/backup.log`. It needs the cron entry above to fire at all.
+
+### What this does not do
+
+Backups are written to the same disk as the database they came from. That
+survives a bad migration, a bad deploy and a bad `DELETE`; it does not survive
+the server. **Getting the files off this machine is still a manual job** — an
+`rsync` to another host, or a sync to object storage:
+
+```cron
+30 3 * * * rsync -az --delete /var/www/newspaper/storage/app/backups/ backup@elsewhere:/srv/newspaper/
+```
+
+There is no monitoring: nothing tells you the backup stopped running. Until
+error tracking exists (see `STATUS.md`), check `backup.log` on a schedule you
+will actually keep.
+
+### Restoring
+
+```bash
+# Database. --add-drop-table is on by default, so this replaces what is there.
+gzip -cd storage/app/backups/database/newspaper-YYYY-MM-DD-HHMMSS.sql.gz \
+  | mysql --default-character-set=utf8mb4 -u newspaper -p newspaper
+
+# Uploads. The archive holds relative paths, so it restores onto any box.
+tar -xzf storage/app/backups/files/uploads-YYYY-MM-DD-HHMMSS.tar.gz \
+  -C storage/app/public
+
+php artisan optimize:clear
+```
+
+Then check the restore rather than assuming it: compare a row count against
+what you expected, open a story with an image on it, and search a Bangla term.
+A restore verified only by "the command exited 0" is the same mistake as an
+unverified backup.

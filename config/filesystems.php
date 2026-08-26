@@ -47,6 +47,20 @@ return [
             'report' => false,
         ],
 
+        /*
+         * Database dumps and upload archives. Deliberately not under
+         * `app/public`: that tree is symlinked into the document root by
+         * `storage:link`, so a backup written there would be downloadable by
+         * anyone who guessed the filename — the whole database, over HTTP.
+         */
+        'backups' => [
+            'driver' => 'local',
+            'root' => storage_path('app/backups'),
+            'visibility' => 'private',
+            'throw' => false,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),
