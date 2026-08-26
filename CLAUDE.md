@@ -170,6 +170,42 @@ selector.
 Pair every hover-revealed control with `group-focus-within:` and
 `[@media(hover:none)]:` so it stays reachable by keyboard and by finger.
 
+### Editor HTML is sanitised on write, not on read
+
+Three columns are printed with `{!! !!}` — `articles.body`,
+`live_entries.body` and `pages.body`. That is safe only because nothing unsafe
+can reach them: each model's `saving()` hook runs the body through
+`App\Support\Html::sanitize()` on every write, so the stored value is already
+clean. `live_entries.body` has a second reader — the polling endpoint hands it
+to `x-html`, which is `innerHTML`, where a `<script>` is inert but
+`<img onerror>` is not.
+
+Three things follow.
+
+**A fourth body means a fourth hook.** Anything new that gets printed with
+`{!! !!}` needs the same `saving()` guard *and* an entry in
+`SanitizeContentBodies::TARGETS`, on the day it starts being rendered.
+
+**Do not add a second way to write a body.** A query-builder `update()` on any
+of those columns skips model events and puts raw markup straight into something
+printed unescaped. `content:sanitize` exists to clean up after exactly that, and
+is the *only* place in the app allowed to do it.
+
+**Widening the allow-list is a two-sided change.** `Html::ALLOWED` and
+`.prose-editorial` in `resources/css/app.css` have to agree, or you get markup
+that survives sanitising and renders unstyled. After widening, run
+`php artisan content:sanitize` — stored bodies were cleaned against the *old*
+list and nothing re-cleans them on its own.
+
+`<iframe>` is the one allowed element that executes code, so it is allow-listed
+by **host** (`Html::EMBED_HOSTS`) rather than by scheme. `class` is filtered to
+`lat` and `tabular` — an arbitrary class escapes the semantic tokens.
+
+The parser is PHP 8.4's `Dom\HTMLDocument`, not `DOMDocument`. The old HTML4
+parser disagrees with browsers about foreign content (`<svg>`, `<math>`), which
+is where every mutation-XSS bug lives, and it hands back numeric entities on
+some input — `&#2476;` where বাংলা used to be, in a column FULLTEXT covers.
+
 ### Response return types
 
 `Illuminate\Http\Response` is **not** a supertype of `JsonResponse` or
@@ -254,7 +290,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 218 tests, ~48s. Behaviour coverage exists
+`php artisan test` runs and passes — 308 tests, ~43s. Behaviour coverage exists
 for both halves of the app:
 
 | File | Covers |
@@ -271,6 +307,8 @@ for both halves of the app:
 | `CommentPostingTest` | the reader side of comments, both abuse controls |
 | `NewsletterTest`, `PollVotingTest` | subscribe/verify/unsubscribe, and poll voting |
 | `ResponsiveImageTest`, `MediaBackfillTest`, `ArticleImageSyncTest`, `AdAssetTest`, `MediaUploadTest` | the imagery ladder |
+| `Unit/HtmlSanitizerTest` | the HTML allow-list — the vector table, and that cleaning is idempotent |
+| `ContentSanitizeTest` | that every write path applies it — articles, live entries, pages — and `content:sanitize` |
 
 Still uncovered: the live blog append path, the layout manager's reorder, feed
 *contents* as opposed to well-formedness, the e-paper reader, and OAuth sign-in.

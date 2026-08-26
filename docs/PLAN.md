@@ -254,7 +254,7 @@ shipped in Phase 2. What remains:
 Test suite — only Laravel's stock `ExampleTest` stubs exist, and
 `php artisan test` currently fails because `phpunit.xml` targets SQLite
 `:memory:` while `pdo_sqlite` is not installed. All verification so far has been
-ad-hoc scripts · HTML sanitising for article bodies · purge demo data and logins ·
+ad-hoc scripts · ~~HTML sanitising for editor-written bodies~~ (done) · purge demo data and logins ·
 real branding · rate-limit review · backups · error tracking · deploy runbook.
 
 ---

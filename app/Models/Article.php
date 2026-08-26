@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\ArticleStatus;
 use App\Enums\ArticleType;
 use App\Support\Bangla;
+use App\Support\Html;
 use App\Support\Slug;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
@@ -52,7 +53,22 @@ class Article extends Model
     {
         static::saving(function (self $article) {
             $article->slug = $article->slug ?: static::uniqueSlug($article->title, $article->locale, $article->id);
-            $article->reading_time = Bangla::readingTime((string) $article->body);
+
+            // The body is rendered with {!! !!}, so it is sanitised on the way
+            // in rather than on the way out — once per save instead of once per
+            // reader, and the invariant holds for every writer, not only the
+            // article form. Guarded by isDirty() so an unchanged body is not
+            // reparsed, and so a partially-selected model (ArticleQuery::cards()
+            // omits `body`) is not asked for an attribute it never loaded.
+            //
+            // Reading time is derived from the body, so it belongs in the same
+            // guard: recomputing it needs the attribute too, and reaching for
+            // `body` on a model that never selected it is exactly the strict-mode
+            // throw this avoids.
+            if ($article->isDirty('body')) {
+                $article->body = Html::sanitize($article->body);
+                $article->reading_time = Bangla::readingTime((string) $article->body);
+            }
 
             // Publishing without an explicit date means "now".
             if ($article->status === ArticleStatus::Published && ! $article->published_at) {

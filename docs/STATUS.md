@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 218 tests; both halves of the app covered, sanitising and ops still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 308 tests; both halves of the app covered, every editor-written body sanitised, ops still open |
 
 ### By the numbers
 
@@ -43,7 +43,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 218 tests, 599 assertions, ~48s:
+tests.** The suite is 308 tests, 720 assertions, ~43s:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -64,6 +64,8 @@ tests.** The suite is 218 tests, 599 assertions, ~48s:
 | `NewsletterTest` | 8 | subscribe, verify, unsubscribe, resubscribe |
 | `PollVotingTest` | 10 | guest fingerprinting, double-vote refusal, cross-poll option rejection, total equals sum of options |
 | imagery suite | 33 | `ResponsiveImageTest`, `MediaBackfillTest`, `ArticleImageSyncTest`, `AdAssetTest`, `MediaUploadTest` |
+| `Unit/HtmlSanitizerTest` | 68 | the HTML allow-list: script, handler, `javascript:`, entity-encoded and tab-split URLs, `data:` images, conditional comments, foreign content, off-host iframes — and that every verdict is idempotent |
+| `ContentSanitizeTest` | 22 | that all three unescaped bodies are sanitised on write — the article model and editor form, live-blog append and edit (including the JSON the polling client feeds to `x-html`), and static pages — plus `content:sanitize` over every target, trashed rows included, leaving `updated_at` alone |
 
 Writing them turned up six defects that every manual pass had missed — see
 "What the test pass found" below.
@@ -232,14 +234,20 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 218 tests cover both halves of
+1. **Test coverage is started, not finished.** 308 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, and the whole reader path from registration
    through bookmarks, history, comments, the newsletter and polls. What is
    still uncovered is the live blog append path, the layout manager's reorder,
    feed contents, the e-paper reader and OAuth sign-in.
-2. **Article bodies are raw HTML rendered unescaped.** Safe while only staff can
-   write them. Must be sanitised before authorship widens.
+2. ~~**Editor-written bodies are raw HTML rendered unescaped.**~~ **Done.**
+   All three — `articles.body`, `live_entries.body` and `pages.body` — are
+   still stored as HTML and still printed with `{!! !!}`, but nothing unsafe
+   can reach them any more. Each model's `saving()` hook runs the body through
+   `App\Support\Html`, an allow-list sanitiser built on PHP 8.4's HTML5
+   parser, and `content:sanitize` brings stored rows forward. The live-blog
+   timeline is covered on both of its readers: the server-rendered list and
+   the JSON the polling client injects with `x-html`.
 3. **Demo data and demo logins are in the database.** Purge before deploying.
 4. **Placeholder branding** — GD-drawn app icons, no real logo artwork, imprint
    fields hold sample values.
@@ -342,8 +350,7 @@ Two things the Lighthouse pass will surface that are decisions, not bugs:
 Phase 7 has since started ahead of the remaining Phase 6 items, because the
 only unblocked one left is the cold-homepage query count — AVIF needs a rebuilt
 GD or `php-imagick` on this box, and `hreflang` needs a second locale to exist.
-What remains of Phase 7: coverage for the reader-facing half of the app,
-sanitising article bodies, purging demo data, backups, error tracking and a
+What remains of Phase 7: purging demo data, backups, error tracking and a
 deploy runbook.
 
 ---

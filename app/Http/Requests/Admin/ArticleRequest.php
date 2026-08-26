@@ -4,6 +4,7 @@ namespace App\Http\Requests\Admin;
 
 use App\Enums\ArticleStatus;
 use App\Enums\ArticleType;
+use App\Support\Html;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -111,6 +112,24 @@ class ArticleRequest extends FormRequest
         // An empty slug means "regenerate from the title".
         if (blank($this->input('slug'))) {
             $this->merge(['slug' => null]);
+        }
+
+        // Article::saving() sanitises too, and that is where the invariant
+        // lives. Doing it here as well buys one thing the model hook cannot:
+        // the "a published story needs a body" check in after() sees what will
+        // actually be stored. A body of nothing but <script> is non-empty on
+        // the way in and blank on the way out, and without this it would
+        // publish an empty page.
+        //
+        // merge() lands because prepareForValidation() runs before the
+        // validator collects its data. The same call inside after() would not.
+        //
+        // It does not change what a failed submit puts back in the textarea:
+        // Handler::invalid() flashes from the container's request instance, and
+        // merge() here writes to this FormRequest's own input bag. The editor
+        // gets their own markup back, which is the right answer anyway.
+        if (is_string($this->input('body'))) {
+            $this->merge(['body' => Html::sanitize($this->input('body'))]);
         }
     }
 }

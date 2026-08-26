@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Bangla;
+use App\Support\Html;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -21,6 +22,19 @@ class LiveEntry extends Model
             'is_key' => 'boolean',
             'published_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $entry) {
+            // Sanitised on write, like Article::body. This one has two readers:
+            // the timeline prints it with {!! !!}, and payload() hands it to the
+            // polling client, which injects it with x-html — innerHTML, where a
+            // <script> is inert but `<img onerror>` is not.
+            if ($entry->isDirty('body')) {
+                $entry->body = Html::sanitize($entry->body);
+            }
+        });
     }
 
     public function article(): BelongsTo

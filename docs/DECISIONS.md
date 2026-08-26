@@ -234,7 +234,10 @@ submission would be actively harmful.
 | Decision | Cost | Why it stands |
 |---|---|---|
 | Guzzle pinned to 7.x | Not on the latest major | Socialite requires ≤7; Laravel 13 declares `^7.8.2 \|\| ^8.0`, so 7.15.5 is fully supported |
-| Article body stored as raw HTML, rendered unescaped | XSS if untrusted authors are ever added | Only staff can write it today. **Sanitise before widening authorship.** |
-| Body editor is a textarea with HTML helpers, not WYSIWYG | Editors must know a little HTML | A WYSIWYG needs server-side sanitising before its output can be trusted |
+| Editor bodies stored as raw HTML, rendered unescaped | A sanitiser bug is an XSS bug | Sanitised on **write**, not on read: each model's `saving()` hook cleans it once per save rather than once per reader, so `{!! !!}` prints a value already known good. Cost: the stored markup is the cleaned markup, and widening `Html::ALLOWED` needs `content:sanitize` re-run |
+| Sanitiser hand-written on `Dom\HTMLDocument` rather than HTMLPurifier | An allow-list we maintain ourselves | No new dependency, and PHP 8.4 ships a spec-compliant HTML5 parser — the HTML4 one HTMLPurifier-era code assumes is where mutation-XSS lives. `Unit/HtmlSanitizerTest` is the vector table that keeps it honest |
+| `<iframe>` allow-listed by host, not by scheme | A new embed provider needs a code change | It is the one permitted element that executes code; a scheme check would admit any site at all |
+| One allow-list for articles, live entries and pages | A static page cannot carry markup an article may not | Three allow-lists is three things to keep in step with `.prose-editorial`, and nothing has yet wanted the difference. `SanitizeContentBodies::TARGETS` is the list of what is covered |
+| Body editor is a textarea with HTML helpers, not WYSIWYG | Editors must know a little HTML | The server-side sanitising a WYSIWYG would need now exists, so this is a UI decision rather than a safety one |
 | Views counted inline, not queued | A write on article reads | One `UPDATE` is cheaper than a queue round trip at this scale; a session guard stops refresh inflation |
 | Placeholder app icons | Not real branding | GD-drawn so the manifest validates; swap in real artwork |
