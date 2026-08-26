@@ -63,8 +63,7 @@ class MediaSeeder extends Seeder
         $service = app(ImageService::class);
         $uploader = User::query()->where('role', UserRole::Admin)->orderBy('id')->first();
 
-        $library = $this->library($service, $uploader?->id);
-        $this->assignToArticles($library);
+        $this->assignToArticles($service, $uploader?->id);
         $this->assignToAds($service, $uploader?->id);
 
         SeedImagery::releaseNoise();
@@ -134,17 +133,68 @@ class MediaSeeder extends Seeder
     }
 
     /**
-     * Links every article to a plate from its own section.
+     * Articles whose lead image is not actually there.
+     *
+     * A null `image_id`, a row that has since been deleted, or a path with no
+     * file behind it. Anything else is working imagery and is not the seeder's
+     * to replace — a real editor upload, or a folder brought in by
+     * `photos:import`, is somebody's deliberate choice.
+     *
+     * This is the difference between healing 404s, which is what this seeder
+     * is for, and relinking all 374 rows on every run, which is what it used
+     * to do: re-seeding to repair one broken ad silently replaced every
+     * photograph on the site.
+     *
+     * @return \Illuminate\Support\Collection<int, Article>
+     */
+    private function articlesMissingImagery(): \Illuminate\Support\Collection
+    {
+        $disk = Storage::disk('public');
+
+        // Distinct paths rather than one exists() per article: 374 rows share
+        // a few dozen files between them.
+        $onDisk = Article::withTrashed()
+            ->whereNotNull('image')
+            ->distinct()
+            ->pluck('image')
+            ->filter(fn (string $path): bool => $disk->exists($path))
+            ->flip();
+
+        $mediaIds = Media::query()->pluck('id')->flip();
+
+        return Article::withTrashed()
+            ->select(['id', 'category_id', 'image', 'image_id'])
+            ->orderBy('id')
+            ->get()
+            ->reject(fn (Article $article): bool => $article->image_id !== null
+                && $mediaIds->has($article->image_id)
+                && $article->image !== null
+                && $onDisk->has($article->image));
+    }
+
+    /**
+     * Links every article that needs one to a plate from its own section.
      *
      * Both columns are written. `image_id` is what feeds the srcset; the
      * denormalised `image` is what feeds the plain `src`, and leaving it on the
      * old seed path would keep a 404 as the fallback of every responsive image
      * on the site.
-     *
-     * @param  array<string, list<Media>>  $library
      */
-    private function assignToArticles(array $library): void
+    private function assignToArticles(ImageService $service, ?int $userId): void
     {
+        $needy = $this->articlesMissingImagery();
+
+        if ($needy->isEmpty()) {
+            $this->command->info('Every article already has imagery on disk — leaving it alone.');
+
+            return;
+        }
+
+        // Drawn only now that something needs it. Fifty-four plates cost about
+        // a minute, and on a box whose articles all carry real photographs
+        // every one of them would be an orphan.
+        $library = $this->library($service, $userId);
+
         // `path` is the materialised "khela/cricket"; its first segment names
         // the section whose palette the plate was drawn from. Resolving it from
         // a pluck avoids touching $category->parent, which strict mode forbids
@@ -158,18 +208,13 @@ class MediaSeeder extends Seeder
         /** @var array<int, list<int>> $buckets media id => article ids */
         $buckets = [];
 
-        Article::withTrashed()
-            ->select(['id', 'category_id'])
-            ->orderBy('id')
-            ->chunk(200, function ($articles) use (&$buckets, $sectionOf, $library, $fallback): void {
-                foreach ($articles as $article) {
-                    $pool = $library[$sectionOf[$article->category_id] ?? ''] ?? $fallback;
+        foreach ($needy as $article) {
+            $pool = $library[$sectionOf[$article->category_id] ?? ''] ?? $fallback;
 
-                    // Deterministic rather than random, so re-running the
-                    // seeder does not reshuffle the whole front page.
-                    $buckets[$pool[$article->id % count($pool)]->id][] = $article->id;
-                }
-            });
+            // Deterministic rather than random, so re-running the seeder does
+            // not reshuffle the whole front page.
+            $buckets[$pool[$article->id % count($pool)]->id][] = $article->id;
+        }
 
         foreach ($buckets as $mediaId => $ids) {
             // A query-builder update, so none of the article model events fire.

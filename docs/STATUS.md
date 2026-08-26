@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 437 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 444 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
 
 ### By the numbers
 
@@ -43,7 +43,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 437 tests, 1,447 assertions, ~78s:
+tests.** The suite is 444 tests, 1,461 assertions, ~76s:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -73,6 +73,7 @@ tests.** The suite is 437 tests, 1,447 assertions, ~78s:
 | `BackupTest` | 10 | that `backup:run` writes a dump holding rows and not just schema, that Bangla survives it, that the archive uses relative paths, the completion-marker check, the public-disk refusal, and that pruning never takes the last backup |
 | `DemoPurgeTest` | 12 | what `demo:purge` deletes and what it keeps, the seeded logins going even when one is an admin, `--keep`, the lockout refusal, the media ladder coming off disk, and the counter and cache resets |
 | `ContentSanitizeTest` | 22 | that all three unescaped bodies are sanitised on write — the article model and editor form, live-blog append and edit (including the JSON the polling client feeds to `x-html`), and static pages — plus `content:sanitize` over every target, trashed rows included, leaving `updated_at` alone |
+| `MediaSeederTest` | 7 | what `MediaSeeder` heals and, more importantly, what it refuses to touch — imagery that is actually on disk |
 | `PhotoImportTest` | 8 | `photos:import` — the ladder built from a real folder, the transcode that stops a 2 MB PNG becoming the `src` fallback, transparency flattened onto white, idempotency by filename, deterministic assignment, and that a dry run writes nothing |
 | `LiveBlogTest` | 23 | the live blog end to end: appending, the backdated correction, pinned above newest, editing that must not move an entry, who may run one — and the polling endpoint's cursor, including a burst larger than one page |
 | `LayoutReorderTest` | 14 | the front-page layout manager: a drag rewriting positions within a column and across them, the emptied column the form omits entirely, the homepage cache flushing so the new order is what renders, unknown block ids refused with nothing moved, the role matrix — and the collision the settings form's own column select used to cause |
@@ -289,7 +290,7 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 437 tests cover both halves of
+1. **Test coverage is started, not finished.** 444 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, and the whole reader path from registration
    through bookmarks, history, comments, the newsletter and polls. What is
@@ -423,19 +424,27 @@ comes to disagree about what drift is.
    `galleries` and `gallery_images` are still empty, so `/photo` renders an
    empty hub, and `epapers` has no rows — both blocked on their missing admin
    CRUD, gaps 8 and 9, not on imagery.
-6b. **The seeded plate library is gone from this box, and the ad slots point
-   at nothing.** Found while importing the photographs, and it predates that
-   import — `photos:import` only inserts media and updates articles, and the
-   six admin uploads that share the table survived untouched. The `media`
-   table holds no `seed-*` rows and `storage/app/public/uploads/2026/08/ads/`
-   does not exist, while all five house ads still carry
-   `uploads/2026/08/ads/seed-ad-*.jpg` in `asset`. Every ad slot on the site
-   is therefore rendering a broken image rather than its reserved placeholder.
+6b. ~~**The seeded plate library is gone from this box, and the ad slots point
+   at nothing.**~~ **Fixed.** Found while importing the photographs, and it
+   predated that import — `photos:import` only inserts media and updates
+   articles, and the six admin uploads sharing the table survived untouched.
+   The `media` table held no `seed-*` rows and
+   `storage/app/public/uploads/2026/08/ads/` did not exist, while all five
+   house ads still carried `uploads/2026/08/ads/seed-ad-*.jpg` in `asset`, so
+   every slot rendered a broken image.
 
-   `php artisan db:seed --class=MediaSeeder` redraws them. **Read the trap in
-   `CLAUDE.md` first:** that seeder also reassigns every article to a freshly
-   drawn plate, so running it now replaces the photographs. Re-running
-   `photos:import <dir> --assign` puts them back.
+   Repairing it meant fixing `MediaSeeder` first. It relinked *every* article
+   on every run, so the obvious repair — re-seed the imagery — would have
+   replaced all 374 photographs. It now assigns only to articles whose lead
+   image is genuinely absent: a null `image_id`, a deleted media row, or a
+   path with no file. The plate library is drawn lazily behind that check, so
+   a run that only repairs the ads costs about a second rather than the minute
+   54 plates take.
+
+   `db:seed --class=MediaSeeder` then filled all five slots, left all 374
+   photographs alone, and drew nothing. Verified over HTTP: every ad slot on
+   the homepage serves a real creative, all 200. `MediaSeederTest` pins both
+   halves — what it heals and what it refuses to touch.
 
 7. **Push notifications are half-present.** The service worker has `push` and
    `notificationclick` handlers, but there is no subscription storage, no VAPID
