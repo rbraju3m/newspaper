@@ -426,6 +426,68 @@ the guard against a second send, and it is stamped even on a partial failure —
 sending twice to everyone it reached is worse than missing the handful it did
 not.
 
+### The newsletter runs with no queue worker
+
+Nothing in this application is queued, because nothing runs `queue:work`.
+`QUEUE_CONNECTION=database`, so a `ShouldQueue` mailable would land in the
+`jobs` table and sit there for ever, looking exactly like a send that worked.
+
+Both newsletter paths therefore send inline: the double opt-in mail from the
+request (throttled to five an hour, which is what makes SMTP latency in a
+request acceptable), and the digest from a cron process, where blocking is the
+point. `ErrorAlerter` made the same choice for the same reason. If a worker
+ever exists, dispatching is the upgrade — and until then, adding `ShouldQueue`
+to a mailable here silently stops it being delivered.
+
+Two things follow for anything that sends:
+
+**A failed send must not take the request with it.** `NewsletterController`
+catches and logs. The subscriber row is already written and the reader has
+already been told to check their inbox; a 500 would leave them looking at an
+error while the subscription quietly exists.
+
+**`last_sent_at` is stamped per subscriber as each one succeeds**, not in a
+batch at the end. A run that dies at row 2,000 of 4,000 must leave the first
+2,000 marked, or the re-run mails them twice.
+
+### An unsubscribe link is fetched by machines
+
+`GET /newsletter/unsubscribe/{token}` used to unsubscribe on sight. Gmail,
+Outlook and every corporate mail scanner fetch the links in a message to check
+them before a human sees it — so that route silently unsubscribed readers who
+never clicked anything, and there is no signal anywhere when it happens.
+
+The link now renders a confirmation and the button posts. **`List-Unsubscribe`
+must name the POST route**, not the confirmation page: the mail client calls it
+directly and renders nothing, so pointing it at a page asking "are you sure?"
+leaves the reader still subscribed and certain they unsubscribed.
+
+That POST is in `validateCsrfTokens(except:)` — it arrives from Gmail's own
+chrome with no session and no token. The 64-character subscriber token in the
+URL is the credential, and the only thing the request can do is stop that
+address receiving mail.
+
+`RFC 8058` also wants a 200 with no body for the one-click case rather than a
+redirect, which is why `destroy()` returns `Response|RedirectResponse` — see
+below on why that union is spelled out.
+
+### Email HTML is not the site's HTML
+
+`resources/views/components/mail/shell.blade.php` is tables and literal hex
+colours on purpose. Gmail's mobile clients strip `<style>` from the head,
+Outlook renders through Word, and none of them know what a CSS custom property
+is — so not one of the semantic tokens in `app.css` survives, and `bg-surface`
+in an email is a class that styles nothing.
+
+The masthead is type on a coloured bar rather than a logo image, because remote
+images are blocked by default in most clients and a masthead that renders as a
+broken-image icon is worse than one made of words. Only the lead story carries
+an image, and nothing depends on it loading.
+
+Every digest needs both parts: `Content` declares `view:` **and** `text:`. A
+mail with no plain-text alternative reads as spam to a filter before it reaches
+anybody.
+
 ### Response return types
 
 `Illuminate\Http\Response` is **not** a supertype of `JsonResponse` or
@@ -545,7 +607,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 547 tests, ~108s. Behaviour coverage exists
+`php artisan test` runs and passes — 568 tests, ~98s. Behaviour coverage exists
 for both halves of the app:
 
 | File | Covers |
@@ -578,6 +640,7 @@ for both halves of the app:
 | `GallerySeederTest` | that `GallerySeeder` curates only the imagery seeding owns, and never twice inside one gallery |
 | `Unit/SeedImageryTest` | the seed arithmetic behind every drawn image, and that it raises no deprecation |
 | `PushNotificationTest` | Web Push — who may subscribe, the account switch, sending, pruning a gone browser, and who may press send |
+| `NewsletterTest`, `NewsletterDigestTest` | subscribe/verify/unsubscribe including one-click, and the digest — who receives it, what it holds, and that a quiet news day sends nothing |
 | `PhotoImportTest` | `photos:import` — the transcode, the flattening, idempotency, and deterministic assignment |
 | `LiveBlogTest` | the live blog — appending, ordering, who may run one, and the polling cursor |
 | `LayoutReorderTest` | the front-page layout manager — drags within and across columns, the cache flush, and that a column change cannot collide |

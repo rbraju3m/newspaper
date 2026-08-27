@@ -17,6 +17,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'staff' => EnsureUserIsStaff::class,
         ]);
+
+        // RFC 8058 one-click unsubscribe. Gmail and Outlook POST this
+        // themselves from their own chrome — no page was rendered, so there is
+        // no session and no token to send. The 64-character subscriber token in
+        // the URL is the credential, and the only thing the request can do is
+        // stop that address receiving mail.
+        $middleware->validateCsrfTokens(except: [
+            'newsletter/unsubscribe/*',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

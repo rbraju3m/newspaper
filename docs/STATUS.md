@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 547 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 568 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
 
 ### By the numbers
 
@@ -44,7 +44,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 547 tests, 2,507 assertions, ~108s:
+tests.** The suite is 568 tests, 2,560 assertions, ~98s:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -78,6 +78,7 @@ tests.** The suite is 547 tests, 2,507 assertions, ~108s:
 | `EpaperAdminTest` | 22 | the e-paper admin — one issue per edition per day, page uploads numbered in order with thumbnails, the whole-issue PDF and its replacement, renumbering against the unique constraint, deletion taking its files, and the public reader |
 | `GalleryAdminTest` | 25 | the photo gallery admin — creating, the Bangla slug, uploads writing both columns and building the ladder, attaching from the library, drag ordering, the cover that follows it, deletion taking its files off disk without reaping a photograph an article still uses, the denormalised count, and the public hub |
 | `MediaSeederTest` | 7 | what `MediaSeeder` heals and, more importantly, what it refuses to touch — imagery that is actually on disk |
+| `NewsletterDigestTest` | 18 | `newsletter:send` — who receives an edition and who never does, the daily/weekly split, the double-send guard, per-section filtering, that a quiet news day sends nothing, the desk's lead leading the email, the one-click headers, and that one rejected address does not end the run |
 | `PushNotificationTest` | 26 | Web Push end to end — a guest subscribing, the endpoint as identity, the account switch standing browsers down, the payload contract with `sw.js`, sending, a 410 pruning the row, a 500 keeping it, the double-send guard, and the role matrix on the send button |
 | `Unit/SeedImageryTest` | 10 | `SeedImagery`'s deterministic RNG — the seed mixed in exact 32-bit arithmetic against arbitrary-precision references, that no seed raises the precision deprecation, and that an overflowing seed still draws the same image twice |
 | `GallerySeederTest` | 14 | `GallerySeeder` — the seven demo galleries, the count its model events keep, the credit copied off the photograph, the uncaptioned gallery, the draft staying unpublished, a hand-made gallery left alone, the pool it refuses to curate, and dealing without repeats out of a fresh box's 54 plates |
@@ -297,7 +298,7 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 547 tests cover both halves of
+1. **Test coverage is started, not finished.** 568 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, and the whole reader path from registration
    through bookmarks, history, comments, the newsletter and polls. What is
@@ -613,8 +614,63 @@ comes to disagree about what drift is.
      and shadows the column, so a permanently-zero column was invisible. It is
      now kept by `GalleryImage::booted()` the way `Comment::booted()` keeps
      `comments_count`, and reconciled by `counters:recompute`.
-10. **Newsletter never sends.** Subscribers are captured and verified; there is
-    no digest job or mail template.
+10. ~~**Newsletter never sends.**~~ **Done** — and it turned out to be two
+    gaps, not one. `store()` had always told the reader to check their inbox
+    while the double opt-in mail was a `TODO(Phase 3)`, so a footer subscriber
+    could never reach `verified_at` and `active()` never matched them. The send
+    list was, in practice, empty. Both halves are built now:
+    `NewsletterVerify`, `NewsletterDigest`, `NewsletterService`,
+    `newsletter:send`, HTML and plain-text templates, and two scheduler entries
+    (daily 07:30, weekly Friday 08:00).
+
+    What shapes it:
+
+    - **Nothing is queued, because no worker runs.** `QUEUE_CONNECTION=database`
+      and nothing calls `queue:work`, so a `ShouldQueue` mailable would sit in
+      the `jobs` table looking exactly like a send that worked. The opt-in mail
+      goes inline from the request — throttled to five an hour, which is what
+      makes SMTP latency there acceptable — and the digest inline from cron,
+      where blocking is the point. `ErrorAlerter` made the same call.
+    - **A quiet news day sends nothing.** An edition that comes back empty skips
+      that reader entirely and deliberately does *not* stamp `last_sent_at` —
+      they are still due whenever there is something to say. A newsletter that
+      arrives every morning regardless is a newsletter that gets filtered, and
+      after that none of them arrive.
+    - **Editorial before algorithmic.** The desk's lead or feature leads the
+      email; the rest is ordered by what readers actually opened. Ordering
+      purely by views leads on whatever went viral, which is not the same thing
+      as whatever mattered.
+    - **`last_sent_at` is stamped per subscriber as each send succeeds**, not
+      batched at the end — a run that dies at row 2,000 of 4,000 must not
+      re-mail the first 2,000. One rejected address is caught and logged
+      individually, so it cannot cost the rest of the list their edition.
+    - **Editions are memoised per category signature.** Most readers ask for
+      everything, so the general edition is built once; only the distinct
+      *sets* of followed categories cost another query, rather than one per
+      subscriber.
+
+    Two things it does *not* do, both deliberate: there is no queue (see above,
+    and `DEPLOY.md` says what to do when the list outgrows an inline send), and
+    no open or click tracking — a tracking pixel is a third-party request in a
+    reader's inbox and was not worth adding for a number nobody had asked for.
+
+10b. **Unsubscribing used to happen on GET.** Found while building the digest,
+    and pre-existing: `GET /newsletter/unsubscribe/{token}` unsubscribed on
+    sight, and Gmail, Outlook and every corporate mail scanner fetch the links
+    in a message before a human sees it. Readers were being unsubscribed by
+    machines, silently, with no signal anywhere.
+
+    The link now renders a confirmation and the button posts. One-click
+    unsubscribe from the mail client's own chrome (RFC 8058
+    `List-Unsubscribe-Post`) reaches the POST directly, answers 200 with no
+    body, and is CSRF-exempt because it arrives with no session — the
+    64-character token in the URL is the credential, and the only thing that
+    request can do is stop that address receiving mail.
+
+    Those headers are not decoration. A bulk sender without them gets throttled
+    on reputation alone, and a reader who cannot find the unsubscribe link
+    presses "spam" instead — which is the one signal there is no recovering
+    from.
 11. **Bilingual is scaffolded, not built.** `locale` and `translation_of`
     columns exist and slugs are unique per locale, but there is no English
     edition, no language switcher and no `hreflang`.

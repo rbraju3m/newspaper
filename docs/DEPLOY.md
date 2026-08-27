@@ -516,6 +516,66 @@ is not in scope here.
 
 ---
 
+## The newsletter
+
+Two scheduled editions, both inline sends from cron:
+
+```
+30 7 * * *   newsletter:send --frequency=daily
+0  8 * * 5   newsletter:send --frequency=weekly
+```
+
+Output goes to `storage/logs/newsletter.log`. Daily runs *after* the 07:00
+error digest on purpose: if last night broke something, whoever is on call gets
+half an hour with it before several thousand readers are mailed a link into the
+same site.
+
+Before the first real send, read what will go out:
+
+```bash
+php artisan newsletter:send --frequency=daily --dry-run     # audience + the running order
+php artisan newsletter:send --to=you@yourdomain.com         # one real mail, to you
+```
+
+`--to` ignores the frequency and the double-send guard but still refuses an
+unverified address, so it is safe for checking how the thing actually renders
+in an inbox — which is the only place worth checking it.
+
+### What makes it arrive
+
+- **Both parts are sent.** Every edition has an HTML and a plain-text body. A
+  mail with no text alternative reads as spam to a filter before it reaches
+  anybody.
+- **`List-Unsubscribe` + `List-Unsubscribe-Post`** put an *Unsubscribe* control
+  in Gmail's and Outlook's own chrome. Bulk senders that omit these get
+  throttled on reputation, and a reader who cannot find the link presses "spam"
+  instead — the one signal there is no recovering from.
+- **A quiet news day sends nothing at all.** A subscriber whose edition comes
+  back empty is skipped and left due, not mailed a page of nothing.
+
+None of that substitutes for SPF, DKIM and DMARC on the sending domain. If
+`MAIL_FROM_ADDRESS` is at a domain this server is not authorised to send for,
+the newsletter goes to spam no matter what is in the message.
+
+### What this does not do
+
+- **No queue.** `QUEUE_CONNECTION=database` and nothing runs `queue:work`, so
+  every send is inline and the scheduler is held for the length of the run.
+  `withoutOverlapping()` stops tomorrow starting on top of today. When the list
+  outgrows that — a few thousand is comfortable — the upgrade is a worker plus
+  `ShouldQueue` on the mailable, and **not before**: a queued mailable with no
+  worker sits in the `jobs` table looking exactly like a send that worked.
+- **No retry.** A rejected address is caught, logged to
+  `storage/logs/laravel.log`, and left unstamped, so it is picked up by the
+  next edition rather than that one.
+- **No open or click tracking.** A tracking pixel is a third-party request in a
+  reader's inbox; it was not worth adding for a number nobody had asked for.
+- **Nothing prunes addresses that bounce for ever.** There is no bounce
+  handling — a hard-bouncing address stays on the list. `last_sent_at` says
+  when each one was last mailed, which is what a sweep would key on.
+
+---
+
 ## Push notifications
 
 Off until `.env` names a key pair, and off is a real state rather than a broken

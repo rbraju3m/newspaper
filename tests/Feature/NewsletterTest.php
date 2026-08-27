@@ -2,19 +2,21 @@
 
 namespace Tests\Feature;
 
+use App\Mail\NewsletterVerify;
 use App\Models\NewsletterSubscriber;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
  * The public newsletter box.
  *
- * Note the standing gap this pins rather than papers over: `store()` tells the
- * reader to check their inbox, but the double opt-in mail is still a TODO, so
- * a subscriber created here is left unverified and nothing is ever sent. The
- * tests assert what the code actually does, so that finishing the sending side
- * shows up as a failure here rather than passing silently.
+ * The double opt-in mail is now real, so `store()` telling the reader to check
+ * their inbox is a promise the application keeps. `Mail::fake()` everywhere —
+ * `.env` on the development box points MAIL_MAILER at a live Gmail account, and
+ * a test that actually sent would send from a real address to whatever is
+ * written below.
  *
  * The addresses here are deliberately not @example.com. The endpoint validates
  * `email:rfc,dns`, and egulias treats the RFC 2606 reserved domains
@@ -28,6 +30,13 @@ class NewsletterTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Mail::fake();
+    }
+
     public function test_a_visitor_can_subscribe(): void
     {
         $this->from('/')
@@ -38,8 +47,23 @@ class NewsletterTest extends TestCase
 
         $this->assertSame('রফিক', $subscriber->name);
         $this->assertNull($subscriber->unsubscribed_at);
-        // Not yet confirmed: the opt-in mail is not built.
+
+        // Unverified until they click, which is the whole point of double
+        // opt-in: anybody can type a stranger's address into a form.
         $this->assertNull($subscriber->verified_at);
+
+        Mail::assertSent(NewsletterVerify::class, fn (NewsletterVerify $mail) => $mail->hasTo('rafiq@gmail.com'));
+    }
+
+    /** Nothing to confirm, so nothing is sent — and no second mail on a re-post. */
+    public function test_an_already_verified_address_is_not_mailed_again(): void
+    {
+        NewsletterSubscriber::create(['email' => 'rafiq@gmail.com'])
+            ->forceFill(['verified_at' => now()])->save();
+
+        $this->from('/')->post('/newsletter/subscribe', ['email' => 'rafiq@gmail.com']);
+
+        Mail::assertNothingSent();
     }
 
     public function test_a_signed_in_reader_is_linked_to_their_account(): void
@@ -86,12 +110,42 @@ class NewsletterTest extends TestCase
         $this->assertNull($subscriber->unsubscribed_at);
     }
 
-    public function test_an_unsubscribe_link_stops_the_newsletter(): void
+    /**
+     * The link only asks. Every mail scanner between the sender and the reader
+     * fetches the links in a message to check them, so a GET that unsubscribed
+     * would unsubscribe people who never clicked anything.
+     */
+    public function test_the_unsubscribe_link_only_asks(): void
     {
         $subscriber = NewsletterSubscriber::create(['email' => 'rafiq@gmail.com']);
 
         $this->get("/newsletter/unsubscribe/{$subscriber->token}")
+            ->assertOk()
+            ->assertSee('নিউজলেটার বন্ধ করবেন?');
+
+        $this->assertNull($subscriber->fresh()->unsubscribed_at, 'Fetching the link must change nothing.');
+    }
+
+    public function test_confirming_stops_the_newsletter(): void
+    {
+        $subscriber = NewsletterSubscriber::create(['email' => 'rafiq@gmail.com']);
+
+        $this->post("/newsletter/unsubscribe/{$subscriber->token}")
             ->assertRedirect(route('home'));
+
+        $this->assertNotNull($subscriber->fresh()->unsubscribed_at);
+    }
+
+    /**
+     * RFC 8058: Gmail and Outlook post this from their own chrome with no
+     * session and no CSRF token, and render nothing afterwards.
+     */
+    public function test_one_click_unsubscribe_needs_no_session(): void
+    {
+        $subscriber = NewsletterSubscriber::create(['email' => 'rafiq@gmail.com']);
+
+        $this->post("/newsletter/unsubscribe/{$subscriber->token}",
+            ['List-Unsubscribe' => 'One-Click'])->assertOk();
 
         $this->assertNotNull($subscriber->fresh()->unsubscribed_at);
     }
@@ -99,7 +153,7 @@ class NewsletterTest extends TestCase
     public function test_resubscribing_after_an_unsubscribe_works(): void
     {
         $subscriber = NewsletterSubscriber::create(['email' => 'rafiq@gmail.com']);
-        $this->get("/newsletter/unsubscribe/{$subscriber->token}");
+        $this->post("/newsletter/unsubscribe/{$subscriber->token}");
 
         $this->from('/')->post('/newsletter/subscribe', ['email' => 'rafiq@gmail.com']);
 
@@ -111,5 +165,6 @@ class NewsletterTest extends TestCase
     {
         $this->get('/newsletter/verify/not-a-real-token')->assertNotFound();
         $this->get('/newsletter/unsubscribe/not-a-real-token')->assertNotFound();
+        $this->post('/newsletter/unsubscribe/not-a-real-token')->assertNotFound();
     }
 }

@@ -70,7 +70,15 @@ Route::get('/api/articles/{article}/live', [Site\ApiController::class, 'liveEntr
 Route::post('/newsletter/subscribe', [Site\NewsletterController::class, 'store'])
     ->middleware('throttle:newsletter')->name('newsletter.subscribe');
 Route::get('/newsletter/verify/{subscriber:token}', [Site\NewsletterController::class, 'verify'])->name('newsletter.verify');
-Route::get('/newsletter/unsubscribe/{subscriber:token}', [Site\NewsletterController::class, 'unsubscribe'])->name('newsletter.unsubscribe');
+// Unsubscribing asks before it acts. A GET that changes state is a GET that
+// every mail scanner in the world will trigger on the reader's behalf, which
+// is a silent way to lose them; the link renders a confirmation and the button
+// posts. The POST is also what `List-Unsubscribe-Post` targets, so a one-click
+// unsubscribe from Gmail's own chrome reaches it directly.
+Route::get('/newsletter/unsubscribe/{subscriber:token}', [Site\NewsletterController::class, 'confirm'])
+    ->name('newsletter.unsubscribe');
+Route::post('/newsletter/unsubscribe/{subscriber:token}', [Site\NewsletterController::class, 'destroy'])
+    ->middleware('throttle:newsletter')->name('newsletter.unsubscribe.click');
 Route::get('/ads/{ad}/click', [Site\AdController::class, 'click'])->name('ads.click');
 // A guest vote is fingerprinted on IP + user agent, so rotating the agent
 // buys another vote. The IP is what has to be limited.

@@ -58,3 +58,30 @@ Schedule::command('backup:run')
 Schedule::command('errors:digest', ['--days' => 1, '--email' => (string) config('errors.alert.email')])
     ->dailyAt('07:00')
     ->when(fn () => filled(config('errors.alert.email')));
+
+/*
+ * The newsletter.
+ *
+ * 07:30, after the error digest rather than before it: if last night broke
+ * something, whoever is on call has had half an hour with it before several
+ * thousand readers are mailed a link into the same site.
+ *
+ * Sent inline — no queue worker runs here — so this holds the scheduler for as
+ * long as the send takes. `withoutOverlapping()` is what stops tomorrow's run
+ * starting on top of a today's that is still going, which would mail the
+ * unstamped tail of the list twice.
+ *
+ * A quiet news day sends nothing at all: the command skips any subscriber
+ * whose edition comes back empty, rather than mailing them a page of nothing.
+ */
+Schedule::command('newsletter:send --frequency=daily')
+    ->dailyAt('07:30')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/newsletter.log'));
+
+// Fridays, because the Bangladeshi week ends on one and a "week in review"
+// arriving mid-week is a week in review of nothing anybody remembers.
+Schedule::command('newsletter:send --frequency=weekly')
+    ->weeklyOn(5, '08:00')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/newsletter.log'));
