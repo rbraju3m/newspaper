@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile, cold homepage halved; AVIF remains, and it is blocked on the box |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 590 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified and copied off-site behind a dead-man's-switch, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters and rate limits; real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 590 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built but not yet run against a real bucket, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters and rate limits; real branding still open |
 
 ### By the numbers
 
@@ -360,6 +360,33 @@ lookup in front of every newsletter submission on the live site too.
    cron every night to say so. The cost of that choice: a mistyped bucket name
    reads as "not configured", which is why `backup:sync` prints the disk it
    looked at and `DEPLOY.md` says to run it once by hand.
+
+   **One thing is still open, and it is the one that matters.** None of this
+   has run against a real bucket. `league/flysystem-aws-s3-v3` is installed,
+   `backups_offsite` is configured, and the whole path is exercised end to end
+   in tests and by hand — but against a *local directory* standing in for the
+   remote. What that proves is this command's contract: what it uploads, what
+   it skips, what it refuses to leave in place. What it cannot prove is the
+   half that only a real endpoint has — credentials, region and endpoint
+   resolution, path-style addressing, bucket policy, and the multipart upload
+   that a 79 MB uploads archive will actually take. The multipart path is the
+   interesting one, because it is the case where the ETag stops being an MD5
+   and `verify()` falls back to size.
+
+   So: treat off-site as **built but unproven** until somebody runs it against
+   the destination it will really use. The step is small — put the six
+   `BACKUP_OFFSITE_*` values in `.env`, then:
+
+   ```bash
+   php artisan backup:sync --dry-run             # names what would go up
+   php artisan backup:sync --verify=download     # proves the bytes
+   php artisan backup:sync                       # must skip everything
+   ```
+
+   Scope the key to **write-only on that one bucket**: a key that can delete
+   the bucket turns one compromised web server into no backups. And set
+   `BACKUP_OFFSITE_PREFIX` if that bucket will ever take more than one server,
+   or two boxes write the same object key on the same night.
 
    ~~**Error tracking is still open.**~~ **Done.** Every reportable exception
    is written to `storage/logs/errors-YYYY-MM-DD.log` as JSON, and the first
@@ -968,3 +995,30 @@ php artisan serve --port=8899        # or use the Apache vhost
 
 Read [`CLAUDE.md`](../CLAUDE.md) first — it lists the traps that have already
 cost time once.
+
+### Where this was left
+
+Phase 6 has nothing unblocked left in it. AVIF needs a rebuilt GD or
+`php-imagick` on the box, and `hreflang` needs a second locale to exist —
+neither is a code problem.
+
+Picking up, in the order they are worth doing:
+
+1. **Point the off-site backup at a real bucket** and run the three commands
+   in gap 5 above. It is maybe ten minutes and it is the only thing standing
+   between "built" and "working", on the feature whose entire job is to be
+   there on the worst day.
+2. **Set up the two external watchers**, which cannot live in this repo: a
+   monitor on `/up` (it answers 500 now when the database, cache or disk is
+   gone), and a dead-man's-switch expecting the backup ping daily just after
+   03:00. `DEPLOY.md` → "Knowing it still runs" has both.
+3. **The three uncovered test areas** — feed *contents* as opposed to
+   well-formedness, the e-paper reader, OAuth sign-in (needs the provider
+   stubbed). Feed contents is the cheapest and the most valuable.
+4. **Real branding** — gap 4, the last open Phase 7 item. Needs artwork and
+   imprint decisions rather than code.
+
+Smaller and self-contained, if the above is blocked: ad impressions are never
+incremented (gap 14), ad creatives are still served at full size (gap 15),
+`/epaper/{date}` cannot reach a second edition on the same day, and the
+`redirects` table still has no middleware reading it (gap 12).
