@@ -753,6 +753,30 @@ the relevant role, and check `storage/logs/laravel.log` is clean. Compile-time
 checks have repeatedly passed while the runtime path was broken — the database
 and the browser are where the real bugs surfaced.
 
+### A cold buffer pool reads exactly like a missing index
+
+The **first** query to touch a table after MySQL starts pays to fault its pages
+in, and on this box that is hundreds of milliseconds regardless of how small
+the table is. Measured here: `select * from epapers where is_published = ?
+order by date desc limit 1` took **1,076ms against six rows**, and 0.6–1.5ms on
+every run after. The homepage did the same thing — 2.8s and 460ms on one
+`whereIn` over four categories, then 380ms total for the identical 93 queries.
+
+So a one-off profile of a cold route is worthless, and worse than worthless if
+believed: it points at whichever table happened to be touched first. `/epaper`
+was flagged as a 3.5s route on exactly this evidence and turned out to be one
+of the fastest on the site — 80ms — once the pages were resident.
+
+**Profile the second run, not the first, and quote query counts rather than
+seconds.** Counts are stable; wall-clock on this box swings by a factor of
+three between byte-identical runs, because it is a working desktop with a load
+average near 8. Before blaming a query, `EXPLAIN` it — the epaper queries were
+already on `(is_published, date)` with a backward index scan and no filesort.
+
+The other half of a slow first hit is Blade compilation, which is real but is
+paid at deploy time: `php artisan optimize` runs `view:cache`. A slow first hit
+after `view:clear` is a state production never sees.
+
 ---
 
 ## Local environment
