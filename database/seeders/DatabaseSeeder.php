@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
             ContentSeeder::class,    // articles, comments, tags, topics
             MediaSeeder::class,      // imagery last: it rewrites what the rest wrote
             EpaperSeeder::class,     // after it, and only additive: nothing else touches epapers
+            GallerySeeder::class,    // curates the library the two above filled; draws nothing itself
         ]);
     }
 }

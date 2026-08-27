@@ -1,6 +1,6 @@
 # Project Status
 
-**Last updated:** 26 August 2026
+**Last updated:** 27 August 2026
 **Branch:** `main`
 **Environment:** running locally against MySQL, seeded with demo content
 
@@ -17,19 +17,20 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 496 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 520 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
 
 ### By the numbers
 
 | | |
 |---|---|
-| PHP files (app/database/routes/config) | 133 |
+| PHP files (app/database/routes/config) | 153 |
 | Models · Enums · Policies · Services | 23 · 5 · 3 · 4 |
 | Controllers | 46 |
 | Blade templates | 93 |
 | Routes (115 total, 52 admin) | 115 |
 | Database tables | 38 |
 | Seeded content | 55 categories · 374 articles · 107 comments · 36 users |
+| Demo modules | 6 e-paper issues (48 pages) · 7 photo galleries (62 images) |
 | Imagery | 153 media · 761 WebP derivatives · 79 MB on disk |
 | Bundle (gzipped) | 16.0 KB CSS · 23.3 KB JS |
 
@@ -43,7 +44,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 496 tests, 1,670 assertions, ~114s:
+tests.** The suite is 520 tests, 2,423 assertions, ~110s:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -77,6 +78,8 @@ tests.** The suite is 496 tests, 1,670 assertions, ~114s:
 | `EpaperAdminTest` | 22 | the e-paper admin — one issue per edition per day, page uploads numbered in order with thumbnails, the whole-issue PDF and its replacement, renumbering against the unique constraint, deletion taking its files, and the public reader |
 | `GalleryAdminTest` | 25 | the photo gallery admin — creating, the Bangla slug, uploads writing both columns and building the ladder, attaching from the library, drag ordering, the cover that follows it, deletion taking its files off disk without reaping a photograph an article still uses, the denormalised count, and the public hub |
 | `MediaSeederTest` | 7 | what `MediaSeeder` heals and, more importantly, what it refuses to touch — imagery that is actually on disk |
+| `Unit/SeedImageryTest` | 10 | `SeedImagery`'s deterministic RNG — the seed mixed in exact 32-bit arithmetic against arbitrary-precision references, that no seed raises the precision deprecation, and that an overflowing seed still draws the same image twice |
+| `GallerySeederTest` | 14 | `GallerySeeder` — the seven demo galleries, the count its model events keep, the credit copied off the photograph, the uncaptioned gallery, the draft staying unpublished, a hand-made gallery left alone, the pool it refuses to curate, and dealing without repeats out of a fresh box's 54 plates |
 | `PhotoImportTest` | 8 | `photos:import` — the ladder built from a real folder, the transcode that stops a 2 MB PNG becoming the `src` fallback, transparency flattened onto white, idempotency by filename, deterministic assignment, and that a dry run writes nothing |
 | `LiveBlogTest` | 23 | the live blog end to end: appending, the backdated correction, pinned above newest, editing that must not move an entry, who may run one — and the polling endpoint's cursor, including a burst larger than one page |
 | `LayoutReorderTest` | 14 | the front-page layout manager: a drag rewriting positions within a column and across them, the emptied column the form omits entirely, the homepage cache flushing so the new order is what renders, unknown block ids refused with nothing moved, the role matrix — and the collision the settings form's own column select used to cause |
@@ -293,7 +296,7 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 496 tests cover both halves of
+1. **Test coverage is started, not finished.** 520 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, and the whole reader path from registration
    through bookmarks, history, comments, the newsletter and polls. What is
@@ -424,10 +427,10 @@ comes to disagree about what drift is.
      without WebP ever fetch it, but it is the `src` fallback, so it is the
      number that matters if that ever stops being a rounding error.
 
-   Both modules have an admin now (gaps 8 and 9), and `EpaperSeeder` fills
-   `/epaper` with six drawn back issues. `galleries` is still empty of demo
-   content: the CRUD exists, but nothing seeds through it, so a fresh
-   `db:seed` leaves `/photo` an empty hub.
+   Both modules have an admin now (gaps 8 and 9), `EpaperSeeder` fills
+   `/epaper` with six drawn back issues, and `GallerySeeder` fills `/photo`
+   with seven — six published and one draft. Nothing is left rendering an
+   empty hub.
 6b. ~~**The seeded plate library is gone from this box, and the ad slots point
    at nothing.**~~ **Fixed.** Found while importing the photographs, and it
    predated that import — `photos:import` only inserts media and updates
@@ -465,8 +468,45 @@ comes to disagree about what drift is.
    vowel signs out of order — a wrong nameplate in front of a Bangla newsroom
    being worse than a nameplate-shaped block.
 
-   Galleries have no equivalent seeder yet, which is the obvious next small
-   piece now that both admins exist.
+9c. ~~**Galleries have no equivalent seeder.**~~ **Done.** `GallerySeeder`
+   fills `/photo` with seven galleries — six published, which is exactly what
+   the homepage's active `photo_row` block shows, and one draft, which must
+   appear in the admin list and nowhere public.
+
+   It is the one imagery seeder that **draws nothing and stores no files**. A
+   gallery is curation — the desk choosing from photography that already
+   exists — so the seeder takes the road the admin's attach-from-library
+   button takes: existing `media` rows copied onto `gallery_images` as a
+   `media_id` plus a denormalised `path`. 62 row inserts, about half a second,
+   and the galleries come out exactly as good as the site's imagery is. Where
+   `photos:import` has run they are real photojournalism; on a fresh `db:seed`
+   they are the same plates every article is showing.
+
+   Three things worth carrying forward:
+
+   - **The pool is restricted to imagery seeding owns** — the `photos/` import
+     and the `seed-*` plates, minus the ad creatives. An editor's own upload
+     sitting in the media library is not demo material, and a seeder that
+     published one into a demo gallery is a surprise nobody would notice until
+     after the fact. E-paper pages are excluded by the same rule: a broadsheet
+     page in a photo gallery reads as a mistake.
+   - **The caption is the seeder's; the credit is the photograph's.** Inventing
+     provenance for someone else's frame is not a demo detail worth having, so
+     `credit` is copied off the media row — a plate says it is symbolic, a
+     photograph says who took it. `উৎসবের রং` is deliberately left uncaptioned,
+     because credit-without-caption is the normal state of a gallery just
+     filled and is the exact combination that rendered as nothing until
+     `photo-show` was fixed.
+   - **Images are strided, not dealt in runs.** Consecutive frames in an import
+     are often minutes apart at the same event, so dealing gallery-by-gallery
+     would stack one event into one gallery. Striding by the gallery count
+     spreads them, deterministically and with no PRNG — `SeedImagery` documents
+     why nothing here may call `mt_srand()`, and index arithmetic sidesteps the
+     question. A fresh box curates 62 slots out of 54 plates, so wrapping is
+     the normal case rather than an edge one: galleries share images, but a
+     gallery never attaches the same one twice.
+
+   `GallerySeederTest` pins all of it, including the fresh-box pool size.
 
 7. **Push notifications are half-present.** The service worker has `push` and
    `notificationclick` handlers, but there is no subscription storage, no VAPID
@@ -555,6 +595,33 @@ comes to disagree about what drift is.
     matching; fine at this size, worth watching as content grows.
 17. Cold homepage is ~1.4s / 80 queries; warm is ~340ms / 15. The cold path
     deserves attention in Phase 6.
+18. ~~**`SeedImagery::__construct()` overflows its seed on about one image in
+    five.**~~ **Fixed.** `($seed * 2654435761) & 0xFFFFFFFF` computed the mask
+    after the multiply, and PHP has no unsigned int to hold the result: any
+    `crc32()` above ~3.47e9 — 330 of 2,113 probed seeds, 15.6% — pushed the
+    product past `PHP_INT_MAX`, so PHP promoted it to a float and dropped
+    exactly the low bits the mask exists to keep, raising *"Implicit
+    conversion from float … to int loses precision"* on the way past.
+
+    The hash is now applied in 16-bit halves, which is the same value modulo
+    2^32 with every intermediate inside an int. Checked against
+    arbitrary-precision references over the whole 32-bit range: 2,113 seeds,
+    zero mismatches, no deprecation under `E_ALL`.
+
+    Two things worth knowing about the fix:
+
+    - **It was never only a notice.** A deprecation is fatal wherever they are
+      promoted to exceptions, which is how it was found — a `migrate:fresh
+      --seed` driven through `tinker` aborted partway through the plate
+      library, after 19 files.
+    - **The 15.6% that overflowed now draw different images**, because they
+      were being drawn from a corrupted seed before. Nothing on disk changes:
+      both imagery seeders are idempotent, so nothing is redrawn in place, and
+      determinism is unaffected — the same seed still draws the same image, it
+      is simply the image that was always intended.
+
+    `Unit/SeedImageryTest` pins the arithmetic against those references and
+    asserts no seed raises the deprecation.
 
 ---
 

@@ -31,6 +31,9 @@ class SeedImagery
 
     private const FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
 
+    /** Knuth's multiplicative hash constant, 2^32 / phi. */
+    private const MIX = 2654435761;
+
     private int $state;
 
     public function __construct(int $seed)
@@ -38,7 +41,24 @@ class SeedImagery
         // Never mt_srand(): that would reseed the global generator Faker draws
         // from, making every other seeder's output depend on whether imagery
         // ran. This xorshift keeps determinism local to the instance.
-        $this->state = ($seed * 2654435761) & 0xFFFFFFFF ?: 1;
+        //
+        // The hash is applied in 16-bit halves rather than as one multiply.
+        // `$seed * self::MIX` is a 64-bit product with no room for a sign bit,
+        // so for any seed above ~3.47e9 — roughly one crc32 in five — PHP
+        // promotes it to a float and drops exactly the low bits the mask is
+        // there to keep. That is a silent wrong answer plus a PHP 8.4
+        // "implicit conversion … loses precision" deprecation per image, and
+        // the deprecation is fatal wherever they are promoted to exceptions.
+        //
+        // Splitting is arithmetically the same thing modulo 2^32: the high
+        // half only contributes through its own low 16 bits once shifted back
+        // up, so masking it there keeps every intermediate inside an int.
+        $seed &= 0xFFFFFFFF;
+
+        $low = ($seed & 0xFFFF) * self::MIX;
+        $high = (($seed >> 16) * self::MIX) & 0xFFFF;
+
+        $this->state = ((($high << 16) + $low) & 0xFFFFFFFF) ?: 1;
     }
 
     // ── Compositions ─────────────────────────────────────────────────────
