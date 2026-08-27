@@ -29,6 +29,9 @@ Route::middleware(['auth', 'staff', 'throttle:admin'])->prefix('admin')->name('a
         Route::get('/{article}/edit', 'edit')->name('edit');
         Route::put('/{article}', 'update')->name('update');
         Route::patch('/{article}/status', 'status')->name('status');
+        // Irreversible and reaches every subscribed browser, so it is its own
+        // action rather than a side effect of saving `is_breaking`.
+        Route::post('/{article}/push', 'push')->name('push');
         Route::delete('/{article}', 'destroy')->name('destroy');
     });
 

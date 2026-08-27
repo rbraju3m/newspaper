@@ -68,6 +68,27 @@
                         <span class="block text-xs text-muted">গুরুত্বপূর্ণ খবর সঙ্গে সঙ্গে জানতে চাই</span>
                     </span>
                 </label>
+
+                {{-- Two controls, because they are two different things and
+                     pretending otherwise makes one of them lie. The checkbox
+                     above is the account's standing answer and follows the
+                     reader everywhere; this one is the permission *this
+                     browser* has granted, which no server can turn on. Switch
+                     the account off and every browser goes quiet with it —
+                     PreferenceController stands the subscriptions down. --}}
+                <div class="rounded-lg border border-line bg-surface-2 p-4">
+                    <p class="text-sm font-semibold text-ink">এই ব্রাউজারে পুশ নোটিফিকেশন</p>
+                    <p class="mt-0.5 text-xs text-muted">
+                        প্রতিটি ডিভাইসে আলাদাভাবে অনুমতি দিতে হয়। ফোনে চালু করলে ল্যাপটপে
+                        আলাদা করে চালু করতে হবে।
+                    </p>
+
+                    <x-ui.push-toggle class="mt-3" />
+
+                    <p x-data x-cloak x-show="! $store.push.supported" class="mt-3 text-xs text-muted">
+                        এই ব্রাউজার পুশ নোটিফিকেশন সমর্থন করে না।
+                    </p>
+                </div>
             </div>
         </section>
 

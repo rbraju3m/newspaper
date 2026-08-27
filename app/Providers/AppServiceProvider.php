@@ -89,6 +89,11 @@ class AppServiceProvider extends ServiceProvider
         // sendBeacon from the share bar, and a counter anyone can inflate.
         RateLimiter::for('share', fn (Request $request) => Limit::perMinute(30)->by($request->ip()));
 
+        // Subscribing to push is a once-per-browser action, and unsubscribing
+        // is once more. A reader toggling it back and forth while deciding is
+        // the only honest way to reach double figures.
+        RateLimiter::for('push', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
+
         // FULLTEXT against a longText column: the most expensive public GET.
         RateLimiter::for('search', fn (Request $request) => Limit::perMinute(30)->by($request->ip()));
 

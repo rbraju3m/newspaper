@@ -77,6 +77,14 @@ Route::get('/ads/{ad}/click', [Site\AdController::class, 'click'])->name('ads.cl
 Route::post('/polls/{poll}/vote', [Site\PollController::class, 'vote'])
     ->middleware('throttle:vote')->name('polls.vote');
 
+// Web Push. Guests subscribe too — most readers of a news site are not signed
+// in, and breaking news is what they want a notification for. Subscribing is a
+// once-per-browser action, so the limit only has to stop a script.
+Route::post('/push/subscribe', [Site\PushController::class, 'store'])
+    ->middleware('throttle:push')->name('push.subscribe');
+Route::delete('/push/subscribe', [Site\PushController::class, 'destroy'])
+    ->middleware('throttle:push')->name('push.unsubscribe');
+
 /*
 |--------------------------------------------------------------------------
 | Catch-all content routes — must stay last

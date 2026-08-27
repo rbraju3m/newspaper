@@ -66,7 +66,10 @@ class PurgeDemoData extends Command
         'poll_votes', 'poll_options', 'polls',
         'articles', 'tags', 'topics', 'media', 'ads',
         'newsletter_subscribers', 'redirects',
-        // Anything tied to a session or a queue run
+        // Anything tied to a browser, a session or a queue run. A push
+        // subscription made while testing is a real browser that would
+        // otherwise receive the first real breaking alert.
+        'push_subscriptions',
         'social_accounts', 'sessions', 'password_reset_tokens',
         'jobs', 'job_batches', 'failed_jobs', 'cache', 'cache_locks',
     ];

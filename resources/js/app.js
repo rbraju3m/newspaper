@@ -3,6 +3,7 @@ import Alpine from './bootstrap';
 import './stores/theme';
 import './stores/reader';
 import './stores/pwa';
+import './stores/push';
 import './stores/toast';
 import './components/ticker';
 import './components/share';

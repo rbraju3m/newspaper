@@ -92,6 +92,7 @@ sudo apt update
 sudo apt install -y apache2 mysql-server \
     php8.4 libapache2-mod-php8.4 \
     php8.4-mysql php8.4-mbstring php8.4-xml php8.4-gd php8.4-curl php8.4-zip \
+    php8.4-gmp \
     unzip git
 ```
 
@@ -103,13 +104,22 @@ Why each of the non-obvious ones:
 | `mbstring` | Bangla string handling throughout `App\Support\Bangla` |
 | `xml` (dom, libxml) | `Dom\HTMLDocument`, the HTML sanitiser |
 | `gd` | `ImageService` — the WebP derivative ladder. **Must be built with WebP support**; `imagewebp()` missing means every upload stores an original and no ladder |
-| `curl` | Socialite's OAuth calls |
+| `curl` | Socialite's OAuth calls, and every Web Push delivery |
+| `gmp` | **Web Push encryption.** Optional in the sense that it works without it, and slow in the sense that it falls back to doing 256-bit elliptic-curve arithmetic in pure PHP for every subscription in every batch. `bcmath` serves the same purpose. Install one before a subscriber list gets real |
 
 Confirm GD can actually write WebP before going further — this is the one that
 tends to be missing:
 
 ```bash
 php -r 'var_dump(function_exists("imagewebp"), gd_info()["WebP Support"] ?? false);'
+```
+
+If neither `gmp` nor `bcmath` is installed, `web-push` logs a NOTICE on every
+batch saying so. That line is the reminder, not a bug — but it is the honest
+signal that encryption is running on the slow path:
+
+```bash
+php -r 'var_dump(extension_loaded("gmp"), extension_loaded("bcmath"));'
 ```
 
 Raise the upload limits. PHP ships with 2 MB, and anything larger is discarded
@@ -503,6 +513,70 @@ goes to the same broken mail. `storage/logs/laravel.log` records
 `ErrorAlerter (email) failed` when a channel throws, and that is the only
 signal. An external uptime check on `/up` is the honest complement to this and
 is not in scope here.
+
+---
+
+## Push notifications
+
+Off until `.env` names a key pair, and off is a real state rather than a broken
+one: no toggle is offered to a reader, the subscribe endpoint answers 503, and
+`push:send` says so rather than pretending to deliver.
+
+```bash
+php artisan push:keys        # prints a pair; writes nothing
+```
+
+```dotenv
+PUSH_PUBLIC_KEY=…
+PUSH_PRIVATE_KEY=…
+PUSH_SUBJECT=mailto:desk@example.com
+```
+
+Then `php artisan optimize` — a cached config ignores the file you just edited.
+
+**Back the key pair up with the database, and never rotate it casually.** It is
+what identifies this application to every push service. A browser rejects a
+message signed by a key it did not subscribe under, and nothing can tell it to
+re-subscribe — so replacing the pair silently unsubscribes every reader on the
+site, with no error anywhere and no way back short of asking each of them to
+turn it on again. `push:keys` refuses to print over a configured pair without
+`--force` for exactly this reason.
+
+`PUSH_SUBJECT` is how a push service reaches a human about this sender. Some of
+them reject a subscription without one. It defaults to `mailto:SITE_EMAIL`, or
+`APP_URL` when that is blank, so set `SITE_EMAIL` and you can leave it alone.
+
+### Sending
+
+Two doors, one service. An editor presses **ব্রেকিং অ্যালার্ট পাঠান** in the
+article editor; an operator runs:
+
+```bash
+php artisan push:send 1234 --dry-run     # audience + exact payload, sends nothing
+php artisan push:send 1234               # confirms first when a terminal is attached
+```
+
+Both refuse an unpublished article — a notification is a link, and a draft is a
+link to a 404 — and both refuse a second send, because `articles.push_sent_at`
+records the first. `--force` overrides that; nothing overrides the fact that a
+push cannot be recalled.
+
+`--dry-run` is the only way to read a notification before several thousand
+people do. Use it.
+
+### What this does not do
+
+- **No queue.** `send()` runs inline, chunked by `PUSH_BATCH` (500). At a few
+  thousand subscriptions that is seconds; well past that it belongs on a queue,
+  and the shape to reach for is `PushService::send()` dispatched per chunk.
+- **No retry.** A subscription that fails with a 500 keeps its row and simply
+  misses that story. Only a 404/410 — the browser is gone — deletes it.
+- **No audit trail.** `push_sent_at` says a story went out. Nothing records who
+  pressed the button or how many arrived.
+- **Nothing prunes silently dead rows.** A browser that never returns a 410
+  stays in the table for ever. `last_success_at` is there to make that
+  answerable — `where('last_success_at', '<', now()->subYear())` is the sweep,
+  when somebody wants it.
 
 ---
 

@@ -243,6 +243,38 @@
                                class="lat w-full rounded-lg border border-line-strong bg-canvas px-3 py-2 text-xs text-ink">
                         @error('breaking_until')<p class="mt-1 text-xs font-medium text-brand">{{ $message }}</p>@enderror
                     </div>
+
+                    {{-- Push alert. Deliberately not tied to the checkbox above:
+                         that flag drives the ticker and gets toggled while
+                         writing, this reaches every subscribed lock screen and
+                         cannot be recalled. The button targets a form declared
+                         outside this one — a form inside a form is invalid HTML
+                         and the browser drops the inner one. --}}
+                    @if ($article->exists && $article->status === App\Enums\ArticleStatus::Published)
+                        <div class="mt-4 border-t border-line pt-3">
+                            <p class="text-xs font-semibold text-ink">পুশ অ্যালার্ট</p>
+
+                            @if ($article->push_sent_at)
+                                <p class="mt-1.5 text-xs text-muted">
+                                    পাঠানো হয়েছে — @bndate($article->push_sent_at), @bntime($article->push_sent_at)
+                                </p>
+                            @elseif (! $pushReady)
+                                <p class="mt-1.5 text-xs text-muted">
+                                    সার্ভারে পুশ কনফিগার করা নেই।
+                                </p>
+                            @else
+                                <p class="mt-1.5 text-xs text-muted">
+                                    গ্রাহক @bn($pushAudience) জন। একবার পাঠালে ফেরানো যায় না।
+                                </p>
+                                <button type="submit" form="article-push"
+                                        onclick="return confirm('সব গ্রাহকের ডিভাইসে অ্যালার্ট পাঠানো হবে। এটি ফেরানো যাবে না। নিশ্চিত?')"
+                                        class="mt-2 w-full rounded-lg bg-brand px-3 py-2 text-xs font-semibold
+                                               text-white transition hover:bg-brand-700">
+                                    ব্রেকিং অ্যালার্ট পাঠান
+                                </button>
+                            @endif
+                        </div>
+                    @endif
                 </section>
             @endcan
 
@@ -367,4 +399,15 @@
         </div>
     </div>
 </form>
+
+{{-- The push button's target. Outside the editor form because nesting forms is
+     invalid HTML — the browser silently drops the inner one and the button
+     would post the whole article instead. --}}
+@if ($article->exists && $article->status === App\Enums\ArticleStatus::Published && ! $article->push_sent_at && $pushReady)
+    @can('publish', App\Models\Article::class)
+        <form id="article-push" method="POST" action="{{ route('admin.articles.push', $article) }}" class="hidden">
+            @csrf
+        </form>
+    @endcan
+@endif
 @endsection

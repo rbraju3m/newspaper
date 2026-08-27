@@ -143,8 +143,10 @@ self.addEventListener('message', (event) => {
 });
 
 /* ── Breaking-news push ───────────────────────────────────────────────────
-   The subscription and delivery plumbing is not built yet, but the handlers
-   are here so an existing installed worker can receive them once it is. */
+   The payload keys below are a contract with App\Services\PushService::payloadFor().
+   Changing one here without changing it there shows the fallback title on
+   every device whose worker has not updated — and a worker updates when this
+   file's bytes change, which is not the same moment the server deploys. */
 self.addEventListener('push', (event) => {
     if (!event.data) return;
 

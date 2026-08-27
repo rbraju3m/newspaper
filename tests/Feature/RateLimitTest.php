@@ -85,6 +85,22 @@ class RateLimitTest extends TestCase
         $post()->assertStatus(429);
     }
 
+    /**
+     * Subscribing to push is a once-per-browser action. A reader toggling it
+     * back and forth while deciding is the only honest way to reach ten.
+     */
+    public function test_push_subscription_cannot_be_hammered(): void
+    {
+        $post = fn (): TestResponse => $this->postJson(route('push.subscribe'), [
+            'endpoint' => 'https://fcm.googleapis.com/fcm/send/'.uniqid(),
+            'keys' => ['p256dh' => 'x', 'auth' => 'y'],
+        ]);
+
+        $this->hammer(10, $post);
+
+        $post()->assertStatus(429);
+    }
+
     /** FULLTEXT against a longText column is the most expensive public GET. */
     public function test_search_is_capped_per_minute(): void
     {

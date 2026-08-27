@@ -380,6 +380,52 @@ Also: the admin's `datetime-local` inputs and the date archive are **wall
 clock**, not instants. They are the reason this is a behaviour bug and not a
 formatting one — an editor asking for 3 PM was getting 9 PM.
 
+### Web Push has three ways to fail silently
+
+**The payload keys are a contract across two files.** `PushService::payloadFor()`
+writes `title`, `body`, `url`, `icon`, `tag`; `public/sw.js` reads them by name.
+Rename one on either side and the notification still arrives — showing the
+fallback title, on every device whose worker has not updated. A worker updates
+when `sw.js` changes bytes, which is not the moment the server deploys, so the
+two are never in step and the old shape has to keep working.
+
+**`new WebPush()` is a 500 on a box without GMP or BCMath.** Its constructor
+calls `Utils::checkRequirement()`, which reports the missing extension with
+`trigger_error(E_USER_NOTICE)` **when it is given no logger** — and Laravel's
+handler turns an `E_USER_NOTICE` into an `ErrorException`. Passing
+`Log::getLogger()` as the seventh constructor argument is not optional here;
+without it the admin's send button is a 500 on this box and any other without
+those extensions.
+
+**A 410 is not an error.** A push service answering 404 or 410 is saying the
+browser is gone — uninstalled, permission revoked, site data cleared — and
+continuing to send is what gets a sender rate-limited or blocked outright.
+`isSubscriptionExpired()` is the one failure `PushService` treats as routine,
+and the row goes immediately. `PushResult` counts pruned separately from failed
+for the same reason: they mean opposite things.
+
+Two more worth knowing:
+
+- **The subscription is identified by `endpoint`, not by user.** Guests
+  subscribe — most readers of a news site are not signed in. `user_id` is a
+  label a row acquires if somebody is signed in on that browser, and it is what
+  lets the account preferences screen stand a subscription down. It cannot
+  raise one: only the browser grants permission, which is why that screen
+  carries a per-browser toggle *beside* the account checkbox rather than
+  instead of it.
+- **Rotating the VAPID pair unsubscribes the entire site**, silently. A browser
+  rejects a message signed by a key it did not subscribe under, and nothing can
+  tell it to re-subscribe. `push:keys` refuses to print over a configured pair
+  without `--force` for that reason. Back the pair up with the database.
+
+Sending is a command an operator runs and a button an editor presses, never a
+model event. `is_breaking` is a *display* flag that drives the ticker and gets
+toggled while writing; wiring a notification to every reader onto a checkbox is
+how a typo becomes something you cannot take back. `articles.push_sent_at` is
+the guard against a second send, and it is stamped even on a partial failure —
+sending twice to everyone it reached is worse than missing the handful it did
+not.
+
 ### Response return types
 
 `Illuminate\Http\Response` is **not** a supertype of `JsonResponse` or
@@ -499,7 +545,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 520 tests, ~110s. Behaviour coverage exists
+`php artisan test` runs and passes — 547 tests, ~108s. Behaviour coverage exists
 for both halves of the app:
 
 | File | Covers |
@@ -531,6 +577,7 @@ for both halves of the app:
 | `MediaSeederTest` | that `MediaSeeder` heals broken imagery without replacing imagery that works |
 | `GallerySeederTest` | that `GallerySeeder` curates only the imagery seeding owns, and never twice inside one gallery |
 | `Unit/SeedImageryTest` | the seed arithmetic behind every drawn image, and that it raises no deprecation |
+| `PushNotificationTest` | Web Push — who may subscribe, the account switch, sending, pruning a gone browser, and who may press send |
 | `PhotoImportTest` | `photos:import` — the transcode, the flattening, idempotency, and deterministic assignment |
 | `LiveBlogTest` | the live blog — appending, ordering, who may run one, and the polling cursor |
 | `LayoutReorderTest` | the front-page layout manager — drags within and across columns, the cache flush, and that a column change cannot collide |

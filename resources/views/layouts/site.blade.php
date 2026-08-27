@@ -50,6 +50,14 @@
     @endphp
     <meta name="sw-url" content="{{ $swUrl }}">
     <meta name="sw-scope" content="{{ $swScope }}">
+
+    {{-- The VAPID public key, read by the push store. Absent rather than empty
+         when push is not configured: the store checks for the tag, so a
+         deployment with no keys never offers a reader a toggle that cannot
+         work. It is a public key — it is meant to be in the page. --}}
+    @if ($pushKey = app(\App\Services\PushService::class)->publicKey())
+        <meta name="push-key" content="{{ $pushKey }}">
+    @endif
     <meta name="theme-color" content="#C8102E" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0E1113" media="(prefers-color-scheme: dark)">
 

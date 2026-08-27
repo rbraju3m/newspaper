@@ -21,6 +21,15 @@
                 </button>
             </form>
         </div>
+
+        {{-- The only place a reader who is not signed in can turn notifications
+             on. Deliberately here and not a prompt over the page: the install
+             banner already waits until somebody has read three things, and a
+             permission dialog on arrival is how a reader learns to say no once
+             and for ever. --}}
+        <div class="mx-auto max-w-site px-4 pb-6 text-center md:text-left">
+            <x-ui.push-toggle compact class="inline-block" />
+        </div>
     </div>
 
     <div class="mx-auto max-w-site px-4 py-10">

@@ -47,6 +47,7 @@ class Article extends Model
             'allow_comments' => 'boolean',
             'published_at' => 'datetime',
             'breaking_until' => 'datetime',
+            'push_sent_at' => 'datetime',
         ];
     }
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Account;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\NewsletterSubscriber;
+use App\Models\PushSubscription;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -39,8 +40,27 @@ class PreferenceController extends Controller
         ])->save();
 
         $this->syncNewsletter($request, $validated);
+        $this->syncPush($request);
 
         return back()->with('status', 'পছন্দসমূহ সংরক্ষিত হয়েছে।');
+    }
+
+    /**
+     * Makes the account-wide breaking-news switch mean something.
+     *
+     * Turning it off stands down every browser this reader has subscribed on,
+     * which is the half a server can do. Turning it back on re-arms those same
+     * rows — it cannot *create* one, because only the browser can grant the
+     * permission, which is why the preferences screen carries a per-browser
+     * toggle beside this checkbox rather than instead of it.
+     *
+     * A query-builder update: `breaking` is fillable but there is no model to
+     * fill, and no event on this table wants firing.
+     */
+    private function syncPush(Request $request): void
+    {
+        PushSubscription::where('user_id', $request->user()->id)
+            ->update(['breaking' => $request->boolean('breaking_alerts')]);
     }
 
     private function syncNewsletter(Request $request, array $validated): void

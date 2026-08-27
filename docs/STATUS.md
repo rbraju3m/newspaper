@@ -17,18 +17,18 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 520 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 547 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
 
 ### By the numbers
 
 | | |
 |---|---|
-| PHP files (app/database/routes/config) | 153 |
+| PHP files (app/database/routes/config) | 162 |
 | Models · Enums · Policies · Services | 23 · 5 · 3 · 4 |
 | Controllers | 46 |
 | Blade templates | 93 |
 | Routes (115 total, 52 admin) | 115 |
-| Database tables | 38 |
+| Database tables | 39 |
 | Seeded content | 55 categories · 374 articles · 107 comments · 36 users |
 | Demo modules | 6 e-paper issues (48 pages) · 7 photo galleries (62 images) |
 | Imagery | 153 media · 761 WebP derivatives · 79 MB on disk |
@@ -44,7 +44,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 520 tests, 2,423 assertions, ~110s:
+tests.** The suite is 547 tests, 2,507 assertions, ~108s:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -78,6 +78,7 @@ tests.** The suite is 520 tests, 2,423 assertions, ~110s:
 | `EpaperAdminTest` | 22 | the e-paper admin — one issue per edition per day, page uploads numbered in order with thumbnails, the whole-issue PDF and its replacement, renumbering against the unique constraint, deletion taking its files, and the public reader |
 | `GalleryAdminTest` | 25 | the photo gallery admin — creating, the Bangla slug, uploads writing both columns and building the ladder, attaching from the library, drag ordering, the cover that follows it, deletion taking its files off disk without reaping a photograph an article still uses, the denormalised count, and the public hub |
 | `MediaSeederTest` | 7 | what `MediaSeeder` heals and, more importantly, what it refuses to touch — imagery that is actually on disk |
+| `PushNotificationTest` | 26 | Web Push end to end — a guest subscribing, the endpoint as identity, the account switch standing browsers down, the payload contract with `sw.js`, sending, a 410 pruning the row, a 500 keeping it, the double-send guard, and the role matrix on the send button |
 | `Unit/SeedImageryTest` | 10 | `SeedImagery`'s deterministic RNG — the seed mixed in exact 32-bit arithmetic against arbitrary-precision references, that no seed raises the precision deprecation, and that an overflowing seed still draws the same image twice |
 | `GallerySeederTest` | 14 | `GallerySeeder` — the seven demo galleries, the count its model events keep, the credit copied off the photograph, the uncaptioned gallery, the draft staying unpublished, a hand-made gallery left alone, the pool it refuses to curate, and dealing without repeats out of a fresh box's 54 plates |
 | `PhotoImportTest` | 8 | `photos:import` — the ladder built from a real folder, the transcode that stops a 2 MB PNG becoming the `src` fallback, transparency flattened onto white, idempotency by filename, deterministic assignment, and that a dry run writes nothing |
@@ -296,7 +297,7 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 520 tests cover both halves of
+1. **Test coverage is started, not finished.** 547 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, and the whole reader path from registration
    through bookmarks, history, comments, the newsletter and polls. What is
@@ -508,10 +509,55 @@ comes to disagree about what drift is.
 
    `GallerySeederTest` pins all of it, including the fresh-box pool size.
 
-7. **Push notifications are half-present.** The service worker has `push` and
-   `notificationclick` handlers, but there is no subscription storage, no VAPID
-   configuration and no sending side. Either finish it (`minishlink/web-push`)
-   or strip the handlers — a half-built version is worse than none.
+7. ~~**Push notifications are half-present.**~~ **Finished.** The handlers the
+   service worker already had now have everything behind them:
+   `minishlink/web-push`, a `push_subscriptions` table, `config/push.php`,
+   `PushService`, subscribe/unsubscribe endpoints, an Alpine store and toggle,
+   `push:keys`, `push:send`, and a button in the article editor.
+
+   The shape of it, and the decisions worth not re-litigating:
+
+   - **Guests subscribe.** Most readers of a news site are not signed in, and
+     breaking news is exactly what they want a notification for. The browser's
+     own permission prompt is the consent record; `user_id` is a label a row
+     acquires if somebody happens to be signed in on that browser. Identity is
+     the `endpoint`, so one browser is one row for ever and re-subscribing
+     updates rather than accumulates.
+   - **Two controls, because they are two things.** The account's
+     `breaking_alerts` checkbox is its standing answer and now finally does
+     something — switching it off stands every one of that reader's browsers
+     down. It cannot switch them back *on*, because only a browser grants the
+     permission, which is why the preferences screen carries a per-browser
+     toggle beside it. The public one lives in the footer: quiet and always
+     reachable, rather than a permission dialog on arrival, which is how a
+     reader learns to say no once and for ever.
+   - **Sending is never automatic.** `is_breaking` is a display flag that
+     drives the ticker and gets toggled while writing. A push cannot be
+     recalled, so it is a command an operator runs and a button an editor
+     presses — authorised on `publish`, since reaching every reader on the site
+     is at least as consequential as putting the story on it, and guarded by
+     `articles.push_sent_at` so the same story cannot go out twice.
+     `push:send --dry-run` prints the audience and the exact payload and sends
+     nothing, which is the only way to read a notification before several
+     thousand people do.
+   - **A 410 deletes the row.** A push service saying the browser is gone is
+     the system working, not a failure; continuing to send is what gets a
+     sender blocked. `PushResult` counts pruned separately from failed.
+
+   Three things that are *not* done, all deliberate:
+
+   - **Only breaking news is sent.** `push_subscriptions.breaking` is a column
+     rather than an implication so that wiring the existing
+     `followed_categories` preference to a per-category alert is a write, not a
+     migration.
+   - **There is no send log.** `push_sent_at` records that a story went out and
+     the command reports the counts, but nothing keeps who pressed it or how
+     many arrived. A `push_notifications` audit table is the obvious next piece
+     if a desk ever needs to answer for one.
+   - **This box has neither GMP nor BCMath**, so every encryption runs on
+     web-push's pure-PHP fallback. It works — verified end to end — but a real
+     subscriber list wants one of those extensions installed; `DEPLOY.md` says
+     so.
 8. ~~**E-paper has no upload UI.**~~ **Done.** `Admin\EpaperController` plus two
    screens, the same shape as galleries: a list with a create form, and an
    editor with drag page ordering, multi-file page upload, a whole-issue PDF,
