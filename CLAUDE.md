@@ -46,6 +46,54 @@ Before adding a `create()`/`update()`/`fill()` call, check the model's
 to a cached payload without adding it there produces a `TypeError` on the *next*
 request, not the one that wrote it.
 
+That list still applies to the two payloads stored packed — see below. The
+unserialize simply happens in `PackedCache` rather than in Laravel's store, and
+it reads the same config key, so there is one list and not two.
+
+### The two big cache payloads are stored packed, not plain
+
+`homepage.blocks` and `layout.categories` go through `App\Support\PackedCache`
+instead of `Cache::remember()`. They are whole Eloquent graphs — 555 KB and
+106 KB serialized — and `CACHE_STORE` is the database, so plain they were
+660 KB pulled out of MySQL on **every** request to the site. Packed they are
+41 KB and 6 KB, and they are *faster* to read back (6.4ms against 7.5ms):
+inflating 41 KB and parsing it beats parsing 555 KB of serialize text.
+
+Three things follow.
+
+**The stored form is base64, not raw zlib.** `cache.value` is a `mediumtext` in
+`utf8mb4` and compressed output is binary, which MySQL rejects outright. Base64
+gives back a third of the saving and is still thirteen times smaller than plain.
+
+**Rolling back past this needs `php artisan cache:clear`.** Old code reading a
+packed entry gets a base64 string where it expects an array, and the front page
+is a 500 until the entry expires. The forward direction is safe by
+construction — `PackedCache` treats anything that is not a packed string as a
+miss and rebuilds — and so is a corrupt or half-written row. Only the rollback
+needs the sweep, and `DEPLOY.md` says so.
+
+**It only pays on large graphs.** Below a few KB, compressing and base64-ing a
+payload makes it bigger. `layout.trending` is 112 bytes and is deliberately
+left on plain `Cache::remember()`.
+
+### `LayoutComposer` composes four views, and used to query four times
+
+`AppServiceProvider` binds it to `partials.header`, `partials.mega-menu`,
+`partials.search-overlay` and `partials.footer`. Laravel resolves a composer
+from the container **per view**, so four instances each re-read the same three
+cache keys: twelve round trips to the `cache` table on every request on the
+site, warm or cold, for three distinct values.
+
+It is bound `scoped` and memoises the three in instance properties. The scoped
+binding is what makes that correct: a `static` would carry one test's category
+tree into the next, which the cache store cannot do because `RefreshDatabase`
+truncates it.
+
+**Anything that drops those keys must drop the memo with them.**
+`LayoutComposer::flush()` is the one door — it forgets all three keys *and* the
+scoped instance. Forgetting the keys by hand leaves an editor who just renamed
+a category looking at the old name for the rest of the request that renamed it.
+
 ### `getOriginal()` applies casts
 
 Inside model events, `getOriginal('status')` returns the **enum**, not the
@@ -545,17 +593,37 @@ Listing pages use `ArticleQuery::cards()` — it selects only the columns a card
 renders and eager-loads category and author. Never `SELECT *` into a listing;
 `body` is a `longText`.
 
+**A page building several card lists at once wants `ArticleQuery::deferred()`
+instead**, then one `ArticleQuery::hydrateCards()` over every article it ended
+up with. `cards()` is right for one list — one query, three eager loads. The
+front page is the other shape, a dozen independent lists on one response, and
+there each `with()` is its own round trip: the same handful of sections,
+bylines and photographs fetched a dozen times over. Eloquent sets relations on
+the model instances themselves, so the lists see them without being handed
+back.
+
+Nothing may read a relation in between. Strict mode forbids lazy loading, so a
+card touched before the hydrate pass is a 500 rather than a slow page — which
+is why `HomepageService::articlesIn()` is a blind walk over the block data
+rather than a `match` on block type. A block type it failed to list would be a
+broken front page, not a slower one.
+
 ### Cache busting
 
 After changing anything an editor controls, clear what depends on it:
 
 ```php
-HomepageService::flush();          // publishing, layout blocks
-Cache::forget('layout.categories'); // category edits
-Cache::forget('layout.trending');   // topic edits
-AdService::flush();                 // ad edits
-Setting::flush();                   // settings (also clears the per-request memo)
+HomepageService::flush();   // publishing, layout blocks
+LayoutComposer::flush();    // category or topic edits (header, nav, footer)
+AdService::flush();         // ad edits
+Setting::flush();           // settings (also clears the per-request memo)
 ```
+
+`LayoutComposer::flush()` replaced the hand-written
+`Cache::forget('layout.categories')` pairs. Use it rather than forgetting the
+keys directly: it also drops the scoped instance holding this request's memo of
+them, and forgetting one without the other is a stale header on the very
+request that made the edit.
 
 ### Error pages come in two families
 
@@ -607,8 +675,10 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 568 tests, ~98s. Behaviour coverage exists
-for both halves of the app:
+`php artisan test` runs and passes — 576 tests. The ~98s this used to quote was
+measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
+since it builds the front page from scratch several times over. Behaviour
+coverage exists for both halves of the app:
 
 | File | Covers |
 |---|---|
@@ -644,6 +714,7 @@ for both halves of the app:
 | `PhotoImportTest` | `photos:import` — the transcode, the flattening, idempotency, and deterministic assignment |
 | `LiveBlogTest` | the live blog — appending, ordering, who may run one, and the polling cursor |
 | `LayoutReorderTest` | the front-page layout manager — drags within and across columns, the cache flush, and that a column change cannot collide |
+| `HomepageCacheTest` | what the front page costs — that card relations load once for the page rather than once per block, that the payload is stored packed and round-trips, and that an unreadable entry rebuilds instead of 500ing |
 
 Still uncovered: feed *contents* as opposed to well-formedness, the e-paper
 reader, and OAuth sign-in.

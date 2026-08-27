@@ -9,9 +9,9 @@ use App\Models\User;
 use App\Services\AdService;
 use App\Services\HomepageService;
 use App\Services\ImageService;
+use App\View\Composers\LayoutComposer;
 use Illuminate\Console\Command;
 use Illuminate\Console\ConfirmableTrait;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -352,8 +352,7 @@ class PurgeDemoData extends Command
         HomepageService::flush();
         AdService::flush();
         Setting::flush();
-        Cache::forget('layout.categories');
-        Cache::forget('layout.trending');
+        LayoutComposer::flush();
     }
 
     /**

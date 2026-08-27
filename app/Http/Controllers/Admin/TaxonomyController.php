@@ -6,10 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Tag;
 use App\Models\Topic;
 use App\Services\HomepageService;
+use App\View\Composers\LayoutComposer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -124,7 +124,7 @@ class TaxonomyController extends Controller
 
     private function flush(): void
     {
-        Cache::forget('layout.trending');
+        LayoutComposer::flush();
         HomepageService::flush();
     }
 }

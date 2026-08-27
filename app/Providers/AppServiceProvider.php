@@ -26,6 +26,12 @@ class AppServiceProvider extends ServiceProvider
     {
         // One instance per request so a page with six ad slots issues one query.
         $this->app->singleton(AdService::class);
+
+        // Same reason: four views are composed by LayoutComposer, and a fresh
+        // instance for each of them re-read the same three cache keys four
+        // times over. Scoped rather than singleton so the memo cannot outlive
+        // the request that filled it.
+        $this->app->scoped(LayoutComposer::class);
     }
 
     public function boot(): void

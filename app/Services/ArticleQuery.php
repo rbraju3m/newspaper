@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Article;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 
 /**
  * Shared query shaping for every listing surface.
@@ -23,19 +24,56 @@ class ArticleQuery
         'articles.locale',
     ];
 
+    /**
+     * What a card renders besides its own columns.
+     *
+     * `featuredImage` selects only the columns `Media::srcset()` and the
+     * CLS-reserving width/height need; `conversions` is the JSON ladder.
+     */
+    public const CARD_RELATIONS = [
+        'category:id,name,slug,path,color',
+        'author:id,name,slug,avatar,designation',
+        'featuredImage:id,disk,path,conversions,width,height',
+    ];
+
     /** Base query for any public listing: published, card columns, eager loads. */
     public static function cards(): Builder
     {
+        return self::deferred()->with(self::CARD_RELATIONS);
+    }
+
+    /**
+     * The same query with the relations left off, for a caller assembling
+     * several card lists at once.
+     *
+     * A listing page wants `cards()`: one list, three eager loads, done. The
+     * front page is the other shape — a dozen independent lists on one
+     * response — and there each `with()` is its own round trip, so the same
+     * handful of sections, bylines and photographs get fetched a dozen times
+     * over. Build the lists with this, then hand every article to
+     * `hydrateCards()` once.
+     *
+     * Nothing may read a relation in between: strict mode is on outside
+     * production, so a lazy load here is a 500 rather than a slow page.
+     */
+    public static function deferred(): Builder
+    {
         return Article::query()
             ->select(self::CARD_COLUMNS)
-            ->published()
-            ->with([
-                'category:id,name,slug,path,color',
-                'author:id,name,slug,avatar,designation',
-                // Only the columns Media::srcset() and the CLS-reserving
-                // width/height need. `conversions` is the JSON ladder.
-                'featuredImage:id,disk,path,conversions,width,height',
-            ]);
+            ->published();
+    }
+
+    /**
+     * Load the card relations across any number of separately-built lists.
+     *
+     * Eloquent sets relations on the model instances themselves, so the lists
+     * holding those instances see them without being passed back.
+     *
+     * @param  iterable<Article>  $articles
+     */
+    public static function hydrateCards(iterable $articles): void
+    {
+        (new EloquentCollection($articles))->load(self::CARD_RELATIONS);
     }
 
     public static function newest(int $limit = 10): Builder

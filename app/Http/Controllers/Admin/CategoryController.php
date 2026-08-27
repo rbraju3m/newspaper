@@ -5,10 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Services\HomepageService;
+use App\View\Composers\LayoutComposer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -130,7 +130,7 @@ class CategoryController extends Controller
 
     private function flush(): void
     {
-        Cache::forget('layout.categories');
+        LayoutComposer::flush();
         HomepageService::flush();
     }
 }

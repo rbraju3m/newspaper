@@ -5,9 +5,9 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Services\HomepageService;
+use App\View\Composers\LayoutComposer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -64,7 +64,7 @@ class SettingController extends Controller
         }
 
         // Settings feed the layout and homepage, so both caches must go.
-        Cache::forget('layout.categories');
+        LayoutComposer::flush();
         HomepageService::flush();
 
         return back()->with('status', 'সেটিংস সংরক্ষিত হয়েছে।');

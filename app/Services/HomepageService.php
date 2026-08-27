@@ -9,6 +9,7 @@ use App\Models\Category;
 use App\Models\Gallery;
 use App\Models\HomeBlock;
 use App\Models\Poll;
+use App\Support\PackedCache;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -30,7 +31,7 @@ class HomepageService
     /** @return array{main: Collection, sidebar: Collection} */
     public function build(): array
     {
-        return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
+        return PackedCache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
             $blocks = HomeBlock::active()->with(['category', 'topic'])->get();
 
             // Stories already placed higher up the page, so a section block does
@@ -43,6 +44,14 @@ class HomepageService
 
                 return ['block' => $block, 'data' => $data];
             });
+
+            // One eager-load pass for the whole page. Each block used to fetch
+            // its own category, author and image rows, so a front page of a
+            // dozen lists spent three dozen round trips re-reading the same
+            // handful of sections and bylines.
+            ArticleQuery::hydrateCards(
+                $resolved->flatMap(fn (array $r) => $this->articlesIn($r['data'])),
+            );
 
             return [
                 'main' => $resolved->where('block.column', 'main')->values(),
@@ -80,6 +89,41 @@ class HomepageService
         };
     }
 
+    /**
+     * Every article the resolved blocks put on the page, wherever it sits in
+     * the shape a given block returns — a flat list, the nested
+     * {category, articles} of a three-column, the {topic, articles} of a
+     * cluster.
+     *
+     * Deliberately a blind walk rather than a match on block type, unlike
+     * `placedArticleIds()` below. That one has to be exhaustive about which
+     * blocks *count* as placement; this one only has to find models, and a
+     * block type added later that this failed to list would render with its
+     * relations unloaded — which under strict mode is a 500, not a slow page.
+     *
+     * @return list<Article>
+     */
+    private function articlesIn(mixed $data): array
+    {
+        if ($data instanceof Article) {
+            return [$data];
+        }
+
+        if (! is_iterable($data)) {
+            return [];
+        }
+
+        $found = [];
+
+        foreach ($data as $value) {
+            foreach ($this->articlesIn($value) as $article) {
+                $found[] = $article;
+            }
+        }
+
+        return $found;
+    }
+
     private function resolve(HomeBlock $block, Collection $used): mixed
     {
         return match ($block->type) {
@@ -105,7 +149,7 @@ class HomepageService
      */
     private function hero(HomeBlock $block): Collection
     {
-        $leads = ArticleQuery::cards()
+        $leads = ArticleQuery::deferred()
             ->where(fn (Builder $q) => $q->where('is_lead', true)->orWhere('is_pinned', true))
             ->orderByDesc('is_pinned')
             ->newest()
@@ -116,7 +160,7 @@ class HomepageService
             return $leads;
         }
 
-        $fill = ArticleQuery::cards()
+        $fill = ArticleQuery::deferred()
             ->whereNotIn('articles.id', $leads->pluck('id'))
             ->newest()
             ->limit($block->limit - $leads->count())
@@ -131,7 +175,7 @@ class HomepageService
             return collect();
         }
 
-        return ArticleQuery::cards()
+        return ArticleQuery::deferred()
             ->inCategory($block->category)
             ->whereNotIn('articles.id', $used->all() ?: [0])
             ->newest()
@@ -151,7 +195,7 @@ class HomepageService
             ->get()
             ->map(fn (Category $category) => [
                 'category' => $category,
-                'articles' => ArticleQuery::cards()
+                'articles' => ArticleQuery::deferred()
                     ->inCategory($category)
                     ->whereNotIn('articles.id', $used->all() ?: [0])
                     ->newest()
@@ -164,7 +208,7 @@ class HomepageService
 
     private function byType(HomeBlock $block, ArticleType $type, Collection $used): Collection
     {
-        return ArticleQuery::cards()
+        return ArticleQuery::deferred()
             ->ofType($type)
             ->whereNotIn('articles.id', $used->all() ?: [0])
             ->newest()
@@ -183,7 +227,7 @@ class HomepageService
 
     private function mostRead(HomeBlock $block): Collection
     {
-        return ArticleQuery::cards()
+        return ArticleQuery::deferred()
             ->mostRead(days: 7)
             ->limit($block->limit)
             ->get();
@@ -191,7 +235,7 @@ class HomepageService
 
     private function latest(HomeBlock $block): Collection
     {
-        return ArticleQuery::cards()
+        return ArticleQuery::deferred()
             ->newest()
             ->limit($block->limit)
             ->get();
@@ -208,7 +252,7 @@ class HomepageService
 
         return [
             'topic' => $topic,
-            'articles' => ArticleQuery::cards()
+            'articles' => ArticleQuery::deferred()
                 ->whereHas('topics', fn (Builder $q) => $q->whereKey($topic->id))
                 ->newest()
                 ->limit($block->limit)

@@ -328,6 +328,10 @@ If a release changes `ImageService::WIDTHS`:
 php artisan media:backfill
 ```
 
+A release that changes what the front page caches — a new block type, a column
+added to `ArticleQuery::CARD_COLUMNS` — does not need anything: the payload
+carries a 120-second TTL and the first request after the deploy rebuilds it.
+
 ---
 
 ## Verifying a deploy
@@ -355,9 +359,16 @@ Then, by hand and signed in:
 4. **Publish a story with an image**, and confirm it appears on the homepage.
 5. **Read `storage/logs/laravel.log`.** It should be empty.
 
-A cold homepage is measurably slower than a warm one — roughly 0.38s against
-0.12s locally, because the homepage cache is built on first request. Hit `/`
-once yourself after `optimize` so a reader is not the one paying for it.
+A cold homepage is still measurably slower than a warm one, because the
+homepage cache is built on first request. Hit `/` once yourself after
+`optimize` so a reader is not the one paying for it.
+
+The gap is about half what it was: the cold build went from 93 queries to 48
+and the warm read from 17 to 8, of which none are content — they are the cache
+store and the session. Query counts are quoted rather than seconds because
+wall-clock on a shared box swings by a factor of three between byte-identical
+runs, and the first request after a restart pays for a cold InnoDB buffer pool
+on top of everything else.
 
 ### Two production-only behaviours
 
@@ -382,9 +393,18 @@ php artisan down
 git checkout <previous-tag>
 composer install --no-dev --optimize-autoloader
 npm ci && npm run build
+php artisan cache:clear
 php artisan optimize
 php artisan up
 ```
+
+`cache:clear` is in that list for a reason, and it is not tidiness. Two cache
+payloads — `homepage.blocks` and `layout.categories` — are stored compressed by
+`App\Support\PackedCache`. Rolling back to a build that predates it leaves the
+old code reading a base64 string where it expects an array, and the front page
+is a 500 until the entry expires. Going *forward* needs nothing: an entry the
+new code cannot read counts as a miss and is rebuilt, which is also what
+happens to a corrupt or half-written row.
 
 Migrations are the part that does not roll back cleanly. `migrate:rollback`
 runs the `down()` methods, which for anything that dropped or rewrote a column

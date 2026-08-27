@@ -16,23 +16,23 @@
 | 3 | Auth & reader features — accounts, bookmarks, comments | **Done** |
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
-| 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile; AVIF and the cold homepage remain |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 568 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
+| 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile, cold homepage halved; AVIF remains, and it is blocked on the box |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 576 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
 
 ### By the numbers
 
 | | |
 |---|---|
-| PHP files (app/database/routes/config) | 162 |
-| Models · Enums · Policies · Services | 23 · 5 · 3 · 4 |
-| Controllers | 46 |
-| Blade templates | 93 |
-| Routes (115 total, 52 admin) | 115 |
+| PHP files (app/database/routes/config) | 168 |
+| Models · Enums · Policies · Services | 24 · 5 · 3 · 7 |
+| Controllers | 47 |
+| Blade templates | 115 |
+| Routes | 139 total · 73 admin |
 | Database tables | 39 |
 | Seeded content | 55 categories · 374 articles · 107 comments · 36 users |
 | Demo modules | 6 e-paper issues (48 pages) · 7 photo galleries (62 images) |
 | Imagery | 153 media · 761 WebP derivatives · 79 MB on disk |
-| Bundle (gzipped) | 16.0 KB CSS · 23.3 KB JS |
+| Bundle (gzipped) | 16.9 KB CSS · 24.9 KB JS |
 
 ### Verification currently passing
 
@@ -44,7 +44,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 568 tests, 2,560 assertions, ~98s:
+tests.** The suite is 576 tests, 2,604 assertions:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -85,6 +85,7 @@ tests.** The suite is 568 tests, 2,560 assertions, ~98s:
 | `PhotoImportTest` | 8 | `photos:import` — the ladder built from a real folder, the transcode that stops a 2 MB PNG becoming the `src` fallback, transparency flattened onto white, idempotency by filename, deterministic assignment, and that a dry run writes nothing |
 | `LiveBlogTest` | 23 | the live blog end to end: appending, the backdated correction, pinned above newest, editing that must not move an entry, who may run one — and the polling endpoint's cursor, including a burst larger than one page |
 | `LayoutReorderTest` | 14 | the front-page layout manager: a drag rewriting positions within a column and across them, the emptied column the form omits entirely, the homepage cache flushing so the new order is what renders, unknown block ids refused with nothing moved, the role matrix — and the collision the settings form's own column select used to cause |
+| `HomepageCacheTest` | 8 | what the front page costs to build and to read back: that the three card relations load once for the whole page however many blocks produced it, that every card leaves the build with its relations already on it, that a second build touches no content table, that the payload is stored packed and round-trips its model graph, that a truncated entry and one written by an older build both rebuild rather than 500, and that a cached null is not mistaken for a miss |
 
 Writing them turned up six defects that every manual pass had missed — see
 "What the test pass found" below.
@@ -298,7 +299,7 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 568 tests cover both halves of
+1. **Test coverage is started, not finished.** 576 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, and the whole reader path from registration
    through bookmarks, history, comments, the newsletter and polls. What is
@@ -695,8 +696,32 @@ comes to disagree about what drift is.
 
 16. `ArticleQuery::related()` runs a correlated `EXISTS` subquery for topic
     matching; fine at this size, worth watching as content grows.
-17. Cold homepage is ~1.4s / 80 queries; warm is ~340ms / 15. The cold path
-    deserves attention in Phase 6.
+17. ~~**Cold homepage is ~1.4s / 80 queries.**~~ **Done.** 93 queries to 48 and
+    417ms to 291ms at the median; warm went 17 queries to 8, of which none are
+    content — they are the cache store and the session and nothing else.
+    Rendered bytes are identical before and after on the homepage and on a
+    category page, which is the only real proof that a change like this changed
+    nothing.
+
+    The 1.4s in the original note was largely a cold InnoDB buffer pool rather
+    than the application: the first request after a restart measured 2.8s here
+    and every repeat measured 380ms with the same 93 queries. Query count is
+    the number worth tracking on this box; wall-clock swings by a factor of
+    three between byte-identical runs.
+
+    Three things came out of it, all fixed:
+
+    - **`LayoutComposer` ran four times per request**, once per view it is
+      bound to, re-reading the same three cache keys each time: twelve round
+      trips to the `cache` table on every request on the site, warm or cold,
+      for three distinct values. It is `scoped` now and memoises them.
+    - **Every block eager-loaded its own cards.** A dozen independent lists on
+      one page meant a dozen `with()` passes over the same handful of sections,
+      bylines and photographs — 36 queries where 3 will do. The lists are built
+      with `ArticleQuery::deferred()` and hydrated once at the end.
+    - **The cached payload was 555 KB**, and `layout.categories` another 106 KB,
+      both pulled out of MySQL on *every* request. See item 19.
+
 18. ~~**`SeedImagery::__construct()` overflows its seed on about one image in
     five.**~~ **Fixed.** `($seed * 2654435761) & 0xFFFFFFFF` computed the mask
     after the multiply, and PHP has no unsigned int to hold the result: any
@@ -724,6 +749,29 @@ comes to disagree about what drift is.
 
     `Unit/SeedImageryTest` pins the arithmetic against those references and
     asserts no seed raises the deprecation.
+
+19. ~~**The cached payloads were 660 KB per request.**~~ **Done.** Serialized
+    Eloquent graphs are mostly not content: `original` repeats `attributes`
+    verbatim on every model, and the same twenty property names appear on each
+    of a few hundred objects. That shape compresses about as well as
+    anything can.
+
+    `App\Support\PackedCache` stores them zlib-compressed and base64-encoded —
+    base64 because `cache.value` is a `mediumtext` in `utf8mb4` and compressed
+    output is binary, which MySQL rejects. `homepage.blocks` goes 555 KB to
+    41 KB, `layout.categories` 106 KB to 6 KB, and the total read per request
+    679 KB to 65 KB.
+
+    It is not a trade. Reading a packed entry back is *faster* — 6.4ms against
+    7.5ms — because inflating 41 KB and parsing the result beats parsing 555 KB
+    of serialize text. The compress costs 10ms and happens once per TTL.
+
+    Two things to know. `serializable_classes` still applies: the unserialize
+    moved into `PackedCache`, which reads the same config key, so there is one
+    list and not two. And **a rollback past this needs `cache:clear`** — old
+    code reading a packed entry gets a string where it expects an array. The
+    forward direction is safe by construction, and so is a corrupt row: both
+    read as a miss and rebuild. `HomepageCacheTest` pins that.
 
 ---
 
@@ -756,7 +804,8 @@ In rough order of value:
 5. ~~Measure Core Web Vitals against the budget in `PLAN.md`
    (LCP < 2.5s, CLS < 0.1).~~ **Done** — LCP 1.8–2.2s, CLS 0.000 on every run.
    The `width`/`height` on the article hero did what it was added for.
-6. Reduce cold-homepage query count.
+6. ~~Reduce cold-homepage query count.~~ **Done** — 93 to 48, and the cached
+   payload 555 KB to 41 KB. See gaps 17 and 19.
 7. `hreflang` + canonical review once a second locale exists.
 
 Two things the Lighthouse pass will surface that are decisions, not bugs:
@@ -768,11 +817,11 @@ Two things the Lighthouse pass will surface that are decisions, not bugs:
   returns none and every slot renders its placeholder. The creatives now
   exist; flip the flag if the pass should measure filled slots.
 
-Phase 7 has since started ahead of the remaining Phase 6 items, because the
-only unblocked one left is the cold-homepage query count — AVIF needs a rebuilt
-GD or `php-imagick` on this box, and `hreflang` needs a second locale to exist.
-What remains of Phase 7: off-site copies of the nightly backup, an external
-uptime check, and real branding.
+Phase 7 started ahead of the remaining Phase 6 items, and with the cold
+homepage done there is now nothing unblocked left in Phase 6 at all: AVIF needs
+a rebuilt GD or `php-imagick` on this box, and `hreflang` needs a second locale
+to exist. What remains of Phase 7: off-site copies of the nightly backup, an
+external uptime check, and real branding.
 
 ---
 
