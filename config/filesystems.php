@@ -61,6 +61,34 @@ return [
             'report' => false,
         ],
 
+        /*
+         * Where the nightly backup is copied so it survives this machine.
+         *
+         * Any S3-compatible bucket. Its own credentials rather than the `s3`
+         * disk's, deliberately: the destination for backups is usually a
+         * different bucket — often a different provider — from anything the
+         * application itself would read or write, and it wants a key that can
+         * only append to it.
+         *
+         * `throw` is true here and false on every other disk. Elsewhere a
+         * failed write returning false is a degraded page; on a backup
+         * destination a silent false is a night with no off-site copy that
+         * reported success, which is the exact failure this whole feature
+         * exists to prevent.
+         */
+        'backups_offsite' => [
+            'driver' => 's3',
+            'key' => env('BACKUP_OFFSITE_KEY'),
+            'secret' => env('BACKUP_OFFSITE_SECRET'),
+            'region' => env('BACKUP_OFFSITE_REGION'),
+            'bucket' => env('BACKUP_OFFSITE_BUCKET'),
+            'endpoint' => env('BACKUP_OFFSITE_ENDPOINT'),
+            'use_path_style_endpoint' => (bool) env('BACKUP_OFFSITE_PATH_STYLE', false),
+            'visibility' => 'private',
+            'throw' => true,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

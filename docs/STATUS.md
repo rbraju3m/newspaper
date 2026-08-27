@@ -17,13 +17,13 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile, cold homepage halved; AVIF remains, and it is blocked on the box |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 576 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, verified nightly backups, error alerting, scheduled publishing, self-healing counters and rate limits; off-site backup copies and real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 590 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified and copied off-site behind a dead-man's-switch, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters and rate limits; real branding still open |
 
 ### By the numbers
 
 | | |
 |---|---|
-| PHP files (app/database/routes/config) | 168 |
+| PHP files (app/database/routes/config) | 173 |
 | Models · Enums · Policies · Services | 24 · 5 · 3 · 7 |
 | Controllers | 47 |
 | Blade templates | 115 |
@@ -44,7 +44,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 576 tests, 2,604 assertions:
+tests.** The suite is 590 tests, 2,644 assertions:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -86,6 +86,7 @@ tests.** The suite is 576 tests, 2,604 assertions:
 | `LiveBlogTest` | 23 | the live blog end to end: appending, the backdated correction, pinned above newest, editing that must not move an entry, who may run one — and the polling endpoint's cursor, including a burst larger than one page |
 | `LayoutReorderTest` | 14 | the front-page layout manager: a drag rewriting positions within a column and across them, the emptied column the form omits entirely, the homepage cache flushing so the new order is what renders, unknown block ids refused with nothing moved, the role matrix — and the collision the settings form's own column select used to cause |
 | `HomepageCacheTest` | 8 | what the front page costs to build and to read back: that the three card relations load once for the whole page however many blocks produced it, that every card leaves the build with its relations already on it, that a second build touches no content table, that the payload is stored packed and round-trips its model graph, that a truncated entry and one written by an older build both rebuild rather than 500, and that a cached null is not mistaken for a miss |
+| `BackupSyncTest` | 14 | the off-site copy and the monitoring around it: what goes up and what is skipped as already there, that a dry run writes nothing, that an unconfigured remote skips rather than failing the nightly cron, that a copy arriving truncated is deleted from the remote and fails the run, remote retention keeping the newest, `backup:run` taking the artifacts off-site itself — and the heartbeat, pinged on success, `/fail` on failure, silent when unconfigured, and never able to fail a good backup |
 
 Writing them turned up six defects that every manual pass had missed — see
 "What the test pass found" below.
@@ -299,7 +300,7 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 576 tests cover both halves of
+1. **Test coverage is started, not finished.** 590 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, and the whole reader path from registration
    through bookmarks, history, comments, the newsletter and polls. What is
@@ -332,13 +333,33 @@ lookup in front of every newsletter submission on the live site too.
    file, so the check is mysqldump's own completion marker; anything that
    fails is deleted rather than left looking like a backup.
 
-   Two things keep this from being finished, and neither is a code change:
+   ~~Two things keep this from being finished, and neither is a code
+   change.~~ **Both are done.**
 
-   - **The artifacts sit on the same disk as the database they came from.**
-     That survives a bad migration, not a dead server. Getting them off the
-     box is a manual `rsync` — `DEPLOY.md` has the cron line.
-   - **Nothing monitors it.** If the nightly run stops, only
-     `storage/logs/backup.log` will say so.
+   - ~~**The artifacts sit on the same disk as the database they came
+     from.**~~ `backup:sync` copies every verified artifact to any
+     S3-compatible bucket, and `backup:run` calls it itself, so one schedule
+     entry and one exit code mean "there is a checked backup and it is not
+     only on this machine". It copies rather than streams, because a
+     `mysqldump | gzip | aws s3 cp` pipeline cannot check its own completion
+     marker and uploads truncated dumps with total confidence. A copy that
+     cannot be proved is deleted from the remote — size always, S3's ETag
+     under `--verify=checksum` where the upload was single-part, and the whole
+     object streamed back and hashed under `--verify=download`.
+   - ~~**Nothing monitors it.**~~ Two failures, and only one of them can be
+     reported from the box. A backup that *breaks* now goes out through
+     `ErrorAlerter`, which is what `config/errors.php` said it was for all
+     along and nothing had wired. A backup that *never runs* — cron entry
+     deleted, box powered off, disk full at midnight — reports nothing,
+     because nothing runs; `BACKUP_HEARTBEAT_URL` is pinged only after a run
+     completes and verifies, so an external service alerts on the ping that
+     never came. `/fail` is pinged on a failed run, so one switch covers both.
+
+   Off-site is off when `BACKUP_OFFSITE_BUCKET` is blank, and the nightly run
+   still succeeds — an install that has not configured it is not failing its
+   cron every night to say so. The cost of that choice: a mistyped bucket name
+   reads as "not configured", which is why `backup:sync` prints the disk it
+   looked at and `DEPLOY.md` says to run it once by hand.
 
    ~~**Error tracking is still open.**~~ **Done.** Every reportable exception
    is written to `storage/logs/errors-YYYY-MM-DD.log` as JSON, and the first
@@ -349,9 +370,20 @@ lookup in front of every newsletter submission on the live site too.
    the throttle silenced still get seen. Both are off until `.env` names a
    destination.
 
-   What is *not* covered: nothing watches the watcher. If mail delivery
-   breaks, the alert about it goes to the same broken mail. An external uptime
-   check against `/up` is the honest complement, and is not in the repo.
+   What is *not* covered from inside the box: if mail delivery breaks, the
+   alert about it goes to the same broken mail. The complements both sit
+   outside it — the backup heartbeat above, and an external uptime check
+   against `/up`.
+
+   ~~`/up` is Laravel's stock health route.~~ It is a real check now.
+   `App\Listeners\DiagnoseHealth` runs `select 1`, a cache write and read
+   back, and a writability test on `storage/logs` and `storage/framework`; a
+   throw turns the 200 into a 500 with `{"status":"down"}`. The stock route
+   answers 200 as soon as the framework boots, so a monitor watching it would
+   have sat green through a dead database. SMTP, push and the backup bucket
+   are deliberately *not* checked — all three can be down for an hour without
+   a reader noticing, and a check that goes red while the site is fine trains
+   everyone to ignore it.
 
 ### Decisions the runbook surfaced
 
@@ -820,8 +852,14 @@ Two things the Lighthouse pass will surface that are decisions, not bugs:
 Phase 7 started ahead of the remaining Phase 6 items, and with the cold
 homepage done there is now nothing unblocked left in Phase 6 at all: AVIF needs
 a rebuilt GD or `php-imagick` on this box, and `hreflang` needs a second locale
-to exist. What remains of Phase 7: off-site copies of the nightly backup, an
-external uptime check, and real branding.
+to exist. Off-site backups and the health endpoint are done too, which leaves
+**real branding** as the last open item in Phase 7 — plus the three uncovered
+test areas (feed contents, the e-paper reader, OAuth sign-in).
+
+The uptime check itself is the one piece that cannot live here: `/up` now fails
+when a dependency does, and something outside this machine has to be watching
+it. Same for the backup heartbeat. Both are a URL and a schedule on somebody
+else's box, and `DEPLOY.md` says which.
 
 ---
 

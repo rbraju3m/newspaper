@@ -372,6 +372,50 @@ parser disagrees with browsers about foreign content (`<svg>`, `<math>`), which
 is where every mutation-XSS bug lives, and it hands back numeric entities on
 some input — `&#2476;` where বাংলা used to be, in a column FULLTEXT covers.
 
+### A backup that cannot be proved must not survive
+
+Both halves of the backup refuse to leave an artifact they could not verify —
+locally `backup:run` deletes a dump with no `Dump completed` marker, and
+off-site `backup:sync` deletes an object whose size does not match what was
+uploaded. That is not belt-and-braces. A short object sitting in a bucket looks
+exactly like a backup, and the day you find out is the day you needed it.
+
+Three things about the off-site half:
+
+- **It copies verified artifacts; it does not stream to the bucket.** A
+  `mysqldump | gzip | aws s3 cp` pipeline cannot check its own completion
+  marker, so it uploads truncated dumps with total confidence. Local first,
+  verify, then up — and `backup:run` calls `backup:sync` itself so one exit
+  code means "checked, and not only on this machine".
+- **An unconfigured remote is a silent success.** `filled(bucket)` is the
+  whole test, and an install that has not set it up must not fail its cron
+  every night to say so. The cost is that a *mistyped* bucket also reads as
+  "not configured" — which is why the command prints the disk it looked at.
+- **`backups_offsite` sets `throw => true`** where every other disk sets
+  false. Elsewhere a failed write returning `false` is a degraded page; on a
+  backup destination it is a night with no off-site copy that reported
+  success.
+
+`ErrorAlerter` covers the backup that *breaks*. Nothing in here can cover the
+backup that never runs — a deleted cron entry reports nothing, because nothing
+runs — which is what `BACKUP_HEARTBEAT_URL` is for, and why it is pinged only
+after everything has verified. A heartbeat that fires before the off-site copy
+would be green on the night the bucket credentials expired.
+
+### `/up` rethrows instead of failing when `APP_DEBUG=true`
+
+Laravel's health route catches the `DiagnosingHealth` listener's exception and
+answers 500 — *unless* debug mode is on, in which case it rethrows and you get
+a stack trace. So probing `/up` on this box does not show what a monitor would
+see, and a test asserting the 500 has to set `app.debug` false first.
+
+The listener is `App\Listeners\DiagnoseHealth`, and what belongs in it is
+narrow: a dependency the site genuinely cannot serve without, checked cheaply
+enough to run once a minute for ever. SMTP, push and the backup bucket are
+deliberately absent — all three can be down for an hour without a reader
+noticing, and a check that goes red while the site is fine trains everyone to
+ignore the alert.
+
 ### `demo:purge` keeps the shell, not the content
 
 `demo:purge` is the pre-launch sweep: it deletes the seeded articles, comments,
@@ -675,7 +719,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 576 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 590 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -715,6 +759,7 @@ coverage exists for both halves of the app:
 | `LiveBlogTest` | the live blog — appending, ordering, who may run one, and the polling cursor |
 | `LayoutReorderTest` | the front-page layout manager — drags within and across columns, the cache flush, and that a column change cannot collide |
 | `HomepageCacheTest` | what the front page costs — that card relations load once for the page rather than once per block, that the payload is stored packed and round-trips, and that an unreadable entry rebuilds instead of 500ing |
+| `BackupSyncTest` | the off-site copy — what goes up, what is skipped, what is deleted for failing verification — and the heartbeat and alerting around a failed run |
 
 Still uncovered: feed *contents* as opposed to well-formedness, the e-paper
 reader, and OAuth sign-in.
@@ -752,6 +797,20 @@ Then exercise the actual path with `curl` against a running server, logged in as
 the relevant role, and check `storage/logs/laravel.log` is clean. Compile-time
 checks have repeatedly passed while the runtime path was broken — the database
 and the browser are where the real bugs surfaced.
+
+### Two tests cannot share `errors-<pid>.log`
+
+`ErrorAlertTest` points `logging.channels.errors.path` at
+`storage/framework/testing/errors-<pid>.log`. Anything else that triggers
+`ErrorAlerter` and picks the same filename writes into the file that test is
+counting lines in — same PHPUnit process, same pid, so the name collides
+exactly. `BackupSyncTest` did this and turned into a failure inside
+`ErrorAlertTest`, which is a long way from the file that caused it and passes
+in isolation.
+
+Give the log its own name, point the channel at it in `setUp`, and
+`Log::forgetChannel('errors')` before deleting it in `tearDown` — the manager
+caches resolved channels and Monolog holds the handle open.
 
 ### A cold buffer pool reads exactly like a missing index
 

@@ -340,7 +340,7 @@ Compile-time checks have repeatedly passed here while the runtime path was
 broken. Exercise it.
 
 ```bash
-curl -sI https://example.com/up | head -1              # 200, the health route
+curl -sI https://example.com/up | head -1              # 200; 500 if a dependency is down
 curl -s -o /dev/null -w '%{http_code}\n' https://example.com/
 curl -s -o /dev/null -w '%{http_code}\n' https://example.com/rss
 curl -s -o /dev/null -w '%{http_code}\n' https://example.com/sitemap.xml
@@ -442,20 +442,91 @@ like a good one.
 The nightly run is registered in `routes/console.php` for 03:00 and appends to
 `storage/logs/backup.log`. It needs the cron entry above to fire at all.
 
-### What this does not do
+One schedule entry covers the whole thing. `backup:run` dumps, archives,
+verifies both, and then hands the verified artifacts to `backup:sync` itself,
+so its exit code means "there is a checked backup and it is not only on this
+machine". A separate entry for the sync could succeed on a night the dump
+failed, which is the reading nobody wants.
 
-Backups are written to the same disk as the database they came from. That
-survives a bad migration, a bad deploy and a bad `DELETE`; it does not survive
-the server. **Getting the files off this machine is still a manual job** — an
-`rsync` to another host, or a sync to object storage:
+### Off-site copies
 
-```cron
-30 3 * * * rsync -az --delete /var/www/newspaper/storage/app/backups/ backup@elsewhere:/srv/newspaper/
+Local backups survive a bad migration, a bad deploy and a bad `DELETE`. They do
+not survive the server. Set these and the nightly run copies every verified
+artifact to an S3-compatible bucket — AWS, DigitalOcean Spaces, Backblaze B2,
+Wasabi, MinIO:
+
+```dotenv
+BACKUP_OFFSITE_BUCKET=newspaper-backups
+BACKUP_OFFSITE_KEY=...
+BACKUP_OFFSITE_SECRET=...
+BACKUP_OFFSITE_REGION=us-east-1
+BACKUP_OFFSITE_ENDPOINT=            # anything that is not AWS
+BACKUP_OFFSITE_PATH_STYLE=false     # MinIO wants true
+BACKUP_OFFSITE_PREFIX=              # set it if one bucket takes >1 server
+BACKUP_OFFSITE_KEEP=30
 ```
 
-There is no monitoring: nothing tells you the backup stopped running. Until
-error tracking exists (see `STATUS.md`), check `backup.log` on a schedule you
-will actually keep.
+```bash
+php artisan backup:sync --dry-run            # what would go up, changes nothing
+php artisan backup:sync                      # copy now
+php artisan backup:sync --verify=download    # stream it back and hash it
+```
+
+Four things worth knowing before you trust it:
+
+**Blank means off, and the run still succeeds.** An install that has not set
+this up is not failing its cron every night to say so. That does mean a
+mistyped bucket name reads as "not configured" — `backup:sync` prints which
+disk it looked at, so run it once by hand after setting it.
+
+**It copies verified artifacts rather than streaming to the bucket.** The
+ordering is the point: a `mysqldump | gzip | aws s3 cp` pipeline cannot check
+its own completion marker, so it uploads truncated dumps with total confidence.
+Only something that already passed locally goes up.
+
+**A copy it cannot prove is deleted from the remote.** Same rule as the local
+half — a short object sitting in a bucket looks exactly like a backup until the
+day somebody restores from it. Size is checked always; `--verify=checksum`
+compares S3's ETag, which *is* the MD5 of the body for a single-part upload.
+Large objects go up multipart and their ETag is a hash of part hashes, which
+cannot be compared to anything computed locally, so those fall back to size and
+say so in the output. `--verify=download` streams the object back and hashes
+it — the only check that proves the bytes, at the cost of the bandwidth.
+
+**It is idempotent by size**, so a re-run after a half-finished night uploads
+what is missing and skips the rest.
+
+Give the key write access to this bucket and nothing else. It is a destination,
+not a store the application reads from — and a key that can delete the bucket
+is a key that turns one compromised web server into no backups.
+
+### Knowing it still runs
+
+Two different failures, and only one of them can be reported from here.
+
+A backup that **breaks** — mysqldump gone, disk full mid-dump, bucket refusing
+the upload — throws, is caught, and goes out through the same alerting as any
+other fault, to `ERROR_ALERT_EMAIL` and `ERROR_ALERT_WEBHOOK`. Throttled to one
+an hour, which suits a nightly job that keeps failing the same way.
+
+A backup that **never runs** reports nothing, because nothing runs. A deleted
+cron entry, a powered-off box, a disk that filled at midnight: there is no code
+that can tell you about its own absence. That is what the heartbeat is for.
+
+```dotenv
+BACKUP_HEARTBEAT_URL=https://hc-ping.com/<uuid>
+BACKUP_HEARTBEAT_TIMEOUT=10
+```
+
+The URL is requested only after a run completes *and* verifies, off-site copy
+included. Point it at healthchecks.io, Cronitor, Better Stack or a self-hosted
+equivalent, tell that service to expect a ping daily at 03:05, and it alerts on
+the one that does not arrive. A failed run pings `<url>/fail` instead, so the
+same switch covers both and there is one thing to watch rather than two.
+
+An unreachable monitoring endpoint never fails a good backup — it is logged and
+the run still reports success. The external service notices the missing ping by
+itself, which is the whole design.
 
 ### Restoring
 
@@ -528,11 +599,40 @@ the digest says it has been breaking three hundred times a day since Tuesday.
 deployment runs no queue worker. The webhook timeout is five seconds for that
 reason. If a worker ever exists, dispatching the send is the upgrade.
 
-**Nothing watches the watcher.** If mail delivery breaks, the alert about it
-goes to the same broken mail. `storage/logs/laravel.log` records
+**Nothing watches the watcher, from in here.** If mail delivery breaks, the
+alert about it goes to the same broken mail. `storage/logs/laravel.log` records
 `ErrorAlerter (email) failed` when a channel throws, and that is the only
-signal. An external uptime check on `/up` is the honest complement to this and
-is not in scope here.
+signal this box can produce. The complements both live outside it: the backup
+heartbeat above, and an external uptime check on `/up`.
+
+### `/up` is a real health check
+
+Point an external monitor at it — anything that fetches a URL on a schedule and
+alerts on a non-200. It answers `{"status":"up"}` with 200, and **500 with
+`{"status":"down"}`** when a dependency the site cannot serve without is
+broken:
+
+| Checked | Because |
+|---|---|
+| `select 1` on the default connection | a dead MySQL is every page, not one |
+| a cache write and read back | `CACHE_STORE` is the database and the homepage is served out of it |
+| `storage/logs` and `storage/framework` writable | a full disk stops sessions, the cache table, the log and every upload at once |
+
+Laravel's stock health route answers 200 as soon as the framework boots, which
+is a narrower claim than it looks — PHP is running and the container built. A
+monitor watching that would have sat green through a dead database. The checks
+live in `App\Listeners\DiagnoseHealth`; a throw from there is what turns the
+200 into a 500.
+
+Two deliberate omissions. SMTP, the push service and the off-site bucket are
+**not** checked: all three can be down for an hour without a reader noticing,
+and none can be probed without doing something with a side effect. A check that
+goes red while readers are being served fine trains everyone to ignore the
+alert, and after that the endpoint is decoration.
+
+One thing to know when testing it by hand: with `APP_DEBUG=true` the route
+rethrows instead of answering 500, so the failure arrives as a stack trace. On
+a production box, where debug is off, it is a clean 500.
 
 ---
 

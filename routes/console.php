@@ -43,6 +43,19 @@ Schedule::command('counters:recompute --quiet-when-clean')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/backup.log'));
 
+/*
+ * The nightly backup, and the only entry that needs to exist for it.
+ *
+ * `backup:run` dumps, archives, verifies both, and then hands the verified
+ * artifacts to `backup:sync` itself when off-site storage is configured — so
+ * there is one schedule line, one log, and one exit code meaning "there is a
+ * checked backup and it is not on this machine". A second entry for the sync
+ * could succeed on a night the dump failed, which is the reading nobody wants.
+ *
+ * Failures reach `ErrorAlerter`. The run that never starts at all — cron
+ * removed, box off, disk full at midnight — reaches nobody, which is what the
+ * heartbeat is for: an external service alerts on the ping that does not come.
+ */
 Schedule::command('backup:run')
     ->dailyAt('03:00')
     ->withoutOverlapping()

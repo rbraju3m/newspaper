@@ -2,6 +2,9 @@
 
 namespace App\Console\Commands;
 
+use App\Exceptions\BackupFailed;
+use App\Services\ErrorAlerter;
+use App\Support\Heartbeat;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -22,9 +25,14 @@ use Symfony\Component\Process\Process;
  * success, and anything that fails is deleted rather than left looking like a
  * backup.
  *
- * Local disk only. Getting the files off this machine is a separate job — see
- * `docs/DEPLOY.md`; a backup on the same disk as the database survives a bad
- * migration, not a dead server.
+ * Writes locally first, always. A backup on the same disk as the database
+ * survives a bad migration and not a dead server, so when off-site storage is
+ * configured this hands the verified artifacts to `backup:sync` before it
+ * reports success — the local copy is the one that can be checked, and only
+ * something that passed goes up.
+ *
+ * Success here means all of it: dumped, archived, verified, and off the
+ * machine. That is what makes the heartbeat at the end worth anything.
  */
 class RunBackup extends Command
 {
@@ -38,11 +46,12 @@ class RunBackup extends Command
         {--database : Back up only the database}
         {--files : Back up only the uploads}
         {--keep=14 : Delete backups older than this many days}
-        {--disk=backups : Filesystem disk to write to}';
+        {--disk=backups : Filesystem disk to write to}
+        {--no-offsite : Skip the off-site copy even when one is configured}';
 
     protected $description = 'Dump the database and archive uploads, then verify both';
 
-    public function handle(): int
+    public function handle(ErrorAlerter $alerter): int
     {
         $disk = (string) $this->option('disk');
 
@@ -73,13 +82,42 @@ class RunBackup extends Command
             $this->newLine();
             $this->components->error('Backup incomplete. Nothing above marked OK should be relied on.');
 
-            return self::FAILURE;
+            return $this->giveUp($alerter, 'Nightly backup failed. See storage/logs/backup.log.');
+        }
+
+        // Off-site last, and only for artifacts that already verified. It
+        // reports and alerts on its own failures, so this only has to fail.
+        if (! $this->option('no-offsite') && $this->call('backup:sync', ['--from' => $disk]) !== self::SUCCESS) {
+            return $this->giveUp($alerter, null);
         }
 
         $this->newLine();
         $this->components->info('Backup complete: '.Storage::disk($disk)->path(''));
 
+        Heartbeat::ping();
+
         return self::SUCCESS;
+    }
+
+    /**
+     * Report a failed run through every channel that exists, then fail.
+     *
+     * Two channels, because they catch different things. `ErrorAlerter` says
+     * what went wrong and is throttled to one an hour, which suits a nightly
+     * job that keeps failing the same way. The heartbeat's `/fail` says only
+     * that tonight did not work — but it is the same switch that would have
+     * caught the run never starting at all, so the external service has one
+     * thing to watch rather than two.
+     */
+    private function giveUp(ErrorAlerter $alerter, ?string $message): int
+    {
+        if ($message !== null) {
+            $alerter->report(new BackupFailed($message));
+        }
+
+        Heartbeat::ping('fail');
+
+        return self::FAILURE;
     }
 
     /**

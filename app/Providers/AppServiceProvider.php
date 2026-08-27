@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Listeners\DiagnoseHealth;
 use App\Models\User;
 use App\Services\AdService;
 use App\Support\Bangla;
@@ -11,9 +12,11 @@ use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Events\DiagnosingHealth;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
@@ -62,6 +65,11 @@ class AppServiceProvider extends ServiceProvider
         );
 
         View::composer('layouts.admin', AdminComposer::class);
+
+        // `/up` answers 200 as soon as the framework boots, which would leave
+        // an uptime check green through a dead database. A throw from this
+        // listener turns it into a 500.
+        Event::listen(DiagnosingHealth::class, DiagnoseHealth::class);
     }
 
     /**
