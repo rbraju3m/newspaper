@@ -40,6 +40,39 @@ order. Verify ordering by matching a `Request` against the route collection.
 Before adding a `create()`/`update()`/`fill()` call, check the model's
 `$fillable`. This bug class appeared five times.
 
+### Strict mode does *not* catch a lazy load after `first()` or `find()`
+
+The half of the rule above that everything relies on has a hole, and it is not
+in this application's code. `Builder::hydrate()` stamps the instance flag that
+enforces it:
+
+```php
+$model = $instance->newFromBuilder($item);
+
+if (count($items) > 1) {                       // ← the hole
+    $model->preventsLazyLoading = Model::preventsLazyLoading();
+}
+```
+
+A query that returned **one row** hands back a model with
+`preventsLazyLoading = false`, so `$one->relation` loads silently. Only models
+that arrived in a multi-row result set are guarded.
+
+`Model::preventsLazyLoading()` — the static — is still true. It is the
+per-instance copy that decides, and the framework only sets it when the result
+had more than one row.
+
+So `SocialAccount::where(...)->first()` followed by `->user` is a lazy load
+that no test and no local click-through will ever flag, and
+`SocialiteController::resolveUser()` does exactly that today. It is not a
+crash risk; it is the opposite, and that is the problem. **The safety net does
+not cover single-row fetches, so an N+1 can walk straight through the place
+everybody believes it cannot.** Eager-load on a `first()` the same way you
+would on a `get()` — the guard will not remind you.
+
+`OAuthSignInTest` is where this was found, and only because a test that was
+*expected* to fail did not.
+
 ### Cached models need allow-listing
 
 `config/cache.php` → `serializable_classes` is an explicit list. Adding a model
@@ -719,7 +752,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 629 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 650 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -762,8 +795,14 @@ coverage exists for both halves of the app:
 | `BackupSyncTest` | the off-site copy — what goes up, what is skipped, what is deleted for failing verification — and the heartbeat and alerting around a failed run |
 | `FeedContentsTest` | what the three feeds *say* — the RSS channel and item fields, the canonical link, the 40-item cap, that a draft, a scheduled story and a retraction stay out, the sitemap's URL set, and Google News's 48-hour window |
 | `EpaperReaderTest` | the public e-paper — which issue `/epaper` opens, the back-issue rail, page order and the thumbnail fallback, the shapes a half-built issue takes, and that a malformed date falls through to the catch-alls |
+| `OAuthSignInTest` | Google and Facebook sign-in — the provider guards, the three cases `resolveUser()` decides between, the account-takeover refusal, and session fixation |
 
-Still uncovered: OAuth sign-in.
+Every area the coverage table once listed as missing now has a file. What
+`OAuthSignInTest` still cannot reach is the half that only a real provider
+has: the token exchange, the state parameter, and whether the client id and
+redirect URI registered at Google actually match this deployment. It fakes the
+provider, so it proves the controller's decisions and nothing about the
+handshake.
 
 **The feeds are cached, so a feed test may request each one only once.**
 `feed.rss`, `feed.sitemap` and `feed.news-sitemap` are `Cache::remember()` for
@@ -805,6 +844,38 @@ Then exercise the actual path with `curl` against a running server, logged in as
 the relevant role, and check `storage/logs/laravel.log` is clean. Compile-time
 checks have repeatedly passed while the runtime path was broken — the database
 and the browser are where the real bugs surfaced.
+
+### A before/after session id proves nothing unless the cookie is carried
+
+The obvious way to test that sign-in rotates the session id —
+
+```php
+$this->get('/login');
+$before = session()->getId();
+$this->post('/login', [...]);
+$this->assertNotSame($before, session()->getId());
+```
+
+— cannot fail. Laravel's test client does not carry a response's cookies into
+the next call, so the second request starts a session that has nothing to do
+with the first and the two ids always differ. Delete the `regenerate()` the
+test is guarding and it still passes.
+
+**`LoginTest::test_the_session_id_is_rotated_on_login` has this shape and is
+currently vacuous.** Verified by removing
+`AuthenticatedSessionController`'s `$request->session()->regenerate()`: the
+test stays green.
+
+To make it mean something, feed the first response's own session cookie back —
+it is already encrypted, so `withUnencryptedCookie()` is the right door and
+`EncryptCookies` decrypts it like a browser's — and assert a **control** first:
+two plain requests on that cookie must keep the *same* id. Without the control
+a harness that quietly failed to carry anything reports a rotation every time,
+which reads exactly like the thing working. `OAuthSignInTest` does both.
+
+Worth knowing while you are in there: the rotation is `SessionGuard::login()`
+calling `migrate(true)`, not the controller line. Removing the explicit
+`regenerate()` does not reintroduce fixation. Test the property, not the line.
 
 ### Two tests cannot share `errors-<pid>.log`
 

@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile, cold homepage halved; AVIF remains, and it is blocked on the box |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 629 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built but not yet run against a real bucket, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters and rate limits; real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 650 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built but not yet run against a real bucket, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters and rate limits; real branding still open |
 
 ### By the numbers
 
@@ -44,7 +44,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 629 tests, 2,778 assertions:
+tests.** The suite is 650 tests, 2,889 assertions:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -89,11 +89,16 @@ tests.** The suite is 629 tests, 2,778 assertions:
 | `BackupSyncTest` | 14 | the off-site copy and the monitoring around it: what goes up and what is skipped as already there, that a dry run writes nothing, that an unconfigured remote skips rather than failing the nightly cron, that a copy arriving truncated is deleted from the remote and fails the run, remote retention keeping the newest, `backup:run` taking the artifacts off-site itself — and the heartbeat, pinged on success, `/fail` on failure, silent when unconfigured, and never able to fail a good backup |
 | `FeedContentsTest` | 20 | what the three feeds *say*, as opposed to whether they parse: the RSS channel's own description of the publication, an item's canonical link, byline, pubDate and excerpt, the enclosure's real image type, the 40-item cap, that a draft, a scheduled story and a retraction all stay out, ordering newest-first, escaping that survives a round trip, the sitemap's homepage/category/article set with an inactive category and a draft absent, and Google News's 48-hour window at both edges |
 | `EpaperReaderTest` | 19 | the public e-paper reader: which issue `/epaper` opens and that an unpublished newer one does not take it over, a back issue by its own date, the rail's ordering, its cap of 14, that it never offers an unpublished issue and marks the one being read, pages in `page_number` order, the thumbnail fallback, the PDF button appearing only when there is a PDF, the empty states for a fresh install and for an issue published before its pages are uploaded, and that a malformed date falls through to the catch-all routes |
+| `OAuthSignInTest` | 21 | Google and Facebook sign-in: an unknown provider and one with no credentials both 404, a configured one reaches its real consent screen, the login page offers only what is configured, the three cases `resolveUser()` decides between, the refusal that stops an unverified provider email taking over a local account, a second provider linking to the same reader, no email and no id and a suspended reader and a throwing provider all refused, session fixation with a control that proves the harness — and three behaviours pinned as they are rather than as they read |
 
 Writing them turned up six defects that every manual pass had missed — see
 "What the test pass found" below.
 
-Still uncovered: OAuth sign-in, which needs the provider stubbed.
+Every area this section once listed as uncovered now has a file. What
+`OAuthSignInTest` cannot reach is the half only a real provider has — the
+token exchange, the state parameter, and whether the credentials registered at
+Google match this deployment. It fakes the provider, so it proves the
+controller's decisions and nothing about the handshake.
 
 ---
 
@@ -324,18 +329,47 @@ assertion guards the clause.
 The reader turned up no defects otherwise, which is worth stating plainly: it
 was the last uncovered *public* surface, and it was already correct.
 
+The OAuth pass turned up the most consequential of these, and it is not about
+OAuth. **Strict mode does not catch a lazy load on a model fetched with
+`first()` or `find()`.** `Builder::hydrate()` stamps the per-instance flag that
+enforces `preventLazyLoading` only `if (count($items) > 1)` — so a single-row
+result comes back with the guard *off* and `$one->relation` loads in silence.
+`Model::preventsLazyLoading()` stays true throughout; it is the instance copy
+that decides.
+
+It was found because a test expected to fail did not:
+`SocialiteController::resolveUser()` does
+`SocialAccount::where(...)->first()` and then reads `->user`, which is textbook
+lazy loading, and it works. The consequence is not a crash — it is that
+`CLAUDE.md`'s first rule, the one the whole codebase leans on, covers less
+than everybody assumes, and an N+1 on a single-row fetch will never be flagged
+by a test, a local click-through or `HarnessTest`. Written up in `CLAUDE.md`.
+
+And a second, smaller one in the same family: **the existing
+`LoginTest::test_the_session_id_is_rotated_on_login` cannot fail.** Laravel's
+test client does not carry a response's cookies into the next call, so the two
+requests it compares are unrelated sessions whose ids always differ. Verified
+by deleting `AuthenticatedSessionController`'s `session()->regenerate()` — the
+test stays green. `OAuthSignInTest` carries the cookie forward and asserts a
+control first, and `CLAUDE.md` has the shape. Worth knowing that the rotation
+itself is real either way: `SessionGuard::login()` calls `migrate(true)`, so
+the controller's explicit call is belt-and-braces rather than the thing
+holding fixation off.
+
 ---
 
 ## Known gaps
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 629 tests cover both halves of
+1. **Test coverage is started, not finished.** 650 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, the whole reader path from registration through
    bookmarks, history, comments, the newsletter and polls, what the three feeds
-   actually say, and the public e-paper reader. What is still uncovered is
-   OAuth sign-in.
+   actually say, the public e-paper reader, and OAuth sign-in. The three areas
+   this item used to name are all done; what is left is depth rather than a
+   missing surface, and three specific things the OAuth pass turned up —
+   see 20 below.
 2. ~~**Editor-written bodies are raw HTML rendered unescaped.**~~ **Done.**
    All three — `articles.body`, `live_entries.body` and `pages.body` — are
    still stored as HTML and still printed with `{!! !!}`, but nothing unsafe
@@ -863,6 +897,38 @@ comes to disagree about what drift is.
     forward direction is safe by construction, and so is a corrupt row: both
     read as a miss and rebuild. `HomepageCacheTest` pins that.
 
+20. **Three OAuth behaviours are pinned as they are, not as they read.** None
+    is a live defect on this install — both shipped providers verify the
+    addresses they return, and OAuth is not configured here at all — but each
+    is a decision somebody has to make rather than something to quietly
+    change, so `OAuthSignInTest` records the current answer and names the
+    choice.
+
+    - **An unverified provider email cannot *link* to a local account, but can
+      still *create* one — stamped verified.** The takeover guard is written
+      `if ($user && ! verified)`, so with no local account there is nothing to
+      protect and case 3 creates the reader, then sets `email_verified_at`
+      because the comment above it says the provider proved the address. For a
+      provider that did not verify, nobody proved anything, and the account
+      that results can squat an address its real owner has not signed up with
+      yet. The small fix is to create the account without stamping it; the
+      large one is to refuse sign-up. Both change what an existing install's
+      rows mean.
+    - **A deleted reader cannot sign back in, and is told the wrong reason.**
+      Account deletion is a soft delete, and `cascadeOnDelete` is a database
+      constraint, so the `social_accounts` row survives. Signing in again hits
+      case 1, `$existing->user` resolves to null through the SoftDeletes
+      scope, and the controller reports *"this social account has no email"* —
+      then suggests registering by email, which also fails, because the
+      soft-deleted row still holds the unique index on that address. The fix
+      is a decision about what deletion means: drop the social links with it,
+      or let a returning reader reclaim the account.
+    - **`social_accounts.avatar` is written once and never refreshed.**
+      `resolveUser()` returns at case 1 for every returning reader, so the
+      `updateOrCreate()` below it is only ever reached when no row exists —
+      it always creates and never updates. Cosmetic; recorded because the next
+      person to read that call will believe it refreshes something.
+
 ---
 
 ## Next up (Phase 6)
@@ -911,8 +977,8 @@ Phase 7 started ahead of the remaining Phase 6 items, and with the cold
 homepage done there is now nothing unblocked left in Phase 6 at all: AVIF needs
 a rebuilt GD or `php-imagick` on this box, and `hreflang` needs a second locale
 to exist. Off-site backups and the health endpoint are done too, which leaves
-**real branding** as the last open item in Phase 7 — plus the one uncovered
-test area, OAuth sign-in.
+**real branding** as the last open item in Phase 7. The three test areas
+that stood open alongside it are done.
 
 The uptime check itself is the one piece that cannot live here: `/up` now fails
 when a dependency does, and something outside this machine has to be watching
@@ -1043,9 +1109,10 @@ Picking up, in the order they are worth doing:
    monitor on `/up` (it answers 500 now when the database, cache or disk is
    gone), and a dead-man's-switch expecting the backup ping daily just after
    03:00. `DEPLOY.md` → "Knowing it still runs" has both.
-3. **The last uncovered test area** — OAuth sign-in, which needs the provider
-   stubbed. Feed contents and the e-paper reader were the other two and are
-   now done; see `FeedContentsTest` and `EpaperReaderTest`.
+3. **Three things the OAuth pass recorded rather than changed** — gap 20.
+   The one that reaches beyond OAuth is that strict mode does not catch a lazy
+   load after `first()`, which is a hole in the safety net the whole codebase
+   leans on.
 4. **Real branding** — gap 4, the last open Phase 7 item. Needs artwork and
    imprint decisions rather than code.
 
