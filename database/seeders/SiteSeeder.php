@@ -11,6 +11,7 @@ use App\Models\Poll;
 use App\Models\PollOption;
 use App\Models\Setting;
 use Database\Seeders\Support\BanglaContent;
+use Database\Seeders\Support\StaticPageContent;
 use Illuminate\Database\Seeder;
 
 class SiteSeeder extends Seeder
@@ -26,14 +27,29 @@ class SiteSeeder extends Seeder
 
     private function settings(): void
     {
+        /*
+         * The imprint is deliberately *unmistakable* rather than plausible.
+         *
+         * It held `মোঃ আব্দুল করিম` and `১২৩ কারওয়ান বাজার, ঢাকা-১২১৫` — a
+         * name and a Dhaka media-district address that read as real, on
+         * fields that are a legal requirement for a newspaper in Bangladesh.
+         * `demo:purge` deliberately leaves this group alone, so those values
+         * survive the pre-launch sweep and would have shipped: an imprint
+         * naming an editor who does not exist is worse than an empty one,
+         * because an empty one gets noticed.
+         *
+         * These say what they are. An install with a real publication behind
+         * it overwrites them in the admin, or from `.env` via `config/site.php`
+         * — and `DEPLOY.md` lists them among the things to set before launch.
+         */
         $defaults = [
-            ['site_name', 'দৈনিক সংবাদ', 'string', 'general'],
-            ['site_tagline', 'সময়ের সাথে সত্যের পথে', 'string', 'general'],
-            ['editor_name', 'মোঃ আব্দুল করিম', 'string', 'imprint'],
-            ['publisher_name', 'সংবাদ মিডিয়া লিমিটেড', 'string', 'imprint'],
-            ['office_address', '১২৩ কারওয়ান বাজার, ঢাকা-১২১৫', 'string', 'imprint'],
-            ['office_phone', '+880 2 55012345', 'string', 'imprint'],
-            ['office_email', 'news@newspaper.test', 'string', 'imprint'],
+            ['site_name', config('site.name_bn'), 'string', 'general'],
+            ['site_tagline', config('site.tagline'), 'string', 'general'],
+            ['editor_name', 'সম্পাদকের নাম নির্ধারিত হয়নি (ডেমো)', 'string', 'imprint'],
+            ['publisher_name', 'ডেমো ইনস্টলেশন — কোনো প্রকৃত প্রতিষ্ঠান নয়', 'string', 'imprint'],
+            ['office_address', 'ঠিকানা নির্ধারিত হয়নি (ডেমো)', 'string', 'imprint'],
+            ['office_phone', '', 'string', 'imprint'],
+            ['office_email', '', 'string', 'imprint'],
             ['comments_require_approval', '1', 'bool', 'comments'],
             ['comments_min_length', '10', 'int', 'comments'],
             ['articles_per_page', '20', 'int', 'display'],
@@ -120,12 +136,18 @@ class SiteSeeder extends Seeder
             ['মন্তব্য নীতি', 'comment-policy'],
         ];
 
+        $bodies = StaticPageContent::all();
+
         foreach ($pages as [$title, $slug]) {
             Page::firstOrCreate(
                 ['slug' => $slug],
                 [
                     'title' => $title,
-                    'body' => '<p>'.BanglaContent::paragraph(6).'</p><p>'.BanglaContent::paragraph(5).'</p>',
+                    // Written copy, not `BanglaContent` filler. These are the
+                    // six pages a reader opens *because* they want an answer,
+                    // and generated noise on "আমাদের সম্পর্কে" is the clearest
+                    // sign an installation was never finished.
+                    'body' => $bodies[$slug],
                     'is_active' => true,
                 ],
             );

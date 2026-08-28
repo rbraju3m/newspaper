@@ -6,8 +6,18 @@
  * and the things that are genuinely deployment-level.
  */
 return [
-    'name_bn' => env('SITE_NAME_BN', 'দৈনিক সংবাদ'),
-    'name_en' => env('SITE_NAME_EN', 'Dainik Songbad'),
+    /*
+     * The masthead is a **fictional** publication. It was `দৈনিক সংবাদ` until
+     * somebody noticed that is the name of a real Bangladeshi daily founded in
+     * 1951 — fine as a throwaway placeholder, not fine on something shown to
+     * people, where it reads as a clone of an outlet that exists. Any name put
+     * here should be checked against the real ones first.
+     *
+     * Every one of these is overridable from `.env`, so a deployment with a
+     * real publication behind it changes them there and touches no code.
+     */
+    'name_bn' => env('SITE_NAME_BN', 'দৈনিক আলোরেখা'),
+    'name_en' => env('SITE_NAME_EN', 'Dainik Alorekha'),
     'tagline' => env('SITE_TAGLINE', 'সময়ের সাথে সত্যের পথে'),
     'description' => env('SITE_DESCRIPTION', 'বাংলাদেশ ও বিশ্বের সর্বশেষ খবর, রাজনীতি, খেলা, বিনোদন, ব্যবসা ও মতামত।'),
 
@@ -17,13 +27,20 @@ return [
     'phone' => env('SITE_PHONE', ''),
     'email' => env('SITE_EMAIL', ''),
 
+    /*
+     * Empty by default, and the footer skips any that are blank. They used to
+     * default to `https://facebook.com` and friends — bare domains, which
+     * render as a full row of live social buttons that take a reader to the
+     * front page of Facebook. An absent link is honest; a link that goes
+     * nowhere useful is a broken one nobody reports.
+     */
     'social' => [
-        'facebook' => env('SOCIAL_FACEBOOK', 'https://facebook.com'),
-        'youtube' => env('SOCIAL_YOUTUBE', 'https://youtube.com'),
-        'twitter' => env('SOCIAL_TWITTER', 'https://x.com'),
-        'instagram' => env('SOCIAL_INSTAGRAM', 'https://instagram.com'),
-        'linkedin' => env('SOCIAL_LINKEDIN', null),
-        'tiktok' => env('SOCIAL_TIKTOK', null),
+        'facebook' => env('SOCIAL_FACEBOOK', ''),
+        'youtube' => env('SOCIAL_YOUTUBE', ''),
+        'twitter' => env('SOCIAL_TWITTER', ''),
+        'instagram' => env('SOCIAL_INSTAGRAM', ''),
+        'linkedin' => env('SOCIAL_LINKEDIN', ''),
+        'tiktok' => env('SOCIAL_TIKTOK', ''),
     ],
 
     /** How many categories sit in the main bar before overflowing to the mega menu. */

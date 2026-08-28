@@ -708,6 +708,55 @@ resolving by DOM order.
 
 ## Conventions
 
+### The branding is a fictional demo, and says so
+
+There is no publication behind this install. The masthead, the imprint and the
+six static pages are a *coherent invented* identity, and each of them declares
+itself rather than looking plausible.
+
+That is a deliberate line, not fussiness. `editor_name`, `publisher_name` and
+`office_address` are what a newspaper is legally required to publish, and
+`demo:purge` **keeps** the imprint group — so whatever is seeded there is what
+a launch ships unless somebody edits it. The seed used to hold a real-sounding
+Bangla name and a real Dhaka media-district address, and it would have gone
+out. A plausible fake is worse than an obvious blank because a blank gets
+noticed.
+
+Two rules follow for anything touching this:
+
+- **Never invent an imprint, an address or a masthead that could belong to
+  somebody.** The previous masthead, `দৈনিক সংবাদ`, is a Bangladeshi daily
+  founded in 1951 — check any replacement against the real ones.
+- **The six static pages are written, not generated.**
+  `Database\Seeders\Support\StaticPageContent` holds them. They were
+  `BanglaContent` filler, which is right for 374 articles nobody reads and
+  wrong for the pages a reader opens *because* they want an answer.
+
+`BrandingTest` pins both, and detects filler by looking for `BanglaContent`'s
+stock vocabulary — with a test that the detector still recognises filler, so a
+change to that vocabulary cannot quietly turn the check into one that passes
+on anything.
+
+### Icons are drawn, wordless, and `any` is not `maskable`
+
+`php artisan brand:icons` draws the set from the brand colour. Two things it
+gets right that the hand-made files did not:
+
+**`any` and `maskable` are different files.** A maskable icon is cropped to
+whatever shape the launcher likes, so only a *circle* of 80% diameter is
+guaranteed — tighter than the 80% square people assume, because a square that
+touches that circle has its corners outside it. The old `icon-512.png` was
+declared maskable with content running to 81% of the canvas and lost its
+corners on every circular launcher, silently.
+
+**`favicon.ico` is a real multi-size icon.** It was a zero-byte file: an empty
+200, which is not a 404. Browsers still request `/favicon.ico` whatever the
+`<link rel="icon">` says, and cache the nothing they get.
+
+They carry **no lettering**, and must not. GD does no complex shaping, so
+Bangla conjuncts and vowel signs come out unformed and out of order — the same
+reason `EpaperSeeder` draws a nameplate-shaped block rather than a nameplate.
+
 ### Bangla in the UI
 
 All reader- and admin-facing strings are Bangla. Use the Blade directives rather
@@ -826,7 +875,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 656 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 670 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -870,6 +919,7 @@ coverage exists for both halves of the app:
 | `FeedContentsTest` | what the three feeds *say* — the RSS channel and item fields, the canonical link, the 40-item cap, that a draft, a scheduled story and a retraction stay out, the sitemap's URL set, and Google News's 48-hour window |
 | `EpaperReaderTest` | the public e-paper — which issue `/epaper` opens, the back-issue rail, page order and the thumbnail fallback, the shapes a half-built issue takes, and that a malformed date falls through to the catch-alls |
 | `OAuthSignInTest` | Google and Facebook sign-in — the provider guards, the three cases `resolveUser()` decides between, the account-takeover refusal, what a deleted reader is told, and session fixation |
+| `BrandingTest` | what a fresh install presents itself as — written static pages, an imprint that cannot be mistaken for a real one, a real favicon, and the manifest icon set |
 
 Every area the coverage table once listed as missing now has a file. What
 `OAuthSignInTest` still cannot reach is the half that only a real provider

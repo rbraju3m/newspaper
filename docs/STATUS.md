@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile, cold homepage halved; AVIF remains, and it is blocked on the box |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 656 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built but not yet run against a real bucket, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters and rate limits; real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 670 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built but not yet run against a real bucket, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters and rate limits; real branding still open |
 
 ### By the numbers
 
@@ -44,11 +44,12 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 656 tests, 2,916 assertions:
+tests.** The suite is 670 tests, 2,961 assertions:
 
 | File | Tests | Covers |
 |---|---|---|
 | `HarnessTest` | 6 | driver, FULLTEXT index, factories, strict mode — and that the lazy-load guard actually covers single-row fetches, which Laravel's does not |
+| `BrandingTest` | 14 | what a fresh install presents itself as: that the six static pages are written rather than generated (and that the filler detector still recognises filler), that the seeded imprint cannot be mistaken for a real one, that no social link is a bare network homepage, that `favicon.ico` is a real multi-size icon rather than an empty file, and that the manifest's maskable icon is its own file with every named icon present |
 | `PublicRoutesTest` | 23 | every public URL, nested category paths, canonical redirect, draft visibility, staff preview, feeds parse as XML, output-buffer balance |
 | `AdminAuthorizationTest` | 22 | the role matrix requested by URL, plus publish, cross-author edit, media delete, self-delete |
 | `Unit/PolicyTest` | 14 | Article/Comment/User policy decision tables and the role ladder, no database |
@@ -411,7 +412,7 @@ guarding Laravel. `CLAUDE.md` has the shape.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 656 tests cover both halves of
+1. **Test coverage is started, not finished.** 670 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, the whole reader path from registration through
    bookmarks, history, comments, the newsletter and polls, what the three feeds
@@ -437,8 +438,52 @@ guarding Laravel. `CLAUDE.md` has the shape.
    settings and the six page bodies alone — that is item 4 below, not this one
    — and it reports files left under `uploads/` rather than sweeping the
    directory blind.
-4. **Placeholder branding** — GD-drawn app icons, no real logo artwork, imprint
-   fields hold sample values.
+4. ~~**Placeholder branding**~~ **Done, as a demo identity.** There is no real
+   publication behind this install, so the branding is a *coherent fictional*
+   one rather than a client's — and it says so, everywhere a reader might
+   otherwise assume an organisation stands behind it. Nothing invents an
+   address, a phone number, a company or an editor: those are legal details on
+   a real masthead, and a plausible fake is worse than an obvious blank because
+   it never gets corrected.
+
+   Five things were wrong, and four of them would have shipped:
+
+   - **The masthead was the name of a real newspaper.** `দৈনিক সংবাদ` is a
+     Bangladeshi daily founded in 1951. Fine as a throwaway placeholder,
+     not fine on something anybody looks at, where it reads as a clone of an
+     outlet that exists. It is `দৈনিক আলোরেখা` now, and `config/site.php`
+     carries the warning to check any replacement against the real ones.
+   - **The six static pages were `BanglaContent` filler** — the same generated
+     noise as the 374 demo articles, on the six pages a reader opens *because*
+     they want an answer. They are written now, in
+     `Database\Seeders\Support\StaticPageContent`, and each says plainly that
+     this is a demonstration.
+   - **The imprint was plausible rather than blank**: `মোঃ আব্দুল করিম` and a
+     real Dhaka media-district address, on fields a newspaper is legally
+     required to publish. `demo:purge` deliberately keeps that group, so those
+     values survived the pre-launch sweep by design. They now name themselves
+     as demo values.
+   - **`public/favicon.ico` was a zero-byte file** — an empty 200, which is
+     not the same as a 404. Browsers still request `/favicon.ico` whatever the
+     `<link rel="icon">` says, and they cache the nothing they got.
+   - **The maskable icon was clipped.** The manifest declared `icon-512.png` as
+     `purpose: maskable` while its content ran to 81% of the canvas. A maskable
+     icon may only rely on a *circle* of 80% diameter, which is tighter than
+     the 80% square people assume, so its corners came off on every circular
+     launcher with nothing to say so.
+
+   `brand:icons` draws the set from the brand colour — `any` and `maskable` as
+   separate files, because they are different jobs — and writes a real
+   multi-size `.ico`. They stay wordless on purpose: GD does no complex
+   shaping, so Bangla conjuncts come out unformed, which is the same reason
+   `EpaperSeeder` draws a nameplate-shaped block rather than a nameplate.
+
+   The social links are blank rather than `https://facebook.com`; the footer
+   already skipped empty values, and nothing was empty, so a full row of live
+   buttons took readers to the front page of Facebook.
+
+   `BrandingTest` pins all of it. Every assertion was checked by putting the
+   old value back.
 5. ~~**No backups, no deploy runbook.**~~ **Both exist.** The runbook is
    [`DEPLOY.md`](DEPLOY.md). `backup:run` dumps the database and archives
    `uploads/` — which is in neither the dump nor git — nightly at 03:00, and
