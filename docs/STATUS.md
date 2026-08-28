@@ -518,7 +518,12 @@ guarding Laravel. `CLAUDE.md` has the shape.
    ~~`/up` is Laravel's stock health route.~~ It is a real check now.
    `App\Listeners\DiagnoseHealth` runs `select 1`, a cache write and read
    back, and a writability test on `storage/logs` and `storage/framework`; a
-   throw turns the 200 into a 500 with `{"status":"down"}`. The stock route
+   throw turns the 200 into a 500 — the body is Laravel's stock HTML page, so
+   a monitor has to match on the status code, not on it. Both docs claimed a
+   `{"status":"up"}` / `{"status":"down"}` JSON body until this was checked;
+   there is none, and the *healthy* page contains the literal string
+   `status-down` as a CSS class, so the obvious keyword check is red from the
+   first poll. The stock route
    answers 200 as soon as the framework boots, so a monitor watching it would
    have sat green through a dead database. SMTP, push and the backup bucket
    are deliberately *not* checked — all three can be down for an hour without
@@ -1176,10 +1181,27 @@ Picking up, in the order they are worth doing:
    in gap 5 above. It is maybe ten minutes and it is the only thing standing
    between "built" and "working", on the feature whose entire job is to be
    there on the worst day.
-2. **Set up the two external watchers**, which cannot live in this repo: a
-   monitor on `/up` (it answers 500 now when the database, cache or disk is
-   gone), and a dead-man's-switch expecting the backup ping daily just after
-   03:00. `DEPLOY.md` → "Knowing it still runs" has both.
+2. **Create the two external watchers.** Everything on this side of them is
+   done and proven; what is left is two objects in a Better Stack account and
+   a public hostname to point one of them at, neither of which can live here.
+   `DEPLOY.md` → "Setting the two watchers up" is a copy-paste procedure with
+   the exact intervals and grace periods.
+
+   The heartbeat half was run end to end against a real HTTP endpoint rather
+   than a fake — a local listener standing in for the service, the same way
+   `backup:sync` was proven against a local directory. A good run requests
+   `/ping/<token>` and exits 0; a run with the database credentials broken
+   requests `/ping/<token>/fail`, exits 1, and deletes the truncated dump
+   instead of leaving it looking like a backup. `/up` was checked the way a
+   monitor sees it — `APP_DEBUG=false`, 200 healthy and 500 with the database
+   on a dead port — because with debug on the route rethrows and shows you
+   something a monitor never sees.
+
+   What that does *not* prove is the half only the service has: that the token
+   is right, and that somebody is actually watching. Run
+   `php artisan backup:run` once by hand after setting `BACKUP_HEARTBEAT_URL`
+   and watch the heartbeat go green; a switch that was never armed looks
+   exactly like a switch that has nothing to report.
 3. **Nothing outstanding in the codebase itself.** The list above is what is
    left, and none of it is code.
 4. **Real branding** — gap 4, the last open Phase 7 item. Needs artwork and

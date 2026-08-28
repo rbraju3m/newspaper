@@ -528,6 +528,87 @@ An unreachable monitoring endpoint never fails a good backup — it is logged an
 the run still reports success. The external service notices the missing ping by
 itself, which is the whole design.
 
+### Setting the two watchers up
+
+Both are a URL and a schedule on a machine that is not this one. That is the
+whole point: a watcher on the same box as the thing it watches goes down with
+it. Written against **Better Stack**, which does monitors and heartbeats in one
+account, so there is one dashboard and one alerting policy rather than two.
+healthchecks.io, Cronitor and a self-hosted equivalent all work the same way —
+only the words on the buttons change.
+
+**1. The heartbeat, for a backup that never runs.**
+
+Create a *heartbeat*. Set the expected period to **1 day** and the grace to
+**1 hour** — the cron entry is 03:00 and a slow night must not page anybody.
+Copy its ping URL into `.env`:
+
+```dotenv
+BACKUP_HEARTBEAT_URL=https://uptime.betterstack.com/api/v1/heartbeat/<token>
+BACKUP_HEARTBEAT_TIMEOUT=10
+```
+
+`backup:run` requests it once, after everything has been written *and*
+verified, off-site copy included. A failed run requests `<url>/fail` instead,
+so the one switch covers both.
+
+**2. The uptime check, for a site that is down.**
+
+Create a *monitor*: `GET https://example.com/up`, every **60 seconds**, alert
+when the status is anything other than 200, after **2** consecutive failures.
+Do not add a keyword check — see the section below for why the obvious one is
+worse than none.
+
+**3. Prove the wiring before you trust it.**
+
+The service will tell you it is configured. It cannot tell you this
+application is pinging it correctly, and the failure mode is a switch that
+sits green for ever because it was never armed. Stand a listener up and watch
+the real command hit it:
+
+```bash
+# In one terminal: something that logs what arrives.
+python3 -c "
+import http.server, socketserver
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(s):
+        print('GET', s.path, flush=True)
+        s.send_response(200); s.send_header('Content-Length','2'); s.end_headers(); s.wfile.write(b'OK')
+    def log_message(s,*a): pass
+socketserver.TCPServer.allow_reuse_address = True
+socketserver.TCPServer(('127.0.0.1', 8977), H).serve_forever()"
+
+# In another: a good run, then a deliberately broken one.
+BACKUP_HEARTBEAT_URL=http://127.0.0.1:8977/ping/x php artisan backup:run --database
+#   → GET /ping/x            exit 0
+
+DB_PASSWORD=wrong BACKUP_HEARTBEAT_URL=http://127.0.0.1:8977/ping/x \
+  php artisan backup:run --database
+#   → GET /ping/x/fail       exit 1
+```
+
+Both were run exactly this way here and both behave as written. Two things
+that came out of doing it rather than assuming it: the truncated dump from the
+broken run is deleted rather than left looking like a backup, and the exit code
+is the one a cron `MAILTO` will act on — 0 and 1, not 0 both times.
+
+Then swap in the real URL and run `php artisan backup:run` once by hand. The
+heartbeat should go from "never pinged" to green in the service's UI within
+seconds. If it does not, the URL is wrong and now is when you find out, not on
+the night you need the backup.
+
+**4. What each one will actually tell you.**
+
+| Silence from | Means |
+|---|---|
+| the heartbeat | nothing ran — cron entry gone, box off, disk full at midnight |
+| the monitor | the site is unreachable, or a dependency it cannot serve without is broken |
+
+Neither can be produced from inside this repo, and neither overlaps the other:
+`ErrorAlerter` covers the backup that *breaks*, the heartbeat covers the
+backup that *never happens*, and the monitor covers the case where the box
+that would have sent either is not answering at all.
+
 ### Restoring
 
 ```bash
@@ -608,9 +689,8 @@ heartbeat above, and an external uptime check on `/up`.
 ### `/up` is a real health check
 
 Point an external monitor at it — anything that fetches a URL on a schedule and
-alerts on a non-200. It answers `{"status":"up"}` with 200, and **500 with
-`{"status":"down"}`** when a dependency the site cannot serve without is
-broken:
+alerts on a non-200. It answers **200** when healthy and **500** when a
+dependency the site cannot serve without is broken:
 
 | Checked | Because |
 |---|---|
@@ -630,9 +710,33 @@ and none can be probed without doing something with a side effect. A check that
 goes red while readers are being served fine trains everyone to ignore the
 alert, and after that the endpoint is decoration.
 
+**Match on the status code, not the body.** The route renders Laravel's stock
+HTML health page, not JSON — there is no `{"status":"up"}` to look for, and a
+keyword check is actively dangerous here: the healthy page contains the literal
+string `status-down`, as a CSS class on the indicator dot. A monitor asked to
+alert when the body contains "down" is red from the first poll.
+
+Configure it as: **GET `/up`, every 60s, alert on any status other than 200,
+after two consecutive failures.** Two rather than one because a single request
+can lose to a restart or a deploy, and an alert that cries wolf gets muted. The
+checks are cheap — one `select 1`, one cache round trip, two `is_writable`
+calls — which is what makes a minute reasonable.
+
+Verify it the way a monitor will, not the way a browser does:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://example.com/up          # 200
+```
+
 One thing to know when testing it by hand: with `APP_DEBUG=true` the route
 rethrows instead of answering 500, so the failure arrives as a stack trace. On
-a production box, where debug is off, it is a clean 500.
+a production box, where debug is off, it is a clean 500. To see the failure
+locally you have to turn debug off yourself:
+
+```bash
+APP_DEBUG=false DB_PORT=1 php artisan serve --port=8899 &
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8899/up        # 500
+```
 
 ---
 
