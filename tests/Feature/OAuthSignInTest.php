@@ -8,7 +8,6 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Testing\TestResponse;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\User as SocialiteUser;
 use Tests\TestCase;
@@ -433,11 +432,9 @@ class OAuthSignInTest extends TestCase
      *
      * Laravel's test client does not carry a response's cookies into the next
      * call — so two requests in a test are two unrelated sessions and their
-     * ids always differ, rotation or not. Feeding the response's own (already
-     * encrypted) session cookie back with `withUnencryptedCookie()` is what
-     * continues the session. The file store is used so the session behaves
-     * like a browser's and its payload survives the round trip; carrying the
-     * cookie is the part that makes the assertion mean anything.
+     * ids always differ, rotation or not. `continuingSession()` on the base
+     * TestCase feeds the cookie back; the file store is what makes the
+     * session survive the round trip.
      *
      * So the test carries its own control: two plain requests on the carried
      * cookie must keep the *same* id. Without that assertion a harness that
@@ -445,7 +442,7 @@ class OAuthSignInTest extends TestCase
      * which is indistinguishable from the thing working.
      *
      * What it proves is the property, not the line. `SessionGuard::login()`
-     * already calls `migrate(true)`, so the controller's explicit
+     * already calls `regenerate(true)`, so the controller's explicit
      * `session()->regenerate()` is belt-and-braces — removing it leaves the id
      * rotating anyway. The property is what a fixation attack cares about.
      */
@@ -475,24 +472,6 @@ class OAuthSignInTest extends TestCase
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
-
-    /**
-     * Send this response's session cookie on the next request, so the two are
-     * one session. The value is already encrypted, so it goes back through
-     * `withUnencryptedCookie()` and `EncryptCookies` decrypts it exactly as it
-     * would a browser's.
-     */
-    private function continuingSession(TestResponse $response): static
-    {
-        $name = config('session.cookie');
-
-        $cookie = collect($response->headers->getCookies())
-            ->firstWhere(fn ($c) => $c->getName() === $name);
-
-        $this->assertNotNull($cookie, 'The response set no session cookie to continue.');
-
-        return $this->withUnencryptedCookie($name, $cookie->getValue());
-    }
 
     private function fakeGoogle(array $attributes, bool $verified = true): void
     {

@@ -100,17 +100,53 @@ class LoginTest extends TestCase
         $this->assertGuest();
     }
 
-    public function test_the_session_id_is_rotated_on_login(): void
+    /**
+     * A session id fixed before login must not still be valid after it.
+     *
+     * This was written the obvious way and could not fail. Laravel's test
+     * client does not carry a response's cookies into the next call, so the
+     * two requests it compared were unrelated sessions whose ids always
+     * differ — deleting the `regenerate()` it was guarding left it green.
+     *
+     * `continuingSession()` carries the cookie so the two requests are one
+     * session, and the control below is what proves the harness did that: two
+     * plain requests must keep the *same* id. Without it, a harness that
+     * silently stopped carrying anything reports a rotation on every run,
+     * which reads exactly like the thing working.
+     *
+     * What it pins is the property, not the line. `SessionGuard::login()`
+     * calls `regenerate(true)` on its own, so `AuthenticatedSessionController`'s
+     * explicit `session()->regenerate()` is belt-and-braces rather than the
+     * only thing holding fixation off — and the property is what an attacker
+     * cares about either way.
+     */
+    public function test_a_fixated_session_does_not_survive_login(): void
     {
-        // Without this a session fixed before login stays valid after it.
+        // The array store keeps nothing between requests, so a carried cookie
+        // would name a session that no longer exists.
+        config(['session.driver' => 'file']);
+
         $this->reader();
 
-        $this->get('/login');
-        $before = session()->getId();
+        $form = $this->get('/login')->assertOk();
+        $fixated = $this->app['session']->getId();
 
-        $this->post('/login', ['login' => 'rafiq@example.com', 'password' => 'correct-horse-battery']);
+        $this->continuingSession($form)->get('/login')->assertOk();
 
-        $this->assertNotSame($before, session()->getId());
+        $this->assertSame(
+            $fixated,
+            $this->app['session']->getId(),
+            'Control failed: the session was not carried between requests, so this test '
+            .'could not have detected a missing rotation either.',
+        );
+
+        $this->continuingSession($form)->post('/login', [
+            'login' => 'rafiq@example.com',
+            'password' => 'correct-horse-battery',
+        ]);
+
+        $this->assertAuthenticated();
+        $this->assertNotSame($fixated, $this->app['session']->getId());
     }
 
     public function test_login_is_rate_limited_after_five_failures(): void

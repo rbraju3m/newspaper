@@ -880,21 +880,31 @@ the next call, so the second request starts a session that has nothing to do
 with the first and the two ids always differ. Delete the `regenerate()` the
 test is guarding and it still passes.
 
-**`LoginTest::test_the_session_id_is_rotated_on_login` has this shape and is
-currently vacuous.** Verified by removing
-`AuthenticatedSessionController`'s `$request->session()->regenerate()`: the
-test stays green.
+`LoginTest` shipped this shape and was vacuous for it.
 
-To make it mean something, feed the first response's own session cookie back —
-it is already encrypted, so `withUnencryptedCookie()` is the right door and
-`EncryptCookies` decrypts it like a browser's — and assert a **control** first:
-two plain requests on that cookie must keep the *same* id. Without the control
-a harness that quietly failed to carry anything reports a rotation every time,
-which reads exactly like the thing working. `OAuthSignInTest` does both.
+Use `TestCase::continuingSession($response)`, which feeds the first response's
+own session cookie back — it is already encrypted, so `withUnencryptedCookie()`
+is the right door and `EncryptCookies` decrypts it like a browser's. Two more
+things are needed and neither is optional:
 
-Worth knowing while you are in there: the rotation is `SessionGuard::login()`
-calling `migrate(true)`, not the controller line. Removing the explicit
-`regenerate()` does not reintroduce fixation. Test the property, not the line.
+- **A store that persists between requests.** `SESSION_DRIVER` is `array`, so
+  a carried cookie names a session that no longer exists. `config(['session.driver' => 'file'])`
+  in the test.
+- **A control assertion, first.** Two plain requests on the carried cookie
+  must keep the *same* id. Without it a harness that quietly stopped carrying
+  anything reports a rotation on every run, which reads exactly like the thing
+  working.
+
+`LoginTest::test_a_fixated_session_does_not_survive_login` and
+`OAuthSignInTest::test_a_fixated_session_does_not_survive_sign_in` both do it,
+and both were checked by removing every rotation on their path — the
+controller's own `regenerate()` *and* `SessionGuard::updateSession()`'s
+`regenerate(true)` — at which point they fail.
+
+That second call is worth knowing about on its own: the guard rotates the id
+itself on every login, so deleting a controller's explicit `regenerate()` does
+**not** reintroduce fixation and a test that appears to guard that line is
+really guarding the framework. Test the property, not the line.
 
 ### Two tests cannot share `errors-<pid>.log`
 

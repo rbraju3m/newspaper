@@ -345,16 +345,24 @@ lazy loading, and it works. The consequence is not a crash — it is that
 than everybody assumes, and an N+1 on a single-row fetch will never be flagged
 by a test, a local click-through or `HarnessTest`. Written up in `CLAUDE.md`.
 
-And a second, smaller one in the same family: **the existing
-`LoginTest::test_the_session_id_is_rotated_on_login` cannot fail.** Laravel's
-test client does not carry a response's cookies into the next call, so the two
-requests it compares are unrelated sessions whose ids always differ. Verified
-by deleting `AuthenticatedSessionController`'s `session()->regenerate()` — the
-test stays green. `OAuthSignInTest` carries the cookie forward and asserts a
-control first, and `CLAUDE.md` has the shape. Worth knowing that the rotation
-itself is real either way: `SessionGuard::login()` calls `migrate(true)`, so
-the controller's explicit call is belt-and-braces rather than the thing
-holding fixation off.
+And a second, smaller one in the same family: **`LoginTest`'s session-rotation
+test could not fail.** Laravel's test client does not carry a response's
+cookies into the next call, so the two requests it compared were unrelated
+sessions whose ids always differ — deleting
+`AuthenticatedSessionController`'s `session()->regenerate()` left it green.
+
+**Fixed.** `TestCase::continuingSession()` feeds the cookie back so the two
+requests are one session, the test asks for a persisting store, and it asserts
+a control first — two plain requests must keep the *same* id — because a
+harness that silently stops carrying anything reports a rotation on every run.
+Both fixation tests were then checked by removing every rotation on their path,
+including `SessionGuard::updateSession()`'s own `regenerate(true)`, at which
+point they fail.
+
+That guard call is the part worth carrying forward: the framework rotates the
+id on every login by itself, so a controller's explicit `regenerate()` is
+belt-and-braces and a test that looks like it guards that line is really
+guarding Laravel. `CLAUDE.md` has the shape.
 
 ---
 
