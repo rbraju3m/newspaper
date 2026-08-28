@@ -844,6 +844,39 @@ If you touch the 5xx views, re-run the check that proves it: render them with
 `ErrorPageTest` does exactly that, and restores the port in a `finally` — a
 dead connection left behind fails the *next* test instead.
 
+### An impression is not a render
+
+`ads.impressions` is written by the browser, from `ad-impressions.js`, and not
+by the code that builds the page. Counting server-side is one line and wrong
+in both directions: creatives are `loading="lazy"`, so a slot below the fold is
+frequently never fetched — the CLS measurement found only one of the front
+page's three slots had loaded by the end of a run — while every crawler that
+fetches the HTML would count as a reader.
+
+The rule applied is the industry one: half the creative in view for one
+continuous second. Everything that qualifies on a page goes up in **one
+beacon**, and the endpoint turns it into **one query** —
+`Ad::live()->whereIn('id', $ids)->increment('impressions')`. Three slots must
+not be three writes on a front page that is eight queries warm.
+
+Three things to keep if this is touched:
+
+- **`live()` scopes the increment**, so a tab left open cannot keep paying a
+  creative that has been paused or has run past its end date.
+- **The id list is capped**, because it is client-supplied and an uncapped
+  `whereIn` is a write to every row in the table.
+- **`sendBeacon` cannot set headers**, so the CSRF token rides in the JSON
+  body and Laravel reads `_token` out of the parsed input — the same shape
+  `reading-tracker.js` uses. Change one and check the other.
+
+It cannot prove the browser was honest, and nothing client-reported can. The
+rate limiter bounds it; beyond that the number is what it is. A server-side
+count would be just as forgeable and wrong as well.
+
+**A slot only becomes a link when the ad has a `url`.** `AdController::click()`
+404s without one, and every seeded house ad has none — so wrapping
+unconditionally made all six links to an error page.
+
 ### Rate limits
 
 Named limiters live in `AppServiceProvider::registerRateLimiters()` and are
@@ -875,7 +908,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 670 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 683 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -920,6 +953,7 @@ coverage exists for both halves of the app:
 | `EpaperReaderTest` | the public e-paper — which issue `/epaper` opens, the back-issue rail, page order and the thumbnail fallback, the shapes a half-built issue takes, and that a malformed date falls through to the catch-alls |
 | `OAuthSignInTest` | Google and Facebook sign-in — the provider guards, the three cases `resolveUser()` decides between, the account-takeover refusal, what a deleted reader is told, and session fixation |
 | `BrandingTest` | what a fresh install presents itself as — written static pages, an imprint that cannot be mistaken for a real one, a real favicon, and the manifest icon set |
+| `AdImpressionTest` | ad impressions counted from the browser, the one-query batch, what is refused, and that an ad with no URL is not a link |
 
 Every area the coverage table once listed as missing now has a file. What
 `OAuthSignInTest` still cannot reach is the half that only a real provider

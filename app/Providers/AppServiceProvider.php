@@ -104,6 +104,13 @@ class AppServiceProvider extends ServiceProvider
         // sendBeacon from the share bar, and a counter anyone can inflate.
         RateLimiter::for('share', fn (Request $request) => Limit::perMinute(30)->by($request->ip()));
 
+        // One beacon per page load carries every slot on it, so a reader
+        // moving briskly through the site is a handful a minute. Twenty is
+        // well clear of that and still bounds a script: the ids are
+        // client-supplied, and this limiter is most of what keeps them from
+        // being a way to run the impression count up.
+        RateLimiter::for('ads', fn (Request $request) => Limit::perMinute(20)->by($request->ip()));
+
         // Subscribing to push is a once-per-browser action, and unsubscribing
         // is once more. A reader toggling it back and forth while deciding is
         // the only honest way to reach double figures.

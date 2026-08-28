@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile, cold homepage halved; AVIF remains, and it is blocked on the box |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 670 tests covering both halves, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters, rate limits and a demo identity that declares itself. **One thing left, and it needs credentials rather than code:** the off-site copy has never run against a real bucket |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 683 tests covering both halves, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters, rate limits and a demo identity that declares itself. **One thing left, and it needs credentials rather than code:** the off-site copy has never run against a real bucket |
 
 ### By the numbers
 
@@ -29,7 +29,7 @@ Counted rather than remembered, 28 August 2026.
 | Models · Enums · Policies · Services | 24 · 5 · 3 · 7 |
 | Controllers · Artisan commands | 47 · 13 |
 | Blade templates | 115 |
-| Test files · tests · assertions | 47 · 670 · 2,964 |
+| Test files · tests · assertions | 48 · 683 · 3,027 |
 | Routes | 139 total · 73 admin |
 | Database tables | 39 |
 | Content on this box | 55 categories · 374 articles · 110 comments · 37 users |
@@ -47,7 +47,7 @@ already exists.
 
 ### Verification currently passing
 
-- `php artisan test` — 670 tests, 2,964 assertions, nothing skipped or risky
+- `php artisan test` — 683 tests, 3,027 assertions, nothing skipped or risky
 - PHP lint clean across all 175 files; all 115 Blade templates compile
 - `npm run build` clean; `route:list --except-vendor` resolves all 139
 - Every reachable GET route crawled against seeded data — public and admin,
@@ -56,12 +56,13 @@ already exists.
   single-row fetches, which is what makes that sweep repeatable
 
 The checks above were ad-hoc scripts once. **They are committed tests now**,
-and this is what they cover — 670 tests, 2,964 assertions across 47 files:
+and this is what they cover — 683 tests, 3,027 assertions across 48 files:
 
 | File | Tests | Covers |
 |---|---|---|
 | `HarnessTest` | 6 | driver, FULLTEXT index, factories, strict mode — and that the lazy-load guard actually covers single-row fetches, which Laravel's does not |
 | `BrandingTest` | 14 | what a fresh install presents itself as: that the six static pages are written rather than generated (and that the filler detector still recognises filler), that the seeded imprint cannot be mistaken for a real one, that no social link is a bare network homepage, that `favicon.ico` is a real multi-size icon rather than an empty file, and that the manifest's maskable icon is its own file with every named icon present |
+| `AdImpressionTest` | 13 | ad impressions and the click-through: that a reported slot is counted, that every slot on a page costs one query rather than one each, that a paused or expired creative is not counted, that the beacon is capped and rate-limited, that a filled slot carries an id and an empty box does not, and that an ad with nowhere to go is not a link to a 404 |
 | `PublicRoutesTest` | 23 | every public URL, nested category paths, canonical redirect, draft visibility, staff preview, feeds parse as XML, output-buffer balance |
 | `AdminAuthorizationTest` | 22 | the role matrix requested by URL, plus publish, cross-author edit, media delete, self-delete |
 | `Unit/PolicyTest` | 14 | Article/Comment/User policy decision tables and the role ladder, no database |
@@ -424,7 +425,7 @@ guarding Laravel. `CLAUDE.md` has the shape.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 670 tests cover both halves of
+1. **Test coverage is started, not finished.** 683 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, the whole reader path from registration through
    bookmarks, history, comments, the newsletter and polls, what the three feeds
@@ -935,7 +936,47 @@ comes to disagree about what drift is.
 
 13. Scheduled articles need a cron entry (`status=scheduled` past its
     `published_at` is counted on the dashboard but never auto-publishes).
-14. Ad impressions are never incremented — only clicks are.
+14. ~~Ad impressions are never incremented — only clicks are.~~ **Done.**
+    `impressions` sat at zero for the life of the project while `clicks` was
+    maintained, so every CTR the admin showed was 0.0% by construction.
+
+    **Counted by the browser, not by the server**, and that is the whole
+    design decision. Incrementing while building the page would have been one
+    line and wrong in both directions: creatives are `loading="lazy"`, so a
+    slot below the fold is frequently never fetched — measuring the front page
+    for CLS found only one of its three slots had loaded by the end of the run
+    — while every crawler that fetched the HTML would have counted as a
+    reader. An advertiser paying per impression would be billed the second
+    number for the first.
+
+    So `ad-impressions.js` applies the rule the industry uses — half the
+    creative in view for one continuous second — and posts every slot that
+    qualified in **one beacon per page**, which the endpoint turns into **one
+    query** with a single `whereIn(...)->increment()`. That matters on a front
+    page that is otherwise eight queries warm.
+
+    Three things worth knowing:
+
+    - **`live()` scopes the increment.** A tab left open keeps its ids; a
+      creative paused or past its end date is not still earning impressions.
+    - **The list is capped at ten.** The ids are client-supplied, so without a
+      bound one POST is a write to every row in the table. The rate limiter
+      (`throttle:ads`, 20/minute) is the rest of that answer.
+    - **It cannot prove the browser was honest**, and nothing client-reported
+      can. A server-side render count would be just as forgeable — by loading
+      the page — and wrong on top of it.
+
+    Found while wiring it: **every seeded house ad was a link to a 404.**
+    `click()` aborts on an ad with no `url` and all six have none, but the
+    slot wrapped every creative in that link regardless. It only links when
+    there is somewhere to go now.
+
+    The JavaScript has no automated coverage — there is no JS test runner in
+    this repo and adding one for a single module was not worth it — but the
+    state machine was driven through a stubbed-browser harness: the dwell
+    timer, a slot that leaves before its second is up, one beacon per page, an
+    id counted once however often it re-enters, and a page with no filled slot
+    sending nothing.
 15. **Ad creatives are tracked now, but still served at full size.**
     ~~`AdController` stores uploads with `$file->store('ads', 'public')`~~ —
     uploads go through `ImageService` and get a `Media` row and a ladder.
@@ -1281,8 +1322,8 @@ Picking up, in the order they are worth doing:
 **Nothing else is outstanding in the codebase.** Both items above need
 credentials or a hostname; neither needs code.
 
-Smaller and self-contained, if the above is blocked: ad impressions are never
-incremented (gap 14), ad creatives are still served at full size (gap 15),
+Smaller and self-contained, if the above is blocked: ad creatives are still
+served at full size (gap 15),
 `/epaper/{date}` cannot reach a second edition on the same day (gap 8), and the
 `redirects` table still has no middleware reading it (gap 12).
 

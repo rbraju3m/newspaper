@@ -23,6 +23,12 @@ use Tests\TestCase;
  * these tests can post deliberate rubbish: the request still counts against
  * the bucket, and the newsletter's `email:rfc,dns` rule never gets to make a
  * DNS lookup.
+ *
+ * One limiter is covered elsewhere rather than here: `throttle:ads`, on the
+ * impression beacon, is asserted in `AdImpressionTest` beside the endpoint it
+ * guards — the ids it carries are client-supplied, so the ceiling is part of
+ * that feature's contract rather than a separate concern. Noted so this file
+ * can still be read as the list of every named limiter.
  */
 class RateLimitTest extends TestCase
 {

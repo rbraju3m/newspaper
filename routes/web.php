@@ -80,6 +80,11 @@ Route::get('/newsletter/unsubscribe/{subscriber:token}', [Site\NewsletterControl
 Route::post('/newsletter/unsubscribe/{subscriber:token}', [Site\NewsletterController::class, 'destroy'])
     ->middleware('throttle:newsletter')->name('newsletter.unsubscribe.click');
 Route::get('/ads/{ad}/click', [Site\AdController::class, 'click'])->name('ads.click');
+// Reported by the browser once a slot has actually been in view, not when the
+// page was built — see AdController::impressions(). One beacon per page
+// carrying every slot that qualified, so this is one request and one query.
+Route::post('/api/ads/impressions', [Site\AdController::class, 'impressions'])
+    ->middleware('throttle:ads')->name('ads.impressions');
 // A guest vote is fingerprinted on IP + user agent, so rotating the agent
 // buys another vote. The IP is what has to be limited.
 Route::post('/polls/{poll}/vote', [Site\PollController::class, 'vote'])

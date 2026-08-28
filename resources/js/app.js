@@ -13,6 +13,7 @@ import './components/article-editor';
 import './components/sortable';
 import './components/shortcuts';
 import './components/live-blog';
+import './components/ad-impressions';
 
 window.Alpine = Alpine;
 Alpine.start();

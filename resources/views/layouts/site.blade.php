@@ -4,6 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    {{-- Where ad-impressions.js reports a slot that has actually been seen.
+         In the head rather than hard-coded in the module so the route stays
+         the one place the URL is defined. --}}
+    <meta name="ads-impression-endpoint" content="{{ route('ads.impressions') }}">
 
     {{-- Applied before paint so the page never flashes the wrong theme. --}}
     <script>
