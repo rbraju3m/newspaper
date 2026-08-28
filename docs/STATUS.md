@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile, cold homepage halved; AVIF remains, and it is blocked on the box |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 650 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built but not yet run against a real bucket, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters and rate limits; real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 654 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built but not yet run against a real bucket, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters and rate limits; real branding still open |
 
 ### By the numbers
 
@@ -44,7 +44,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 650 tests, 2,889 assertions:
+tests.** The suite is 654 tests, 2,907 assertions:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -58,7 +58,7 @@ tests.** The suite is 650 tests, 2,889 assertions:
 | `LoginTest` | 13 | login by email or phone (both digit systems), suspended accounts, session rotation, per-identifier throttling |
 | `EmailVerificationTest` | 8 | signed links, tampered hash, expired link, resend |
 | `PasswordResetTest` | 7 | request, reset, old password stops working, token cannot be reused |
-| `AccountProfileTest` | 15 | profile, email change invalidating verification, password change, account deletion, preferences and newsletter sync |
+| `AccountProfileTest` | 16 | profile, email change invalidating verification, password change, account deletion — including that a deleted reader's comments still render on the article — preferences and newsletter sync |
 | `BookmarkTest` | 6 | toggle, the 401-for-guests contract the Alpine store depends on, per-reader isolation |
 | `ReadingHistoryTest` | 9 | progress as a high-water mark, seconds accumulating, per-reader clearing |
 | `CommentPostingTest` | 17 | who may post, pending-by-default, rate limit, thread flattening, edit window, likes, report auto-hide |
@@ -89,7 +89,7 @@ tests.** The suite is 650 tests, 2,889 assertions:
 | `BackupSyncTest` | 14 | the off-site copy and the monitoring around it: what goes up and what is skipped as already there, that a dry run writes nothing, that an unconfigured remote skips rather than failing the nightly cron, that a copy arriving truncated is deleted from the remote and fails the run, remote retention keeping the newest, `backup:run` taking the artifacts off-site itself — and the heartbeat, pinged on success, `/fail` on failure, silent when unconfigured, and never able to fail a good backup |
 | `FeedContentsTest` | 20 | what the three feeds *say*, as opposed to whether they parse: the RSS channel's own description of the publication, an item's canonical link, byline, pubDate and excerpt, the enclosure's real image type, the 40-item cap, that a draft, a scheduled story and a retraction all stay out, ordering newest-first, escaping that survives a round trip, the sitemap's homepage/category/article set with an inactive category and a draft absent, and Google News's 48-hour window at both edges |
 | `EpaperReaderTest` | 19 | the public e-paper reader: which issue `/epaper` opens and that an unpublished newer one does not take it over, a back issue by its own date, the rail's ordering, its cap of 14, that it never offers an unpublished issue and marks the one being read, pages in `page_number` order, the thumbnail fallback, the PDF button appearing only when there is a PDF, the empty states for a fresh install and for an issue published before its pages are uploaded, and that a malformed date falls through to the catch-all routes |
-| `OAuthSignInTest` | 21 | Google and Facebook sign-in: an unknown provider and one with no credentials both 404, a configured one reaches its real consent screen, the login page offers only what is configured, the three cases `resolveUser()` decides between, the refusal that stops an unverified provider email taking over a local account, a second provider linking to the same reader, no email and no id and a suspended reader and a throwing provider all refused, session fixation with a control that proves the harness — and three behaviours pinned as they are rather than as they read |
+| `OAuthSignInTest` | 24 | Google and Facebook sign-in: an unknown provider and one with no credentials both 404, a configured one reaches its real consent screen, the login page offers only what is configured, the three cases `resolveUser()` decides between, the refusal that stops an unverified provider email taking over a local account, a second provider linking to the same reader, no email and no id and a suspended reader and a throwing provider all refused, session fixation with a control that proves the harness, an unverified address creating an unverified account that gets the mail, and what a deleted reader is told on both the identity and the address route |
 
 Writing them turned up six defects that every manual pass had missed — see
 "What the test pass found" below.
@@ -362,14 +362,13 @@ holding fixation off.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 650 tests cover both halves of
+1. **Test coverage is started, not finished.** 654 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, the whole reader path from registration through
    bookmarks, history, comments, the newsletter and polls, what the three feeds
    actually say, the public e-paper reader, and OAuth sign-in. The three areas
    this item used to name are all done; what is left is depth rather than a
-   missing surface, and three specific things the OAuth pass turned up —
-   see 20 below.
+   missing surface.
 2. ~~**Editor-written bodies are raw HTML rendered unescaped.**~~ **Done.**
    All three — `articles.body`, `live_entries.body` and `pages.body` — are
    still stored as HTML and still printed with `{!! !!}`, but nothing unsafe
@@ -897,37 +896,60 @@ comes to disagree about what drift is.
     forward direction is safe by construction, and so is a corrupt row: both
     read as a miss and rebuild. `HomepageCacheTest` pins that.
 
-20. **Three OAuth behaviours are pinned as they are, not as they read.** None
-    is a live defect on this install — both shipped providers verify the
-    addresses they return, and OAuth is not configured here at all — but each
-    is a decision somebody has to make rather than something to quietly
-    change, so `OAuthSignInTest` records the current answer and names the
-    choice.
+20. ~~**Three OAuth behaviours are pinned as they are, not as they read.**~~
+    **Fixed**, all three — and the decision behind the second of them turned
+    out to be holding down a 500 on the public site.
 
-    - **An unverified provider email cannot *link* to a local account, but can
-      still *create* one — stamped verified.** The takeover guard is written
-      `if ($user && ! verified)`, so with no local account there is nothing to
-      protect and case 3 creates the reader, then sets `email_verified_at`
-      because the comment above it says the provider proved the address. For a
-      provider that did not verify, nobody proved anything, and the account
-      that results can squat an address its real owner has not signed up with
-      yet. The small fix is to create the account without stamping it; the
-      large one is to refuse sign-up. Both change what an existing install's
-      rows mean.
-    - **A deleted reader cannot sign back in, and is told the wrong reason.**
-      Account deletion is a soft delete, and `cascadeOnDelete` is a database
-      constraint, so the `social_accounts` row survives. Signing in again hits
-      case 1, `$existing->user` resolves to null through the SoftDeletes
-      scope, and the controller reports *"this social account has no email"* —
-      then suggests registering by email, which also fails, because the
-      soft-deleted row still holds the unique index on that address. The fix
-      is a decision about what deletion means: drop the social links with it,
-      or let a returning reader reclaim the account.
-    - **`social_accounts.avatar` is written once and never refreshed.**
-      `resolveUser()` returns at case 1 for every returning reader, so the
-      `updateOrCreate()` below it is only ever reached when no row exists —
-      it always creates and never updates. Cosmetic; recorded because the next
-      person to read that call will believe it refreshes something.
+    - **An unverified provider email no longer claims a verification nobody
+      performed.** Case 2 always refused to *link* one to a local account;
+      case 3 went on creating one and stamping `email_verified_at` anyway,
+      because the check reads `if ($user && ! verified)` and there is no
+      `$user` to protect. Sign-up still works — refusing it outright would
+      lock out anyone whose provider simply does not send the flag — but the
+      account is created unstamped and `Registered` fires, so the reader gets
+      the same verification mail a form registration sends. That is what gates
+      commenting, so nothing is lost and nothing is invented.
+
+      The event is dispatched from `callback()` rather than inside
+      `resolveUser()`'s transaction: nothing can unsend a message a rollback
+      decided never happened.
+
+    - **A deleted reader is told the truth.** Deletion stays permanent — the
+      account page promises exactly that — so signing in again resurrects
+      nothing. It used to fall through to *"this social account has no
+      email"* and send them off to a registration that could not succeed
+      either, because the soft-deleted row still holds the unique index on
+      the address. Both lookups now run `withTrashed()` and hand the trashed
+      user back, and the controller says so in Bangla.
+
+      The second lookup mattered more than it looks: a *different* provider
+      identity on a deleted reader's address reached `User::create()` and
+      became a duplicate-key 500, not a refusal.
+
+    - **The stored avatar is refreshed.** `resolveUser()` returns at case 1
+      for every returning reader, so the `updateOrCreate()` below it was only
+      ever reached when no row existed — it always created and never updated,
+      and the avatar was written once and never touched again. Case 1 now
+      updates it, and only when it differs, so an ordinary sign-in stays a
+      read.
+
+    **What the second one uncovered.** Account deletion is a soft delete so
+    that a reader's published comments stay attributable — that is what the
+    comment in `ProfileController::destroy()` says it is for. It was not true.
+    `Comment::user()` had no `withTrashed()`, so the relation went null the
+    moment anybody deleted their account, and `comment/item.blade.php` reads
+    `$comment->user->avatar_url` unguarded: every article page carrying one of
+    their approved comments threw. Reproduced on the seeded box —
+    `ErrorException: Attempt to read property "avatar_url" on null` in
+    `laravel.log`, gone after the fix, byline rendering again.
+
+    `Article::author()` is deliberately left alone: every byline template
+    guards `@if ($article->author)`, so a deleted staff account drops the
+    byline rather than taking the page with it. Both answers are correct and
+    the difference is now written down in `CLAUDE.md`.
+
+    `AccountProfileTest` asserts the claim the deletion test only made in a
+    comment.
 
 ---
 
@@ -1109,10 +1131,10 @@ Picking up, in the order they are worth doing:
    monitor on `/up` (it answers 500 now when the database, cache or disk is
    gone), and a dead-man's-switch expecting the backup ping daily just after
    03:00. `DEPLOY.md` → "Knowing it still runs" has both.
-3. **Three things the OAuth pass recorded rather than changed** — gap 20.
-   The one that reaches beyond OAuth is that strict mode does not catch a lazy
-   load after `first()`, which is a hole in the safety net the whole codebase
-   leans on.
+3. **Watch for lazy loads on single-row fetches.** Strict mode does not catch
+   them (see `CLAUDE.md`), so the guard everything leans on has a hole and an
+   N+1 after a `first()` will never be flagged. Gap 20 is closed; this is what
+   it left behind.
 4. **Real branding** — gap 4, the last open Phase 7 item. Needs artwork and
    imprint decisions rather than code.
 

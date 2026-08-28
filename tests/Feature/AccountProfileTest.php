@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\Article;
 use App\Models\Category;
+use App\Models\Comment;
 use App\Models\NewsletterSubscriber;
 use App\Models\User;
 use Illuminate\Auth\Notifications\VerifyEmail;
@@ -154,6 +156,43 @@ class AccountProfileTest extends TestCase
 
         $this->assertGuest();
         $this->assertNotNull(User::withTrashed()->find($user->id)->deleted_at);
+    }
+
+    /**
+     * The claim the test above makes in a comment, actually asserted.
+     *
+     * The soft delete exists so a reader's published comments stay
+     * attributable — but `Comment::user()` had no `withTrashed()`, so the
+     * relation went null the moment somebody deleted their account, and
+     * `comment/item.blade.php` reads `$comment->user->avatar_url` with no
+     * guard. Every article page carrying one of their approved comments
+     * answered **500**, and nothing pointed back at the account screen that
+     * caused it.
+     *
+     * The article byline is not affected — `article.blade.php` and
+     * `opinion-row` both guard `@if ($article->author)`. It was only the
+     * comment thread.
+     */
+    public function test_a_deleted_readers_comments_still_render_on_the_article(): void
+    {
+        $user = $this->reader();
+        $article = Article::factory()->create(['published_at' => now()->subHour()]);
+
+        Comment::factory()->create([
+            'article_id' => $article->id,
+            'user_id' => $user->id,
+            'status' => 'approved',
+            'body' => 'চমৎকার প্রতিবেদন।',
+        ]);
+
+        $this->get($article->url)->assertOk()->assertSee('চমৎকার প্রতিবেদন।');
+
+        $this->actingAs($user)->delete('/account', ['password' => 'correct-horse-battery']);
+
+        $this->get($article->url)
+            ->assertOk()
+            ->assertSee('চমৎকার প্রতিবেদন।')
+            ->assertSee($user->name);
     }
 
     // ── Preferences ──────────────────────────────────────────────────────

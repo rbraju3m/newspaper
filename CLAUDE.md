@@ -127,6 +127,25 @@ truncates it.
 scoped instance. Forgetting the keys by hand leaves an editor who just renamed
 a category looking at the old name for the rest of the request that renamed it.
 
+### A soft-deleted user is still somebody's byline
+
+`Comment::user()` declares `withTrashed()`, and it has to. Account deletion is
+a **soft** delete precisely so a reader's published comments stay attributable
+— but the relation obeys the SoftDeletes scope like any other, so without it
+`$comment->user` goes null the moment somebody deletes their account and
+`comment/item.blade.php` reads `$comment->user->avatar_url` with no guard.
+Every article page carrying one of their approved comments then throws
+`Attempt to read property "avatar_url" on null`.
+
+`Article::author()` is deliberately *not* the same: every template that prints
+a byline guards it with `@if ($article->author)`, so a deleted staff account
+drops the byline instead of taking the page with it. Two different answers to
+the same question, and both are on purpose — a comment without its author is
+not a comment, an article without a byline still is.
+
+Anything else that soft-deletes and is read back through a relation needs one
+of those two, chosen deliberately.
+
 ### `getOriginal()` applies casts
 
 Inside model events, `getOriginal('status')` returns the **enum**, not the
@@ -752,7 +771,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 650 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 654 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -795,7 +814,7 @@ coverage exists for both halves of the app:
 | `BackupSyncTest` | the off-site copy — what goes up, what is skipped, what is deleted for failing verification — and the heartbeat and alerting around a failed run |
 | `FeedContentsTest` | what the three feeds *say* — the RSS channel and item fields, the canonical link, the 40-item cap, that a draft, a scheduled story and a retraction stay out, the sitemap's URL set, and Google News's 48-hour window |
 | `EpaperReaderTest` | the public e-paper — which issue `/epaper` opens, the back-issue rail, page order and the thumbnail fallback, the shapes a half-built issue takes, and that a malformed date falls through to the catch-alls |
-| `OAuthSignInTest` | Google and Facebook sign-in — the provider guards, the three cases `resolveUser()` decides between, the account-takeover refusal, and session fixation |
+| `OAuthSignInTest` | Google and Facebook sign-in — the provider guards, the three cases `resolveUser()` decides between, the account-takeover refusal, what a deleted reader is told, and session fixation |
 
 Every area the coverage table once listed as missing now has a file. What
 `OAuthSignInTest` still cannot reach is the half that only a real provider

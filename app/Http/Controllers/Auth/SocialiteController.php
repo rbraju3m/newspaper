@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\SocialAccount;
 use App\Models\User;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -52,9 +53,28 @@ class SocialiteController extends Controller
             ]);
         }
 
+        // Deletion is permanent — the account page says so — and the address
+        // stays spoken for, because the soft-deleted row keeps the unique
+        // index. Say that, rather than the "no email" message this used to
+        // fall through to, which sent people off to a registration that
+        // cannot succeed either.
+        if ($user->trashed()) {
+            return redirect()->route('login')->withErrors([
+                'login' => 'এই অ্যাকাউন্টটি মুছে ফেলা হয়েছে। নতুন করে শুরু করতে অন্য একটি ইমেইল ব্যবহার করুন।',
+            ]);
+        }
+
         if (! $user->isActive()) {
             return redirect()->route('login')
                 ->withErrors(['login' => 'আপনার অ্যাকাউন্টটি সাময়িকভাবে স্থগিত আছে।']);
+        }
+
+        // A reader whose provider did not verify the address is created
+        // unstamped, so they need the same mail a form registration sends.
+        // Fired here rather than inside the transaction: nothing can unsend a
+        // message a rollback decided never happened.
+        if ($user->wasRecentlyCreated && ! $user->hasVerifiedEmail()) {
+            event(new Registered($user));
         }
 
         Auth::login($user, remember: true);
@@ -72,6 +92,10 @@ class SocialiteController extends Controller
      * Case 2 is the dangerous one. We only auto-link when the provider asserts
      * the email is verified; otherwise anyone who can set an unverified address
      * at the provider could take over a local account by that email.
+     *
+     * A soft-deleted account is returned trashed from either lookup rather
+     * than as null, because the caller has a different thing to say about it
+     * and because its row still holds the unique index on the address.
      */
     private function resolveUser(string $provider, \Laravel\Socialite\Contracts\User $social): ?User
     {
@@ -80,7 +104,23 @@ class SocialiteController extends Controller
             ->first();
 
         if ($existing) {
-            return $existing->user;
+            // `withTrashed`, and a query rather than a read off the relation.
+            // A deleted reader has to come back as a *deleted user* so the
+            // caller can say so, instead of a null that the caller can only
+            // report as "the provider sent no email". Explicit because strict
+            // mode does not catch a lazy load on a single-row fetch — see
+            // CLAUDE.md.
+            $user = $existing->user()->withTrashed()->first();
+
+            // A profile picture changes at the provider, and this is the only
+            // path a returning reader takes — so it is the only place the
+            // stored copy can follow it. Written only when it differs, so an
+            // ordinary sign-in stays a read.
+            if ($user && ! $user->trashed() && $existing->avatar !== $social->getAvatar()) {
+                $existing->update(['avatar' => $social->getAvatar()]);
+            }
+
+            return $user;
         }
 
         $email = $social->getEmail() ? mb_strtolower($social->getEmail()) : null;
@@ -90,7 +130,15 @@ class SocialiteController extends Controller
         }
 
         return DB::transaction(function () use ($provider, $social, $email) {
-            $user = User::where('email', $email)->first();
+            // `withTrashed`: a soft-deleted row still holds the unique index
+            // on this address, so `User::create()` below would be a duplicate
+            // key rather than a new reader. Handed back trashed for the caller
+            // to refuse by name.
+            $user = User::withTrashed()->where('email', $email)->first();
+
+            if ($user?->trashed()) {
+                return $user;
+            }
 
             if ($user && ! $this->providerEmailIsVerified($social)) {
                 // Do not silently link. Returning the user here would be an
@@ -108,15 +156,20 @@ class SocialiteController extends Controller
                 'avatar' => $social->getAvatar(),
             ]);
 
-            // The provider has already proven control of this address, but
-            // email_verified_at is guarded, so it is set explicitly below.
-
             SocialAccount::updateOrCreate(
                 ['provider' => $provider, 'provider_id' => $social->getId()],
                 ['user_id' => $user->id, 'avatar' => $social->getAvatar()],
             );
 
-            if (! $user->email_verified_at) {
+            // Only a provider that says it verified the address has proven
+            // anything. Stamping regardless invents a verification nobody
+            // performed — and the account it produces can sit on an address
+            // whose real owner has not signed up yet. An unverified one is
+            // created unstamped and goes through the ordinary mail; the
+            // caller sends it, outside this transaction.
+            //
+            // `email_verified_at` is guarded, hence forceFill.
+            if (! $user->email_verified_at && $this->providerEmailIsVerified($social)) {
                 $user->forceFill(['email_verified_at' => now()])->save();
             }
 

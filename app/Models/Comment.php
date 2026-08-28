@@ -75,9 +75,17 @@ class Comment extends Model
         return $this->belongsTo(Article::class);
     }
 
+    /**
+     * `withTrashed`, because account deletion is a soft delete and the whole
+     * point of it being soft is that a reader's existing comments stay
+     * attributable. Without it the relation is null the moment somebody
+     * deletes their account, and `comment/item.blade.php` reads
+     * `$comment->user->avatar_url` unguarded — so every article page carrying
+     * one of their approved comments answers 500.
+     */
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 
     public function parent(): BelongsTo

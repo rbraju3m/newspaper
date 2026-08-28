@@ -6,6 +6,8 @@ use App\Enums\UserRole;
 use App\Models\SocialAccount;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Auth\Notifications\VerifyEmail;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Testing\TestResponse;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\User as SocialiteUser;
@@ -237,20 +239,7 @@ class OAuthSignInTest extends TestCase
         );
     }
 
-    /**
-     * The stored avatar is written once and never refreshed, which is not what
-     * the code looks like it does. `resolveUser()` returns at case 1 for every
-     * returning reader, so the `updateOrCreate()` below it — whose whole
-     * purpose is the update half, since the create half is what case 3 needs —
-     * is only ever reached when no row with that (provider, provider_id) pair
-     * exists. It therefore always creates and never updates.
-     *
-     * Pinned as it behaves rather than as it reads. The consequence is a
-     * `social_accounts.avatar` that goes stale for ever, which is cosmetic;
-     * the reason to record it is that the next person to read that
-     * `updateOrCreate` will believe it refreshes something.
-     */
-    public function test_a_returning_sign_in_does_not_refresh_the_stored_avatar(): void
+    public function test_a_returning_sign_in_refreshes_the_stored_avatar(): void
     {
         $this->fakeGoogle(['id' => '1001', 'email' => 'rafiq@example.com', 'avatar' => 'https://cdn/old.jpg']);
         $this->get('/auth/google/callback');
@@ -259,7 +248,23 @@ class OAuthSignInTest extends TestCase
         $this->fakeGoogle(['id' => '1001', 'email' => 'rafiq@example.com', 'avatar' => 'https://cdn/new.jpg']);
         $this->get('/auth/google/callback');
 
-        $this->assertSame('https://cdn/old.jpg', SocialAccount::firstOrFail()->avatar);
+        $this->assertSame('https://cdn/new.jpg', SocialAccount::firstOrFail()->avatar);
+    }
+
+    /** An unchanged picture must not turn every sign-in into a write. */
+    public function test_an_unchanged_avatar_is_not_rewritten(): void
+    {
+        $this->fakeGoogle(['id' => '1001', 'email' => 'rafiq@example.com', 'avatar' => 'https://cdn/same.jpg']);
+        $this->get('/auth/google/callback');
+        $this->post('/logout');
+
+        $touched = SocialAccount::firstOrFail()->updated_at;
+
+        $this->travel(2)->minutes();
+        $this->fakeGoogle(['id' => '1001', 'email' => 'rafiq@example.com', 'avatar' => 'https://cdn/same.jpg']);
+        $this->get('/auth/google/callback');
+
+        $this->assertEquals($touched, SocialAccount::firstOrFail()->updated_at);
     }
 
     // ── Refusals ─────────────────────────────────────────────────────────
@@ -322,25 +327,20 @@ class OAuthSignInTest extends TestCase
     }
 
     /**
-     * The asymmetry in `resolveUser()`, pinned as it behaves.
-     *
      * Case 2 refuses to *link* an unverified provider email to a local
-     * account, which is right. Case 3 will happily *create* one from the same
-     * unverified address and stamp `email_verified_at` on it, because the
-     * check is written `if ($user && ! verified)` and there is no `$user`.
+     * account. Case 3 will still create one from that address — refusing
+     * sign-up outright would lock out anyone whose provider simply does not
+     * send the flag — but it must not claim a verification nobody performed,
+     * or the account can sit on an address its real owner has not signed up
+     * with yet.
      *
-     * In practice neither shipped provider reaches this: Facebook only returns
-     * addresses it has confirmed, and Google sends `email_verified`. It
-     * matters the day a third provider is added, and it matters because the
-     * account that results claims a verification nobody performed — enough to
-     * squat an address its real owner has not signed up with yet.
-     *
-     * Not changed here. Refusing sign-up on an unverified address is a product
-     * decision, and the smaller fix — create the account but do not stamp
-     * `email_verified_at` — changes what an existing install's rows mean.
+     * So it is created unstamped and goes through the ordinary mail, which is
+     * what gates commenting.
      */
-    public function test_an_unverified_provider_email_still_creates_a_verified_account(): void
+    public function test_an_unverified_provider_email_creates_an_unverified_account(): void
     {
+        Notification::fake();
+
         $this->fakeGoogle(['id' => '1001', 'email' => 'rafiq@example.com'], verified: false);
 
         $this->get('/auth/google/callback')->assertRedirect(route('home'));
@@ -348,10 +348,22 @@ class OAuthSignInTest extends TestCase
         $user = User::firstOrFail();
 
         $this->assertAuthenticatedAs($user);
-        $this->assertNotNull(
-            $user->email_verified_at,
-            'Recorded as it behaves: the stamp is applied whether or not the provider verified the address.',
-        );
+        $this->assertNull($user->email_verified_at);
+
+        Notification::assertSentTo($user, VerifyEmail::class);
+    }
+
+    public function test_a_verified_provider_email_needs_no_verification_mail(): void
+    {
+        Notification::fake();
+
+        $this->fakeGoogle(['id' => '1001', 'email' => 'rafiq@example.com'], verified: true);
+
+        $this->get('/auth/google/callback')->assertRedirect(route('home'));
+
+        $this->assertNotNull(User::firstOrFail()->email_verified_at);
+
+        Notification::assertNothingSent();
     }
 
     /**
@@ -359,16 +371,12 @@ class OAuthSignInTest extends TestCase
      * leaves the `social_accounts` row behind, since `cascadeOnDelete` is a
      * database constraint and nothing was deleted at the database.
      *
-     * So a reader who deletes their account and signs in with Google again
-     * hits case 1, `$existing->user` resolves to null through the SoftDeletes
-     * scope, and `resolveUser()` returns null — which the controller reports
-     * as *"this social account has no email"*. It is the wrong message, and
-     * registering by email as it suggests fails too, because the soft-deleted
-     * row still holds the unique index on that address.
-     *
-     * Pinned as it behaves. The fix is a decision about what deletion means —
-     * drop the social links on delete, or let a returning reader reclaim the
-     * account — not a wording change.
+     * Deletion stays permanent — the account page promises exactly that — so
+     * signing in again must not resurrect anything. What it must do is say
+     * so: this used to fall through to *"this social account has no email"*
+     * and send the reader off to a registration that cannot succeed either,
+     * because the soft-deleted row still holds the unique index on the
+     * address.
      */
     public function test_a_deleted_reader_cannot_sign_back_in(): void
     {
@@ -385,10 +393,34 @@ class OAuthSignInTest extends TestCase
 
         $this->get('/auth/google/callback')
             ->assertRedirect(route('login'))
-            ->assertSessionHasErrors('login');
+            ->assertSessionHasErrors(['login' => 'এই অ্যাকাউন্টটি মুছে ফেলা হয়েছে। নতুন করে শুরু করতে অন্য একটি ইমেইল ব্যবহার করুন।']);
 
         $this->assertGuest();
         $this->assertSame(0, User::count(), 'No replacement account is created either.');
+        $this->assertSame(1, User::withTrashed()->count(), 'And the deleted one stays deleted.');
+    }
+
+    /**
+     * The same address arriving on a *different* provider identity — a new
+     * Google account on a deleted reader's email. This one reaches case 2,
+     * where the soft-deleted row holds the unique index, so creating a reader
+     * would be a duplicate key and a 500 rather than a refusal.
+     */
+    public function test_a_new_identity_on_a_deleted_readers_address_is_refused(): void
+    {
+        $this->fakeGoogle(['id' => '1001', 'email' => 'rafiq@example.com']);
+        $this->get('/auth/google/callback');
+        $this->post('/logout');
+        User::firstOrFail()->delete();
+
+        $this->fakeProvider('facebook', ['id' => '2002', 'email' => 'rafiq@example.com'], verified: true);
+
+        $this->get('/auth/facebook/callback')
+            ->assertRedirect(route('login'))
+            ->assertSessionHasErrors('login');
+
+        $this->assertGuest();
+        $this->assertSame(0, User::count());
     }
 
     // ── Session ──────────────────────────────────────────────────────────
