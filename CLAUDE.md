@@ -719,7 +719,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 590 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 610 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -727,7 +727,7 @@ coverage exists for both halves of the app:
 | File | Covers |
 |---|---|
 | `HarnessTest` | the harness itself — driver, FULLTEXT index, strict mode |
-| `PublicRoutesTest` | every public URL, canonicalisation, draft visibility, feeds, output-buffer balance |
+| `PublicRoutesTest` | every public URL, canonicalisation, draft visibility, that the feeds parse, output-buffer balance |
 | `AdminAuthorizationTest` | the role matrix, by URL, plus publish/edit/delete actions |
 | `Unit/PolicyTest` | the decision tables, including CommentPolicy's edit window |
 | `SearchTest` | Bangla `MATCH ... AGAINST`, filters, LIKE fallback |
@@ -760,9 +760,16 @@ coverage exists for both halves of the app:
 | `LayoutReorderTest` | the front-page layout manager — drags within and across columns, the cache flush, and that a column change cannot collide |
 | `HomepageCacheTest` | what the front page costs — that card relations load once for the page rather than once per block, that the payload is stored packed and round-trips, and that an unreadable entry rebuilds instead of 500ing |
 | `BackupSyncTest` | the off-site copy — what goes up, what is skipped, what is deleted for failing verification — and the heartbeat and alerting around a failed run |
+| `FeedContentsTest` | what the three feeds *say* — the RSS channel and item fields, the canonical link, the 40-item cap, that a draft, a scheduled story and a retraction stay out, the sitemap's URL set, and Google News's 48-hour window |
 
-Still uncovered: feed *contents* as opposed to well-formedness, the e-paper
-reader, and OAuth sign-in.
+Still uncovered: the e-paper reader and OAuth sign-in.
+
+**The feeds are cached, so a feed test may request each one only once.**
+`feed.rss`, `feed.sitemap` and `feed.news-sitemap` are `Cache::remember()` for
+ten minutes, six hours and five minutes. A second request inside one test
+answers from the first one's payload, so fixtures created in between are
+invisible and the assertion passes against stale content. `FeedContentsTest`
+makes exactly one request per test for that reason.
 
 Tests run on **MySQL**, against `newspaper_test`, not SQLite in-memory:
 `Article::search()` silently falls back to `LIKE` on any non-MySQL driver, so

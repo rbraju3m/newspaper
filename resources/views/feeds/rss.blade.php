@@ -16,7 +16,7 @@
       @if ($article->category)<category>{{ $article->category->name }}</category>@endif
       @if ($article->author)<dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">{{ $article->author->name }}</dc:creator>@endif
       <description>{{ $article->excerpt }}</description>
-      @if ($article->image_url)<enclosure url="{{ $article->image_url }}" type="image/jpeg"/>@endif
+      @if ($article->image_url)<enclosure url="{{ $article->image_url }}" type="{{ $article->image_mime }}"/>@endif
     </item>
 @endforeach
   </channel>

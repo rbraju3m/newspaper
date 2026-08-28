@@ -435,6 +435,33 @@ class Article extends Model
         });
     }
 
+    /**
+     * MIME type of the lead image, for an RSS `<enclosure>`.
+     *
+     * Derived from the path rather than from `media.mime`, because `image` is
+     * a bare path that may be an external URL or a legacy import with no media
+     * row behind it at all — which is the same reason `image_url` reads it.
+     * An enclosure is a typed pointer: a reader that trusts the declared type
+     * renders nothing when a PNG arrives announced as a JPEG, and the feed
+     * gives it no other way to find out.
+     */
+    protected function imageMime(): Attribute
+    {
+        return Attribute::get(function (): ?string {
+            if (! $this->image) {
+                return null;
+            }
+
+            return match (strtolower(pathinfo(parse_url($this->image, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION))) {
+                'png' => 'image/png',
+                'webp' => 'image/webp',
+                'gif' => 'image/gif',
+                'avif' => 'image/avif',
+                default => 'image/jpeg',
+            };
+        });
+    }
+
     protected function publishedAgo(): Attribute
     {
         return Attribute::get(fn (): string => $this->published_at

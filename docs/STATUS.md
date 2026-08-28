@@ -1,6 +1,6 @@
 # Project Status
 
-**Last updated:** 27 August 2026
+**Last updated:** 28 August 2026
 **Branch:** `main`
 **Environment:** running locally against MySQL, seeded with demo content
 
@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile, cold homepage halved; AVIF remains, and it is blocked on the box |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 590 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built but not yet run against a real bucket, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters and rate limits; real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 610 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built but not yet run against a real bucket, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters and rate limits; real branding still open |
 
 ### By the numbers
 
@@ -44,7 +44,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 590 tests, 2,644 assertions:
+tests.** The suite is 610 tests, 2,722 assertions:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -87,13 +87,13 @@ tests.** The suite is 590 tests, 2,644 assertions:
 | `LayoutReorderTest` | 14 | the front-page layout manager: a drag rewriting positions within a column and across them, the emptied column the form omits entirely, the homepage cache flushing so the new order is what renders, unknown block ids refused with nothing moved, the role matrix — and the collision the settings form's own column select used to cause |
 | `HomepageCacheTest` | 8 | what the front page costs to build and to read back: that the three card relations load once for the whole page however many blocks produced it, that every card leaves the build with its relations already on it, that a second build touches no content table, that the payload is stored packed and round-trips its model graph, that a truncated entry and one written by an older build both rebuild rather than 500, and that a cached null is not mistaken for a miss |
 | `BackupSyncTest` | 14 | the off-site copy and the monitoring around it: what goes up and what is skipped as already there, that a dry run writes nothing, that an unconfigured remote skips rather than failing the nightly cron, that a copy arriving truncated is deleted from the remote and fails the run, remote retention keeping the newest, `backup:run` taking the artifacts off-site itself — and the heartbeat, pinged on success, `/fail` on failure, silent when unconfigured, and never able to fail a good backup |
+| `FeedContentsTest` | 20 | what the three feeds *say*, as opposed to whether they parse: the RSS channel's own description of the publication, an item's canonical link, byline, pubDate and excerpt, the enclosure's real image type, the 40-item cap, that a draft, a scheduled story and a retraction all stay out, ordering newest-first, escaping that survives a round trip, the sitemap's homepage/category/article set with an inactive category and a draft absent, and Google News's 48-hour window at both edges |
 
 Writing them turned up six defects that every manual pass had missed — see
 "What the test pass found" below.
 
-Still uncovered, in rough order of value: feed *contents* as opposed to
-well-formedness, the e-paper reader, and OAuth sign-in (which needs the
-provider stubbed).
+Still uncovered, in rough order of value: the e-paper reader, and OAuth
+sign-in (which needs the provider stubbed).
 
 ---
 
@@ -279,6 +279,24 @@ An eighth came out of covering the live blog.
    Verified over real HTTP against a 35-entry blog: two polls, 30 then 4, each
    batch newest-first, cursor landing on the last id and stopping.
 
+A ninth came out of covering the feeds, and it is the smallest of them.
+
+9. **Every RSS enclosure announced itself as a JPEG.** The template carried a
+   literal `type="image/jpeg"`, so a PNG or a WebP lead image went out with the
+   wrong media type. An enclosure is a *typed* pointer and the feed offers no
+   other way to find out what the file is, so a reader that trusts the
+   declaration renders nothing rather than falling back to sniffing.
+
+   Not hypothetical: `MediaSeeder` draws its section plates as PNG and one
+   article on this box is carrying one. It only stayed invisible because that
+   story is not currently in the newest forty.
+
+   `Article::image_mime` derives it from the path, the same source
+   `image_url` reads — `articles.image` is a bare path that may be an external
+   URL or a legacy import with no media row behind it, so `media.mime` is not
+   available for every case. Unknown extensions still say JPEG, which is the
+   safe guess and what the old code assumed for everything.
+
 Two further findings were in the tests themselves and are worth keeping. The
 article factory's generated body is not inert corpus. `BanglaContent` injects one of
 ten phrases as an `<h2>`, one being `জলবায়ু পরিবর্তনের প্রভাব মোকাবিলায়`, and the
@@ -300,11 +318,12 @@ lookup in front of every newsletter submission on the live site too.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 590 tests cover both halves of
+1. **Test coverage is started, not finished.** 610 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
-   search, comment moderation, and the whole reader path from registration
-   through bookmarks, history, comments, the newsletter and polls. What is
-   still uncovered is feed contents, the e-paper reader and OAuth sign-in.
+   search, comment moderation, the whole reader path from registration through
+   bookmarks, history, comments, the newsletter and polls, and what the three
+   feeds actually say. What is still uncovered is the e-paper reader and OAuth
+   sign-in.
 2. ~~**Editor-written bodies are raw HTML rendered unescaped.**~~ **Done.**
    All three — `articles.body`, `live_entries.body` and `pages.body` — are
    still stored as HTML and still printed with `{!! !!}`, but nothing unsafe
@@ -880,8 +899,8 @@ Phase 7 started ahead of the remaining Phase 6 items, and with the cold
 homepage done there is now nothing unblocked left in Phase 6 at all: AVIF needs
 a rebuilt GD or `php-imagick` on this box, and `hreflang` needs a second locale
 to exist. Off-site backups and the health endpoint are done too, which leaves
-**real branding** as the last open item in Phase 7 — plus the three uncovered
-test areas (feed contents, the e-paper reader, OAuth sign-in).
+**real branding** as the last open item in Phase 7 — plus the two uncovered
+test areas (the e-paper reader, OAuth sign-in).
 
 The uptime check itself is the one piece that cannot live here: `/up` now fails
 when a dependency does, and something outside this machine has to be watching
@@ -1012,9 +1031,9 @@ Picking up, in the order they are worth doing:
    monitor on `/up` (it answers 500 now when the database, cache or disk is
    gone), and a dead-man's-switch expecting the backup ping daily just after
    03:00. `DEPLOY.md` → "Knowing it still runs" has both.
-3. **The three uncovered test areas** — feed *contents* as opposed to
-   well-formedness, the e-paper reader, OAuth sign-in (needs the provider
-   stubbed). Feed contents is the cheapest and the most valuable.
+3. **The two remaining uncovered test areas** — the e-paper reader, and OAuth
+   sign-in (needs the provider stubbed). Feed contents was the third and is
+   now done; see `FeedContentsTest`.
 4. **Real branding** — gap 4, the last open Phase 7 item. Needs artwork and
    imprint decisions rather than code.
 
