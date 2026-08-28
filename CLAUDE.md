@@ -719,7 +719,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 610 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 629 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -761,8 +761,9 @@ coverage exists for both halves of the app:
 | `HomepageCacheTest` | what the front page costs — that card relations load once for the page rather than once per block, that the payload is stored packed and round-trips, and that an unreadable entry rebuilds instead of 500ing |
 | `BackupSyncTest` | the off-site copy — what goes up, what is skipped, what is deleted for failing verification — and the heartbeat and alerting around a failed run |
 | `FeedContentsTest` | what the three feeds *say* — the RSS channel and item fields, the canonical link, the 40-item cap, that a draft, a scheduled story and a retraction stay out, the sitemap's URL set, and Google News's 48-hour window |
+| `EpaperReaderTest` | the public e-paper — which issue `/epaper` opens, the back-issue rail, page order and the thumbnail fallback, the shapes a half-built issue takes, and that a malformed date falls through to the catch-alls |
 
-Still uncovered: the e-paper reader and OAuth sign-in.
+Still uncovered: OAuth sign-in.
 
 **The feeds are cached, so a feed test may request each one only once.**
 `feed.rss`, `feed.sitemap` and `feed.news-sitemap` are `Cache::remember()` for

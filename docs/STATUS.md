@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile, cold homepage halved; AVIF remains, and it is blocked on the box |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 610 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built but not yet run against a real bucket, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters and rate limits; real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 629 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built but not yet run against a real bucket, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters and rate limits; real branding still open |
 
 ### By the numbers
 
@@ -44,7 +44,7 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 610 tests, 2,722 assertions:
+tests.** The suite is 629 tests, 2,778 assertions:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -88,12 +88,12 @@ tests.** The suite is 610 tests, 2,722 assertions:
 | `HomepageCacheTest` | 8 | what the front page costs to build and to read back: that the three card relations load once for the whole page however many blocks produced it, that every card leaves the build with its relations already on it, that a second build touches no content table, that the payload is stored packed and round-trips its model graph, that a truncated entry and one written by an older build both rebuild rather than 500, and that a cached null is not mistaken for a miss |
 | `BackupSyncTest` | 14 | the off-site copy and the monitoring around it: what goes up and what is skipped as already there, that a dry run writes nothing, that an unconfigured remote skips rather than failing the nightly cron, that a copy arriving truncated is deleted from the remote and fails the run, remote retention keeping the newest, `backup:run` taking the artifacts off-site itself — and the heartbeat, pinged on success, `/fail` on failure, silent when unconfigured, and never able to fail a good backup |
 | `FeedContentsTest` | 20 | what the three feeds *say*, as opposed to whether they parse: the RSS channel's own description of the publication, an item's canonical link, byline, pubDate and excerpt, the enclosure's real image type, the 40-item cap, that a draft, a scheduled story and a retraction all stay out, ordering newest-first, escaping that survives a round trip, the sitemap's homepage/category/article set with an inactive category and a draft absent, and Google News's 48-hour window at both edges |
+| `EpaperReaderTest` | 19 | the public e-paper reader: which issue `/epaper` opens and that an unpublished newer one does not take it over, a back issue by its own date, the rail's ordering, its cap of 14, that it never offers an unpublished issue and marks the one being read, pages in `page_number` order, the thumbnail fallback, the PDF button appearing only when there is a PDF, the empty states for a fresh install and for an issue published before its pages are uploaded, and that a malformed date falls through to the catch-all routes |
 
 Writing them turned up six defects that every manual pass had missed — see
 "What the test pass found" below.
 
-Still uncovered, in rough order of value: the e-paper reader, and OAuth
-sign-in (which needs the provider stubbed).
+Still uncovered: OAuth sign-in, which needs the provider stubbed.
 
 ---
 
@@ -297,7 +297,7 @@ A ninth came out of covering the feeds, and it is the smallest of them.
    available for every case. Unknown extensions still say JPEG, which is the
    safe guess and what the old code assumed for everything.
 
-Two further findings were in the tests themselves and are worth keeping. The
+Three further findings were in the tests themselves and are worth keeping. The
 article factory's generated body is not inert corpus. `BanglaContent` injects one of
 ten phrases as an `<h2>`, one being `জলবায়ু পরিবর্তনের প্রভাব মোকাবিলায়`, and the
 full-text index covers `body` — so roughly one article in ten matched a search
@@ -312,18 +312,30 @@ resolvable domain, which does mean those four tests need working DNS and about
 150ms of real lookup each. Worth knowing that the rule puts a blocking DNS
 lookup in front of every newsletter submission on the live site too.
 
+And the e-paper's page order is delivered twice over, so the obvious test for
+it does not test what it looks like it tests. Removing `->orderBy('page_number')`
+from `Epaper::pages()` leaves every page still rendering in the right order,
+because `unique(epaper_id, page_number)` is the index MySQL resolves the
+`epaper_id = ?` lookup through and it returns the rows in that order anyway. A
+*wrong* explicit order — `orderBy('id')` — does fail. `EpaperReaderTest` says
+so in the test itself rather than leaving a future reader to assume the
+assertion guards the clause.
+
+The reader turned up no defects otherwise, which is worth stating plainly: it
+was the last uncovered *public* surface, and it was already correct.
+
 ---
 
 ## Known gaps
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 610 tests cover both halves of
+1. **Test coverage is started, not finished.** 629 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, the whole reader path from registration through
-   bookmarks, history, comments, the newsletter and polls, and what the three
-   feeds actually say. What is still uncovered is the e-paper reader and OAuth
-   sign-in.
+   bookmarks, history, comments, the newsletter and polls, what the three feeds
+   actually say, and the public e-paper reader. What is still uncovered is
+   OAuth sign-in.
 2. ~~**Editor-written bodies are raw HTML rendered unescaped.**~~ **Done.**
    All three — `articles.body`, `live_entries.body` and `pages.body` — are
    still stored as HTML and still printed with `{!! !!}`, but nothing unsafe
@@ -899,8 +911,8 @@ Phase 7 started ahead of the remaining Phase 6 items, and with the cold
 homepage done there is now nothing unblocked left in Phase 6 at all: AVIF needs
 a rebuilt GD or `php-imagick` on this box, and `hreflang` needs a second locale
 to exist. Off-site backups and the health endpoint are done too, which leaves
-**real branding** as the last open item in Phase 7 — plus the two uncovered
-test areas (the e-paper reader, OAuth sign-in).
+**real branding** as the last open item in Phase 7 — plus the one uncovered
+test area, OAuth sign-in.
 
 The uptime check itself is the one piece that cannot live here: `/up` now fails
 when a dependency does, and something outside this machine has to be watching
@@ -1031,9 +1043,9 @@ Picking up, in the order they are worth doing:
    monitor on `/up` (it answers 500 now when the database, cache or disk is
    gone), and a dead-man's-switch expecting the backup ping daily just after
    03:00. `DEPLOY.md` → "Knowing it still runs" has both.
-3. **The two remaining uncovered test areas** — the e-paper reader, and OAuth
-   sign-in (needs the provider stubbed). Feed contents was the third and is
-   now done; see `FeedContentsTest`.
+3. **The last uncovered test area** — OAuth sign-in, which needs the provider
+   stubbed. Feed contents and the e-paper reader were the other two and are
+   now done; see `FeedContentsTest` and `EpaperReaderTest`.
 4. **Real branding** — gap 4, the last open Phase 7 item. Needs artwork and
    imprint decisions rather than code.
 
