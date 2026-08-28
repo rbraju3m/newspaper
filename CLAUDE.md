@@ -40,7 +40,7 @@ order. Verify ordering by matching a `Request` against the route collection.
 Before adding a `create()`/`update()`/`fill()` call, check the model's
 `$fillable`. This bug class appeared five times.
 
-### Strict mode does *not* catch a lazy load after `first()` or `find()`
+### The lazy-load guard is closed by hand, because Laravel leaves it open
 
 The half of the rule above that everything relies on has a hole, and it is not
 in this application's code. `Builder::hydrate()` stamps the instance flag that
@@ -73,8 +73,36 @@ straight through the place everybody believes it cannot.** Eager-load on a
 `OAuthSignInTest` is where this was found, and only because a test that was
 *expected* to fail did not.
 
-**Repeating the sweep.** Close the hole in vendor, run everything, put it
-back:
+**This is closed.** `AppServiceProvider::closeTheLazyLoadingHole()` sets the
+flag from a wildcard `eloquent.retrieved` listener, which fires from
+`newFromBuilder()` for every hydrated row — before the `count()` check above,
+so the framework simply overwrites it with the same value when it does agree.
+Outside production only, guarded on `Model::preventsLazyLoading()`, so
+production registers no listener and pays nothing. `HarnessTest` pins both
+halves: that a `first()` result is guarded, and that a *freshly created* model
+is still exempt — the framework skips the violation when `wasRecentlyCreated`,
+and without that exemption every factory in the suite would throw.
+
+Three things follow.
+
+**A lazy load is now a 500 in development where it used to be a silent extra
+query.** That is the point, and it is the same trade the rest of strict mode
+makes. Eager-load on a `first()` the way you would on a `get()`.
+
+**Models restored from `PackedCache` are still unguarded.** `unserialize()`
+does not fire `retrieved`, so a cached Eloquent graph carries the flag off.
+Those graphs are cached *with* their relations loaded, which is the point of
+caching them, so there is normally nothing to lazy-load — but a relation left
+out of the payload will still load in silence. `HomepageCacheTest` is what
+covers that, by asserting the card relations are present.
+
+**It costs one property assignment per hydrated row.** 23 on a cold homepage,
+46 on a category page, and **0 on a warm homepage** — the front page comes back
+from `PackedCache`, which never hydrates through the builder at all.
+
+**Repeating the sweep.** The listener makes a violation loud on its own now, so
+this is only needed to double-check the listener itself. Close the hole in
+vendor, run everything, put it back:
 
 ```bash
 F=vendor/laravel/framework/src/Illuminate/Database/Eloquent/Builder.php
@@ -87,15 +115,14 @@ cp /tmp/Builder.bak $F
 Read `errors` as well as `failures` in the JSON: a violation thrown outside a
 request arrives as an error and is easy to miss.
 
-**The suite passes with the hole closed**, and so does a crawl of every
-parameterless GET route plus a bound example of each parameterised one. Keep
-it that way — it is what makes this sweep worth repeating. The three sites it
-found (`Site\CategoryController` → `children`, `Site\PollController::results()`
-→ `options`, `Admin\LiveEntryController` → `article`) are fixed, and two test
+The suite passes, and so does a crawl of every parameterless GET route plus a
+bound example of each parameterised one. The three sites the first sweep found
+(`Site\CategoryController` → `children`, `Site\PollController::results()` →
+`options`, `Admin\LiveEntryController` → `article`) are fixed, and two test
 files that did the same thing were fixed with them.
 
-Worth knowing before treating a find here as a performance bug: none of those
-three cost a query. A lazy load of a single relation is one query and an eager
+Worth knowing before treating a violation here as a performance bug: none of
+those three cost a query. A lazy load of a single relation is one query and an eager
 load of it is also one query — `where parent_id = ?` becomes
 `where parent_id in (1)` and nothing else changes. What it buys is that the
 rule holds everywhere, so the day one of those reads moves inside a loop the
@@ -799,7 +826,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 654 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 656 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:

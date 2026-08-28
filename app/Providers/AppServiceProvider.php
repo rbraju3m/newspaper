@@ -41,6 +41,7 @@ class AppServiceProvider extends ServiceProvider
     {
         Model::shouldBeStrict(! app()->isProduction());
         Model::unguard(false);
+        $this->closeTheLazyLoadingHole();
 
         if (app()->isProduction()) {
             URL::forceScheme('https');
@@ -171,6 +172,43 @@ class AppServiceProvider extends ServiceProvider
      * Bangla presentation directives. Views use these instead of calling the
      * helper directly so number/date formatting stays consistent site-wide.
      */
+
+    /**
+     * Make `Model::shouldBeStrict()`'s lazy-loading guard cover single-row
+     * fetches, which the framework does not.
+     *
+     * `Builder::hydrate()` stamps the per-instance flag that enforces
+     * `preventLazyLoading` only `if (count($items) > 1)`, so a model that came
+     * back from `first()`, `find()`, route-model binding or `Auth::user()`
+     * carries the guard *off* and lazy-loads in silence. That is the majority
+     * of the models a controller ever holds, and it means an N+1 can walk
+     * through the one place everybody believes it cannot — see CLAUDE.md.
+     *
+     * `retrieved` fires from `newFromBuilder()` for every hydrated row,
+     * *before* that `count()` check, so setting the flag here is simply
+     * overwritten with the same value when the framework does agree. There is
+     * no per-model event on the base class — Eloquent dispatches
+     * `eloquent.retrieved: <Class>` — so it is registered as a wildcard.
+     *
+     * Outside production only, for the same reason the rest of strict mode is:
+     * this turns a silent extra query into a 500, which is what you want while
+     * writing the code and never what you want in front of a reader.
+     */
+    private function closeTheLazyLoadingHole(): void
+    {
+        if (! Model::preventsLazyLoading()) {
+            return;
+        }
+
+        Event::listen('eloquent.retrieved: *', function (string $event, array $models): void {
+            foreach ($models as $model) {
+                if ($model instanceof Model) {
+                    $model->preventsLazyLoading = true;
+                }
+            }
+        });
+    }
+
     private function registerBladeDirectives(): void
     {
         // @bn(1234) -> ১২৩৪

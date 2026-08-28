@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Article;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\LazyLoadingViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -54,5 +55,45 @@ class HarnessTest extends TestCase
         // would pass on code that throws in development.
         $this->assertTrue(Model::preventsLazyLoading());
         $this->assertTrue(Model::preventsSilentlyDiscardingAttributes());
+    }
+
+    /**
+     * Strict mode's lazy-loading guard does not cover single-row fetches on
+     * its own — `Builder::hydrate()` stamps the per-instance flag that
+     * enforces it only `if (count($items) > 1)`, so a model from `first()`,
+     * `find()`, route-model binding or `Auth::user()` carries it *off*.
+     *
+     * `AppServiceProvider::closeTheLazyLoadingHole()` sets the flag from a
+     * wildcard `eloquent.retrieved` listener instead. Without it the whole
+     * category of bug is invisible: the assertion above passes, every test
+     * passes, and the lazy loads happen anyway.
+     */
+    public function test_the_lazy_loading_guard_covers_single_row_fetches(): void
+    {
+        Article::factory()->create();
+
+        $one = Article::query()->first();
+
+        $this->assertTrue(
+            $one->preventsLazyLoading,
+            'A single-row fetch came back unguarded — the retrieved listener is not registered.'
+        );
+
+        $this->expectException(LazyLoadingViolationException::class);
+
+        $one->category;
+    }
+
+    /**
+     * The exemption that keeps every factory working: a model that was just
+     * created has no relations to have eager-loaded, so the framework skips
+     * the violation for it. Pinned because closing the hole above is exactly
+     * the change that could take this with it.
+     */
+    public function test_a_freshly_created_model_may_still_read_a_relation(): void
+    {
+        $article = Article::factory()->create();
+
+        $this->assertNotNull($article->category);
     }
 }

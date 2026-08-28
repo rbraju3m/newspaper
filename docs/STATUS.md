@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile, cold homepage halved; AVIF remains, and it is blocked on the box |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 654 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built but not yet run against a real bucket, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters and rate limits; real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 656 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built but not yet run against a real bucket, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters and rate limits; real branding still open |
 
 ### By the numbers
 
@@ -44,11 +44,11 @@
 - Full admin authorisation matrix verified across admin/editor/reporter/reader
 
 Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 654 tests, 2,907 assertions:
+tests.** The suite is 656 tests, 2,916 assertions:
 
 | File | Tests | Covers |
 |---|---|---|
-| `HarnessTest` | 4 | driver, FULLTEXT index, factories, strict mode |
+| `HarnessTest` | 6 | driver, FULLTEXT index, factories, strict mode — and that the lazy-load guard actually covers single-row fetches, which Laravel's does not |
 | `PublicRoutesTest` | 23 | every public URL, nested category paths, canonical redirect, draft visibility, staff preview, feeds parse as XML, output-buffer balance |
 | `AdminAuthorizationTest` | 22 | the role matrix requested by URL, plus publish, cross-author edit, media delete, self-delete |
 | `Unit/PolicyTest` | 14 | Article/Comment/User policy decision tables and the role ladder, no database |
@@ -365,11 +365,26 @@ of it is also one query — `where parent_id = ?` becomes
 everywhere, so the day one of those reads moves inside a loop the eager load is
 already there.
 
-The result worth keeping is that **the suite now passes with the hole closed**,
-which makes the sweep repeatable as a regression check. `CLAUDE.md` carries the
-four commands. Read the runner's `errors` as well as its `failures`: two of the
-five were thrown outside a request and arrived as errors, which is how the
-first pass missed them.
+**Then closed for good.** `AppServiceProvider::closeTheLazyLoadingHole()` sets
+the flag from a wildcard `eloquent.retrieved` listener — that event fires from
+`newFromBuilder()` for every hydrated row, before the `count()` check, so the
+framework overwrites it with the same value when it does agree. Outside
+production only, guarded on `Model::preventsLazyLoading()`, so production
+registers no listener. `HarnessTest` pins it, and pins the exemption that keeps
+every factory working: a `wasRecentlyCreated` model may still read a relation.
+
+The cost is one property assignment per hydrated row — 23 on a cold homepage,
+46 on a category page, and **0 on a warm homepage**, because the front page
+comes back from `PackedCache` and never hydrates through the builder.
+
+That last point is also the limit: `unserialize()` does not fire `retrieved`,
+so a cached Eloquent graph is still unguarded. Those graphs are cached with
+their relations loaded, so there is normally nothing to lazy-load, and
+`HomepageCacheTest` is what covers it.
+
+Read the runner's `errors` as well as its `failures` if the sweep is ever
+re-run by hand: two of the five findings were thrown outside a request and
+arrived as errors, which is how the first pass missed them.
 
 And a second, smaller one in the same family: **`LoginTest`'s session-rotation
 test could not fail.** Laravel's test client does not carry a response's
@@ -396,7 +411,7 @@ guarding Laravel. `CLAUDE.md` has the shape.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 654 tests cover both halves of
+1. **Test coverage is started, not finished.** 656 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, the whole reader path from registration through
    bookmarks, history, comments, the newsletter and polls, what the three feeds
@@ -1165,13 +1180,8 @@ Picking up, in the order they are worth doing:
    monitor on `/up` (it answers 500 now when the database, cache or disk is
    gone), and a dead-man's-switch expecting the backup ping daily just after
    03:00. `DEPLOY.md` → "Knowing it still runs" has both.
-3. **Consider closing the single-row lazy-load hole for good.** The sweep is
-   done and the code is clean, but nothing stops it drifting back — the guard
-   still does not cover single-row fetches, and only a deliberate re-run of
-   the vendor patch in `CLAUDE.md` would notice. A `Model::retrieved` hook in
-   `AppServiceProvider` setting `preventsLazyLoading` would make it permanent
-   outside production. Not done: it is an enforcement change rather than a
-   fix, and it would start throwing on any path the suite does not cover.
+3. **Nothing outstanding in the codebase itself.** The list above is what is
+   left, and none of it is code.
 4. **Real branding** — gap 4, the last open Phase 7 item. Needs artwork and
    imprint decisions rather than code.
 
