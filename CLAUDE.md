@@ -63,15 +63,43 @@ per-instance copy that decides, and the framework only sets it when the result
 had more than one row.
 
 So `SocialAccount::where(...)->first()` followed by `->user` is a lazy load
-that no test and no local click-through will ever flag, and
-`SocialiteController::resolveUser()` does exactly that today. It is not a
-crash risk; it is the opposite, and that is the problem. **The safety net does
-not cover single-row fetches, so an N+1 can walk straight through the place
-everybody believes it cannot.** Eager-load on a `first()` the same way you
-would on a `get()` — the guard will not remind you.
+that no test and no local click-through will ever flag. It is not a crash
+risk; it is the opposite, and that is the problem. **The safety net does not
+cover single-row fetches** — including every route-model-bound model and
+`Auth::user()`, both of which are single-row fetches — **so an N+1 can walk
+straight through the place everybody believes it cannot.** Eager-load on a
+`first()` the same way you would on a `get()`; the guard will not remind you.
 
 `OAuthSignInTest` is where this was found, and only because a test that was
 *expected* to fail did not.
+
+**Repeating the sweep.** Close the hole in vendor, run everything, put it
+back:
+
+```bash
+F=vendor/laravel/framework/src/Illuminate/Database/Eloquent/Builder.php
+cp $F /tmp/Builder.bak
+sed -i 's/if (count($items) > 1) {/if (count($items) >= 1) {/' $F
+php artisan test            # violations surface as failures AND errors — read both
+cp /tmp/Builder.bak $F
+```
+
+Read `errors` as well as `failures` in the JSON: a violation thrown outside a
+request arrives as an error and is easy to miss.
+
+**The suite passes with the hole closed**, and so does a crawl of every
+parameterless GET route plus a bound example of each parameterised one. Keep
+it that way — it is what makes this sweep worth repeating. The three sites it
+found (`Site\CategoryController` → `children`, `Site\PollController::results()`
+→ `options`, `Admin\LiveEntryController` → `article`) are fixed, and two test
+files that did the same thing were fixed with them.
+
+Worth knowing before treating a find here as a performance bug: none of those
+three cost a query. A lazy load of a single relation is one query and an eager
+load of it is also one query — `where parent_id = ?` becomes
+`where parent_id in (1)` and nothing else changes. What it buys is that the
+rule holds everywhere, so the day one of those reads moves inside a loop the
+eager load is already there.
 
 ### Cached models need allow-listing
 

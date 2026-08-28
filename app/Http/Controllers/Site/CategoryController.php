@@ -15,7 +15,12 @@ class CategoryController extends Controller
     {
         // Resolved manually rather than by implicit binding: the materialised
         // path contains slashes, which route-model binding cannot express.
-        $category = Category::active()->where('path', $category)->first()
+        //
+        // `children` is eager-loaded because the view below renders it. Strict
+        // mode would not have caught reading it lazily — the guard is not set
+        // on a model that came back from a single-row query (see CLAUDE.md) —
+        // so this was one silent extra query on every category page.
+        $category = Category::active()->with('children')->where('path', $category)->first()
             ?? throw new NotFoundHttpException;
 
         $query = ArticleQuery::cards()->inCategory($category)->newest();

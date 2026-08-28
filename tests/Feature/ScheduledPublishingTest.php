@@ -132,7 +132,8 @@ class ScheduledPublishingTest extends TestCase
 
         $this->artisan('articles:publish-due')->assertSuccessful();
 
-        $this->get($article->fresh()->url)
+        // `url` reads `category`, so the refetched row needs it loaded.
+        $this->get($article->fresh('category')->url)
             ->assertOk()
             ->assertSee($article->title, false);
     }

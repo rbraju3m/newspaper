@@ -53,9 +53,17 @@ class LiveEntryController extends Controller
         return back()->with('status', 'আপডেট যুক্ত হয়েছে।');
     }
 
+    /**
+     * A live entry has no policy of its own — permission to edit one is
+     * permission to edit the article it belongs to. That article has to be
+     * loaded before it can be handed to the gate, and `$entry` arrives from
+     * route-model binding, which is a single-row fetch: strict mode does not
+     * flag reading the relation off it (see CLAUDE.md), so this was a silent
+     * extra query on every edit and delete.
+     */
     public function update(Request $request, LiveEntry $entry): RedirectResponse
     {
-        Gate::authorize('update', $entry->article);
+        Gate::authorize('update', $entry->loadMissing('article')->article);
 
         $entry->update($request->validate([
             'headline' => ['nullable', 'string', 'max:300'],
@@ -70,7 +78,7 @@ class LiveEntryController extends Controller
 
     public function destroy(LiveEntry $entry): RedirectResponse
     {
-        Gate::authorize('update', $entry->article);
+        Gate::authorize('update', $entry->loadMissing('article')->article);
 
         $entry->delete();
 

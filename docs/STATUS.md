@@ -343,7 +343,33 @@ It was found because a test expected to fail did not:
 lazy loading, and it works. The consequence is not a crash — it is that
 `CLAUDE.md`'s first rule, the one the whole codebase leans on, covers less
 than everybody assumes, and an N+1 on a single-row fetch will never be flagged
-by a test, a local click-through or `HarnessTest`. Written up in `CLAUDE.md`.
+by a test, a local click-through or `HarnessTest`. That includes every
+route-model-bound model and `Auth::user()`, both of which are single-row
+fetches.
+
+**Swept.** The hole was closed in vendor for a diagnostic run — one character,
+`count($items) > 1` to `>= 1` — and the whole suite plus a crawl of every
+parameterless GET route and a bound example of each parameterised one was run
+against it. Three application sites and two test files came out, all fixed:
+
+| Site | Relation |
+|---|---|
+| `Site\CategoryController::__invoke` | `children`, on every category page |
+| `Site\PollController::results()` | `options`, on the already-voted branch |
+| `Admin\LiveEntryController::update`/`destroy` | `article`, for the gate |
+
+**None of them cost a query**, and that is worth stating rather than quietly
+implying otherwise: a lazy load of one relation is one query and an eager load
+of it is also one query — `where parent_id = ?` becomes
+`where parent_id in (1)`. What the fixes buy is that the rule holds
+everywhere, so the day one of those reads moves inside a loop the eager load is
+already there.
+
+The result worth keeping is that **the suite now passes with the hole closed**,
+which makes the sweep repeatable as a regression check. `CLAUDE.md` carries the
+four commands. Read the runner's `errors` as well as its `failures`: two of the
+five were thrown outside a request and arrived as errors, which is how the
+first pass missed them.
 
 And a second, smaller one in the same family: **`LoginTest`'s session-rotation
 test could not fail.** Laravel's test client does not carry a response's
@@ -1139,10 +1165,13 @@ Picking up, in the order they are worth doing:
    monitor on `/up` (it answers 500 now when the database, cache or disk is
    gone), and a dead-man's-switch expecting the backup ping daily just after
    03:00. `DEPLOY.md` → "Knowing it still runs" has both.
-3. **Watch for lazy loads on single-row fetches.** Strict mode does not catch
-   them (see `CLAUDE.md`), so the guard everything leans on has a hole and an
-   N+1 after a `first()` will never be flagged. Gap 20 is closed; this is what
-   it left behind.
+3. **Consider closing the single-row lazy-load hole for good.** The sweep is
+   done and the code is clean, but nothing stops it drifting back — the guard
+   still does not cover single-row fetches, and only a deliberate re-run of
+   the vendor patch in `CLAUDE.md` would notice. A `Model::retrieved` hook in
+   `AppServiceProvider` setting `preventsLazyLoading` would make it permanent
+   outside production. Not done: it is an enforcement change rather than a
+   fix, and it would start throwing on any path the suite does not cover.
 4. **Real branding** — gap 4, the last open Phase 7 item. Needs artwork and
    imprint decisions rather than code.
 

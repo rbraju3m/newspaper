@@ -154,7 +154,11 @@ class PollVotingTest extends TestCase
         $this->actingAs(User::factory()->create()->fresh())
             ->postJson("/polls/{$this->poll->id}/vote", ['option_id' => $this->second->id]);
 
-        $poll = $this->poll->fresh();
+        // `fresh('options')` rather than `fresh()`: reading the relation off
+        // a refetched single row is a lazy load, and one that strict mode does
+        // not flag (see CLAUDE.md), so the test would quietly cost an extra
+        // query and hide the shape it is asserting about.
+        $poll = $this->poll->fresh('options');
 
         $this->assertSame(
             $poll->votes_count,

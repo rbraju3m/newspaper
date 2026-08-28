@@ -61,8 +61,18 @@ class PollController extends Controller
         return response()->json(['results' => $this->results($poll->fresh('options'))]);
     }
 
+    /**
+     * `loadMissing` rather than a `load` at each call site: one of the two
+     * callers hands over a route-bound poll whose options were never fetched,
+     * and strict mode does not catch that — the guard is off on a model that
+     * came back from a single-row query (see CLAUDE.md). Putting it here means
+     * a third caller cannot get it wrong either, and the caller that already
+     * eager-loaded pays nothing.
+     */
     private function results(Poll $poll): array
     {
+        $poll->loadMissing('options');
+
         return [
             'total' => $poll->votes_count,
             'options' => $poll->options->map(fn ($o) => [
