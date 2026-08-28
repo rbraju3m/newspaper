@@ -7,14 +7,30 @@
  */
 return [
     /*
-     * The masthead is a **fictional** publication. It was `দৈনিক সংবাদ` until
-     * somebody noticed that is the name of a real Bangladeshi daily founded in
-     * 1951 — fine as a throwaway placeholder, not fine on something shown to
-     * people, where it reads as a clone of an outlet that exists. Any name put
-     * here should be checked against the real ones first.
+     * The masthead is a **fictional** publication.
      *
-     * Every one of these is overridable from `.env`, so a deployment with a
-     * real publication behind it changes them there and touches no code.
+     * It was `দৈনিক সংবাদ`, which is a real outlet: *The Sangbad* (সংবাদ),
+     * founded 17 May 1951 in Dhaka and the oldest newspaper in Bangladesh,
+     * still publishing. Fine as a throwaway placeholder, not fine on anything
+     * anybody looks at, where it reads as a clone.
+     *
+     * `দৈনিক আলোরেখা` was checked, August 2026, and found on none of: web
+     * search in Bangla and romanised, the `allbanglanewspaper.org` and
+     * `w3newspapers.com` directories, or any news domain. What that does *not*
+     * cover is the authoritative one — the DFP register lists ~3,176
+     * publications, and dfp.portal.gov.bd currently serves a default
+     * Kubernetes placeholder certificate, so it cannot be read over a
+     * trustworthy connection. A district daily by this name could exist and be
+     * invisible to all of the above.
+     *
+     * Two things to carry forward if this is ever renamed. Check the candidate
+     * the same way, and know that `আলো` is the most crowded stem in Bangladeshi
+     * mastheads — প্রথম আলো, কালের আলো, সময়ের আলো, যুগের আলো, একুশের আলো,
+     * আলোকিত বাংলাদেশ, আলোকিত সকাল — so a name built on it starts closer to
+     * the real ones than one that is not.
+     *
+     * Every value here is overridable from `.env`, so a deployment with a real
+     * publication behind it changes them there and touches no code.
      */
     'name_bn' => env('SITE_NAME_BN', 'দৈনিক আলোরেখা'),
     'name_en' => env('SITE_NAME_EN', 'Dainik Alorekha'),

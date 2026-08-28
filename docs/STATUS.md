@@ -448,11 +448,30 @@ guarding Laravel. `CLAUDE.md` has the shape.
 
    Five things were wrong, and four of them would have shipped:
 
-   - **The masthead was the name of a real newspaper.** `দৈনিক সংবাদ` is a
-     Bangladeshi daily founded in 1951. Fine as a throwaway placeholder,
-     not fine on something anybody looks at, where it reads as a clone of an
-     outlet that exists. It is `দৈনিক আলোরেখা` now, and `config/site.php`
-     carries the warning to check any replacement against the real ones.
+   - **The masthead was the name of a real newspaper.** `দৈনিক সংবাদ` is
+     *The Sangbad* (সংবাদ) — founded 17 May 1951 in Dhaka, the oldest
+     newspaper in Bangladesh, still publishing. Fine as a throwaway
+     placeholder, not fine on something anybody looks at, where it reads as a
+     clone of an outlet that exists.
+
+     It is `দৈনিক আলোরেখা` now, **checked in August 2026** against web search
+     in both Bangla and romanised form, the `allbanglanewspaper.org` and
+     `w3newspapers.com` directories, and any news domain of that name. No hit
+     on any of them.
+
+     What that does not cover is the authoritative source. The DFP register
+     holds roughly **3,176** publications and the aggregators between them list
+     perhaps 150, all national; `dfp.portal.gov.bd` serves a default Kubernetes
+     placeholder certificate, so it cannot be read over a connection worth
+     trusting, and bypassing that to treat unverified bytes as a legal register
+     would be worse than not checking. **So: no prominent collision, which is
+     the bar that matters here, but not a clean registry check.** A district
+     daily by this name could exist and be invisible to everything reachable.
+
+     One thing worth knowing before any future rename: `আলো` is the most
+     crowded stem in Bangladeshi mastheads — প্রথম আলো, কালের আলো, সময়ের আলো,
+     যুগের আলো, একুশের আলো, আলোকিত বাংলাদেশ, আলোকিত সকাল — so a name built on
+     it starts closer to the real ones than one that is not.
    - **The six static pages were `BanglaContent` filler** — the same generated
      noise as the 374 demo articles, on the six pages a reader opens *because*
      they want an answer. They are written now, in
