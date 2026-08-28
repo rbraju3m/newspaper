@@ -175,4 +175,5 @@ of manual probes otherwise. The test suite is safe — `phpunit.xml` pins the
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Why things are built the way they are — the non-obvious calls |
 | [`docs/STATUS.md`](docs/STATUS.md) | What's done, what's left, known gaps |
 | [`docs/DEPLOY.md`](docs/DEPLOY.md) | Putting it on a server: requirements, cron, backups, monitoring, restore |
+| [`docs/HANDOFF.md`](docs/HANDOFF.md) | A snapshot of where the last session stopped — what is blocked, and the wrong turns already taken |
 | [`CLAUDE.md`](CLAUDE.md) | Conventions and traps for anyone (or any agent) working in this repo |
