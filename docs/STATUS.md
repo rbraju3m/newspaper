@@ -17,34 +17,46 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile, cold homepage halved; AVIF remains, and it is blocked on the box |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 670 tests; both halves covered, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built but not yet run against a real bucket, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters and rate limits; real branding still open |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 670 tests covering both halves, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters, rate limits and a demo identity that declares itself. **One thing left, and it needs credentials rather than code:** the off-site copy has never run against a real bucket |
 
 ### By the numbers
 
+Counted rather than remembered, 28 August 2026.
+
 | | |
 |---|---|
-| PHP files (app/database/routes/config) | 173 |
+| PHP files (app/database/routes/config) | 175 |
 | Models · Enums · Policies · Services | 24 · 5 · 3 · 7 |
-| Controllers | 47 |
+| Controllers · Artisan commands | 47 · 13 |
 | Blade templates | 115 |
+| Test files · tests · assertions | 47 · 670 · 2,964 |
 | Routes | 139 total · 73 admin |
 | Database tables | 39 |
-| Seeded content | 55 categories · 374 articles · 107 comments · 36 users |
-| Demo modules | 6 e-paper issues (48 pages) · 7 photo galleries (62 images) |
-| Imagery | 153 media · 761 WebP derivatives · 79 MB on disk |
-| Bundle (gzipped) | 16.9 KB CSS · 24.9 KB JS |
+| Content on this box | 55 categories · 374 articles · 110 comments · 37 users |
+| Demo modules | 5 e-paper issues (40 pages) · 8 photo galleries (64 images) |
+| Imagery | 152 media · 744 WebP derivatives · 78 MB on disk |
+| Bundle (gzipped) | 16.9 KB CSS · 24.0 KB JS |
+
+Two of those differ from what a fresh `db:seed` produces, and the difference is
+manual verification rather than drift in the seeders: `EpaperSeeder` draws
+**six** issues and this box has five, because one was deleted by hand while the
+e-paper admin's delete path was being checked. The gallery and comment counts
+are likewise a few above the seeded figures for the same reason. Re-seeding
+does not restore them — every imagery seeder is idempotent and skips what
+already exists.
 
 ### Verification currently passing
 
-- PHP lint clean across all 133 files; all JS parses
-- All 93 Blade templates compile; every `@include`/`<x-component>` resolves
-- 20/20 authorisation unit assertions (`CommentPolicy`, roles, OAuth gate)
-- All 23 models boot and every relationship instantiates
-- 19/19 public routes and 12/12 admin screens return 200, zero errors logged
-- Full admin authorisation matrix verified across admin/editor/reporter/reader
+- `php artisan test` — 670 tests, 2,964 assertions, nothing skipped or risky
+- PHP lint clean across all 175 files; all 115 Blade templates compile
+- `npm run build` clean; `route:list --except-vendor` resolves all 139
+- Every reachable GET route crawled against seeded data — public and admin,
+  signed in — with no 500 and nothing in `laravel.log`
+- The suite also passes with the framework's lazy-loading guard forced on for
+  single-row fetches, which is what makes that sweep repeatable
 
-Those were ad-hoc scripts run during development. **They are now committed
-tests.** The suite is 670 tests, 2,961 assertions:
+The checks above were ad-hoc scripts once. **They are committed tests now**,
+and this is what they cover — 670 tests, 2,964 assertions across 47 files:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -1266,12 +1278,52 @@ Picking up, in the order they are worth doing:
    `php artisan backup:run` once by hand after setting `BACKUP_HEARTBEAT_URL`
    and watch the heartbeat go green; a switch that was never armed looks
    exactly like a switch that has nothing to report.
-3. **Nothing outstanding in the codebase itself.** The list above is what is
-   left, and none of it is code.
-4. **Real branding** — gap 4, the last open Phase 7 item. Needs artwork and
-   imprint decisions rather than code.
+**Nothing else is outstanding in the codebase.** Both items above need
+credentials or a hostname; neither needs code.
 
 Smaller and self-contained, if the above is blocked: ad impressions are never
 incremented (gap 14), ad creatives are still served at full size (gap 15),
-`/epaper/{date}` cannot reach a second edition on the same day, and the
+`/epaper/{date}` cannot reach a second edition on the same day (gap 8), and the
 `redirects` table still has no middleware reading it (gap 12).
+
+### What the last pass changed
+
+Written down because most of it was found the same way, and that way is worth
+copying: **breaking something to check the test could see it.** Green was not
+evidence until a mutation proved it, and several of these were tests that had
+been passing without ever being able to fail.
+
+Coverage closed the three areas this file had listed as missing — feed
+*contents*, the public e-paper reader, and OAuth sign-in — taking the suite
+from 590 to 670.
+
+**Eight defects in the application.** The RSS enclosure that announced every
+image as a JPEG; deleting an account throwing on every article page carrying
+one of that reader's comments; a second provider identity on a deleted
+reader's address 500ing on a duplicate key; OAuth stamping `email_verified_at`
+on addresses no provider had verified; a stored social avatar written once and
+never refreshed; and three single-row lazy loads.
+
+**Five in the branding.** A masthead matching a real newspaper, an imprint that
+read as real, six pages of generated filler, a zero-byte `favicon.ico`, and a
+maskable icon whose corners were clipped.
+
+**Four in the harness itself**, and those are the ones worth remembering:
+
+- **`LoginTest`'s session-rotation test could not fail.** Laravel's test client
+  does not carry cookies between calls, so the two ids it compared were always
+  different. It now carries the cookie and asserts a control first.
+- **Strict mode never covered single-row fetches.** `Builder::hydrate()` sets
+  the enforcing flag only when a query returned more than one row, so
+  `first()`, `find()`, route-model binding and `Auth::user()` all lazy-loaded
+  in silence. Closed permanently in `AppServiceProvider`.
+- **Two tests lazy-loaded after `fresh()`**, invisible for the same reason.
+- **One assertion in `BrandingTest` checked nothing** once the values it looped
+  over were all blank — PHPUnit flagged it risky, which is the only reason it
+  was noticed.
+
+And two things were verified rather than assumed: the backup heartbeat has now
+been run against a real HTTP endpoint on both its success and failure paths,
+and the masthead has been checked against every public list of Bangladeshi
+newspapers that can be reached — with the limits of that check written down
+next to it, because "we checked it" is the part that survives retelling.
