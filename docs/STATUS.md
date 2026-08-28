@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile, cold homepage halved; AVIF remains, and it is blocked on the box |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 683 tests covering both halves, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters, rate limits and a demo identity that declares itself. **One thing left, and it needs credentials rather than code:** the off-site copy has never run against a real bucket |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 694 tests covering both halves, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters, rate limits and a demo identity that declares itself. **One thing left, and it needs credentials rather than code:** the off-site copy has never run against a real bucket |
 
 ### By the numbers
 
@@ -29,7 +29,7 @@ Counted rather than remembered, 28 August 2026.
 | Models · Enums · Policies · Services | 24 · 5 · 3 · 7 |
 | Controllers · Artisan commands | 47 · 13 |
 | Blade templates | 115 |
-| Test files · tests · assertions | 48 · 683 · 3,027 |
+| Test files · tests · assertions | 49 · 694 · 3,067 |
 | Routes | 139 total · 73 admin |
 | Database tables | 39 |
 | Content on this box | 55 categories · 374 articles · 110 comments · 37 users |
@@ -47,7 +47,7 @@ already exists.
 
 ### Verification currently passing
 
-- `php artisan test` — 683 tests, 3,027 assertions, nothing skipped or risky
+- `php artisan test` — 694 tests, 3,067 assertions, nothing skipped or risky
 - PHP lint clean across all 175 files; all 115 Blade templates compile
 - `npm run build` clean; `route:list --except-vendor` resolves all 139
 - Every reachable GET route crawled against seeded data — public and admin,
@@ -56,13 +56,14 @@ already exists.
   single-row fetches, which is what makes that sweep repeatable
 
 The checks above were ad-hoc scripts once. **They are committed tests now**,
-and this is what they cover — 683 tests, 3,027 assertions across 48 files:
+and this is what they cover — 694 tests, 3,067 assertions across 49 files:
 
 | File | Tests | Covers |
 |---|---|---|
 | `HarnessTest` | 6 | driver, FULLTEXT index, factories, strict mode — and that the lazy-load guard actually covers single-row fetches, which Laravel's does not |
 | `BrandingTest` | 14 | what a fresh install presents itself as: that the six static pages are written rather than generated (and that the filler detector still recognises filler), that the seeded imprint cannot be mistaken for a real one, that no social link is a bare network homepage, that `favicon.ico` is a real multi-size icon rather than an empty file, and that the manifest's maskable icon is its own file with every named icon present |
 | `AdImpressionTest` | 13 | ad impressions and the click-through: that a reported slot is counted, that every slot on a page costs one query rather than one each, that a paused or expired creative is not counted, that the beacon is capped and rate-limited, that a filled slot carries an id and an empty box does not, and that an ad with nowhere to go is not a link to a 404 |
+| `AdCreativeSizingTest` | 11 | that a creative is served at the size the slot needs: the media link an upload records, the ladder and a matching `sizes`, an untracked creative degrading to a plain `src`, a slot-sized creative keeping its single WebP rung, the accessor refusing to lazy-load, the cached payload round-tripping a second model class, and the reserved box surviving |
 | `PublicRoutesTest` | 23 | every public URL, nested category paths, canonical redirect, draft visibility, staff preview, feeds parse as XML, output-buffer balance |
 | `AdminAuthorizationTest` | 22 | the role matrix requested by URL, plus publish, cross-author edit, media delete, self-delete |
 | `Unit/PolicyTest` | 14 | Article/Comment/User policy decision tables and the role ladder, no database |
@@ -391,10 +392,13 @@ The cost is one property assignment per hydrated row — 23 on a cold homepage,
 46 on a category page, and **0 on a warm homepage**, because the front page
 comes back from `PackedCache` and never hydrates through the builder.
 
-That last point is also the limit: `unserialize()` does not fire `retrieved`,
-so a cached Eloquent graph is still unguarded. Those graphs are cached with
-their relations loaded, so there is normally nothing to lazy-load, and
-`HomepageCacheTest` is what covers it.
+That last point is also the limit: `unserialize()` fires no `retrieved`, so
+anything restored from the cache is still unguarded — `PackedCache` and plain
+`Cache::remember()` alike. It means a page built from a cached payload cannot
+demonstrate a violation at all, which matters when writing a test as much as
+when reading one. The payloads are cached with their relations loaded, so
+there is normally nothing to lazy-load; `HomepageCacheTest` and
+`AdCreativeSizingTest` are what pin that.
 
 Read the runner's `errors` as well as its `failures` if the sweep is ever
 re-run by hand: two of the five findings were thrown outside a request and
@@ -425,7 +429,7 @@ guarding Laravel. `CLAUDE.md` has the shape.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 683 tests cover both halves of
+1. **Test coverage is started, not finished.** 694 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, the whole reader path from registration through
    bookmarks, history, comments, the newsletter and polls, what the three feeds
@@ -977,16 +981,39 @@ comes to disagree about what drift is.
     timer, a slot that leaves before its second is up, one beacon per page, an
     id counted once however often it re-enters, and a page with no filled slot
     sending nothing.
-15. **Ad creatives are tracked now, but still served at full size.**
-    ~~`AdController` stores uploads with `$file->store('ads', 'public')`~~ —
-    uploads go through `ImageService` and get a `Media` row and a ladder.
+15. ~~**Ad creatives are tracked now, but still served at full size.**~~
+    **Done.** Uploads have gone through `ImageService` for a while, so every
+    creative already had a WebP ladder — but `ads` kept only `asset`, a bare
+    path, and the slot rendered that. The ladder existed and nothing could
+    reach it, so a phone loading the front page was sent a 970px billboard.
 
-    What is left: `<x-ui.ad-slot>` renders `asset_url`, which is the original,
-    so a creative is still served at whatever size it was uploaded at even
-    though the derivatives now exist. Using them needs the slot to reach the
-    media row — `ads` has no `media_id`, only a path string. One legacy creative
-    from before the fix is still untracked at `ads/qSLsw9…jpg`, 57 KB in a
-    728x90 slot; re-uploading it through the admin now routes it correctly.
+    `ads.media_id` is the link, the same shape as `articles.image_id` beside
+    `articles.image`: the id carries the derivatives, the path stays because it
+    is what an external creative or a pre-media-library import has.
+    `nullOnDelete`, because a media row can be shared and reaping one must
+    blank the link rather than take the ad with it. The migration backfills
+    from `media.path = ads.asset`, which linked five of the six seeded
+    creatives; the sixth is the untracked one this gap already named, and it
+    correctly stayed null and still renders.
+
+    Measured on the live box: the billboard now offers w320/w640/w768/w960
+    with `sizes="(max-width: 970px) 100vw, 970px"`, against one 970px JPEG
+    before.
+
+    Two things worth keeping:
+
+    - **A single-rung srcset is emitted on purpose.** `ImageService` will not
+      upscale, so a 300×250 rectangle produces exactly one rung — the common
+      case for the small slots, not an edge one. The usual advice against a
+      one-candidate srcset is about stopping a browser reaching for something
+      larger, and there is nothing larger; what there is, is WebP where the
+      fallback is JPEG. Measured on the seeded sidebar creative: **6.5 KB
+      against 16.2 KB** for the same pixels. `Article::imageSrcset`'s docblock
+      claimed the opposite and had claimed it since it was written — the code
+      never did that, and the comment is corrected.
+    - **The slot keeps its reserved box.** CLS is zero because `width`,
+      `height` and the `aspect-ratio` are set whether or not a creative has
+      arrived, and a test pins that srcset did not cost it.
 
 16. `ArticleQuery::related()` runs a correlated `EXISTS` subquery for topic
     matching; fine at this size, worth watching as content grows.
@@ -1322,8 +1349,7 @@ Picking up, in the order they are worth doing:
 **Nothing else is outstanding in the codebase.** Both items above need
 credentials or a hostname; neither needs code.
 
-Smaller and self-contained, if the above is blocked: ad creatives are still
-served at full size (gap 15),
+Smaller and self-contained, if the above is blocked:
 `/epaper/{date}` cannot reach a second edition on the same day (gap 8), and the
 `redirects` table still has no middleware reading it (gap 12).
 

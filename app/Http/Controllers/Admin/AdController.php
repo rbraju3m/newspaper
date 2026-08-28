@@ -90,9 +90,16 @@ class AdController extends Controller
             // creative stored with $file->store('ads', 'public') had no Media
             // row at all: nothing tracked it, nothing could re-derive it, and
             // media:backfill could not see it.
-            $data['asset'] = $images->store($file, $request->user()?->id, [
+            $media = $images->store($file, $request->user()?->id, [
                 'alt' => $data['title'],
-            ], 'ads')->path;
+            ], 'ads');
+
+            // Both, and for different reasons. `asset` is where the file is,
+            // which is what an external creative also has; `media_id` is what
+            // reaches the derivative ladder, so the slot can offer a phone
+            // something smaller than a 970px billboard.
+            $data['asset'] = $media->path;
+            $data['media_id'] = $media->id;
         }
 
         unset($data['file']);

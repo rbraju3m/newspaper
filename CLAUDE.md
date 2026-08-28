@@ -89,12 +89,23 @@ Three things follow.
 query.** That is the point, and it is the same trade the rest of strict mode
 makes. Eager-load on a `first()` the way you would on a `get()`.
 
-**Models restored from `PackedCache` are still unguarded.** `unserialize()`
-does not fire `retrieved`, so a cached Eloquent graph carries the flag off.
-Those graphs are cached *with* their relations loaded, which is the point of
+**Anything restored from the cache is still unguarded** — `PackedCache` and
+plain `Cache::remember()` alike. `unserialize()` fires no `retrieved` event,
+so a cached Eloquent model carries the flag off and a lazy load off it throws
+nothing at all.
+
+That is broader than it first looks, and it is worth knowing before writing a
+test: a page whose models come from a cached payload — the front page, and
+every ad slot on the site — **cannot** demonstrate a lazy-loading violation.
+A test that renders such a page and asserts 200 will pass with the eager load
+removed *and* the accessor's guard removed. `AdCreativeSizingTest` asserts
+against a freshly queried model instead, and says why.
+
+These payloads are cached *with* their relations loaded, which is the point of
 caching them, so there is normally nothing to lazy-load — but a relation left
-out of the payload will still load in silence. `HomepageCacheTest` is what
-covers that, by asserting the card relations are present.
+out of one loads in silence. `HomepageCacheTest` covers that for the front
+page by asserting the card relations are present; `AdCreativeSizingTest` does
+the same for `ads.live`.
 
 **It costs one property assignment per hydrated row.** 23 on a cold homepage,
 46 on a category page, and **0 on a warm homepage** — the front page comes back
@@ -908,7 +919,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 683 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 694 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -954,6 +965,7 @@ coverage exists for both halves of the app:
 | `OAuthSignInTest` | Google and Facebook sign-in — the provider guards, the three cases `resolveUser()` decides between, the account-takeover refusal, what a deleted reader is told, and session fixation |
 | `BrandingTest` | what a fresh install presents itself as — written static pages, an imprint that cannot be mistaken for a real one, a real favicon, and the manifest icon set |
 | `AdImpressionTest` | ad impressions counted from the browser, the one-query batch, what is refused, and that an ad with no URL is not a link |
+| `AdCreativeSizingTest` | ad creatives served at the slot size — the media link, the ladder, the single-rung case, and the cached payload |
 
 Every area the coverage table once listed as missing now has a file. What
 `OAuthSignInTest` still cannot reach is the half that only a real provider

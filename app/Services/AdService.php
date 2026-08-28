@@ -22,7 +22,20 @@ class AdService
         return $this->live ??= Cache::remember(
             'ads.live',
             now()->addMinutes(5),
-            fn () => Ad::live()->get()->groupBy('position'),
+            // The creative is eager-loaded here and nowhere else: strict mode
+            // forbids reading it lazily, and this is the one query every slot
+            // on the page is answered from. Only the columns `Media::srcset()`
+            // and the CLS-reserving width/height need, so the cached payload
+            // does not grow a `conversions`-sized column it will not use.
+            //
+            // `Media` is already on `config/cache.php` → `serializable_classes`
+            // — it reaches the cache as Article->featuredImage too — so adding
+            // it to this payload needed no change there. It would have been a
+            // TypeError on the *next* request if it had.
+            fn () => Ad::live()
+                ->with('creative:id,disk,path,conversions,width,height')
+                ->get()
+                ->groupBy('position'),
         );
     }
 

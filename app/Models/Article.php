@@ -388,9 +388,13 @@ class Article extends Model
      *
      * Only the linked Media carries derivatives. The denormalised `image`
      * column is a bare path — often an external URL or a legacy import — so it
-     * gets a plain `src` and no srcset. Returning null rather than a
-     * single-candidate srcset matters: a srcset listing one width tells the
-     * browser that is the only option, which is worse than omitting it.
+     * gets a plain `src` and no srcset.
+     *
+     * Note this returns null only when the ladder is *empty*, not when it has
+     * a single rung — the docblock here used to claim otherwise. A one-rung
+     * srcset is offered on purpose: the rung is WebP where the `src` fallback
+     * is the original, which is a saving at identical pixel dimensions. See
+     * `Ad::creativeSrcset`, where small creatives make it the common case.
      */
     protected function imageSrcset(): Attribute
     {
