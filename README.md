@@ -1,12 +1,21 @@
-# দৈনিক সংবাদ — Bangla Newspaper Platform
+# দৈনিক আলোরেখা — Bangla Newspaper Platform
 
 A Bangla-first news portal built on Laravel 13, designed from an analysis of ten
 Bangladeshi and English mastheads. Server-rendered for SEO, installable as a
 PWA, and built to stay readable on the slow mobile connections most of its
 audience is on.
 
-**Status:** Phases 0–5 complete and running against a live database.
-See [`docs/STATUS.md`](docs/STATUS.md) for exactly where things stand.
+> **দৈনিক আলোরেখা is a fictional publication.** There is no newsroom behind
+> this: the masthead, the imprint and the six static pages are a demo identity
+> that says so on every page a reader might check. Nothing here invents an
+> editor, a publisher or an address — those are a legal requirement on a real
+> Bangladeshi masthead, and a convincing fake is worse than an obvious blank.
+> A deployment with a real publication behind it overrides all of it from
+> `.env`.
+
+**Status:** phases 0–5 complete, 6 and 7 all but finished — 694 tests, and the
+one thing still open needs credentials rather than code. See
+[`docs/STATUS.md`](docs/STATUS.md) for exactly where things stand.
 
 ---
 
@@ -42,7 +51,8 @@ php artisan key:generate
 # Create the database, then set DB_* in .env
 mysql -u root -p -e "CREATE DATABASE newspaper CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
-php artisan migrate --seed      # ~20s: 55 categories, 374 articles, 107 comments
+php artisan migrate --seed      # ~20s: 55 categories, 374 articles, comments,
+                                #      ads, polls and the six static pages
 php artisan storage:link
 npm run build
 
@@ -95,23 +105,27 @@ app/
 ├── Enums/            ArticleStatus, ArticleType, CommentStatus, HomeBlockType, UserRole
 ├── Http/
 │   ├── Controllers/
-│   │   ├── Site/     public site (19)
-│   │   ├── Admin/    CMS (12)
+│   │   ├── Site/     public site (21)
+│   │   ├── Admin/    CMS (14)
 │   │   ├── Auth/     login, register, reset, verify, OAuth
 │   │   └── Account/  reader profile, bookmarks, history, preferences
 │   ├── Middleware/   EnsureUserIsStaff
 │   └── Requests/     form requests, grouped by area
-├── Models/           23 Eloquent models
+├── Models/           24 Eloquent models
 ├── Policies/         Article, Comment, User
-├── Services/         AdService, ArticleQuery, HomepageService, ImageService
-├── Support/          Bangla (digits, dates, Bengali calendar, relative time)
+├── Services/         AdService, ArticleQuery, ErrorAlerter, HomepageService,
+│                     ImageService, NewsletterService, PushService
+├── Console/Commands/ backups, sanitising, seed imagery, demo purge, brand icons
+├── Support/          Bangla (digits, dates, Bengali calendar, relative time),
+│                     Html (allow-list sanitiser), PackedCache, Heartbeat
 └── View/Composers/   LayoutComposer, AdminComposer
 
 resources/
 ├── css/app.css       design tokens + editorial prose styles
 ├── js/
-│   ├── stores/       theme, reader, pwa, toast
-│   └── components/   ticker, share, infinite-scroll, live-blog, editor, …
+│   ├── stores/       theme, reader, pwa, push, toast
+│   └── components/   ticker, share, infinite-scroll, live-blog, editor,
+│                     reading-tracker, ad-impressions, …
 └── views/
     ├── layouts/      site, auth, admin
     ├── components/   article/, home/, ui/, form/, comment/, admin/
@@ -144,8 +158,12 @@ php artisan route:list --except-vendor
 php artisan tinker
 ```
 
-Mail is `MAIL_MAILER=log` in development — verification and reset links land in
-`storage/logs/laravel.log`.
+**Mail is real.** `.env` here sets `MAIL_MAILER=smtp` against an actual
+account, so anything that calls `Mail::` from tinker or a scratch script sends
+a live message from a live address. Set `MAIL_MAILER=log` first if you want
+verification and reset links in `storage/logs/laravel.log`, and leave mail out
+of manual probes otherwise. The test suite is safe — `phpunit.xml` pins the
+`array` mailer and the suite uses `Mail::fake()`.
 
 ---
 
@@ -156,4 +174,5 @@ Mail is `MAIL_MAILER=log` in development — verification and reset links land i
 | [`docs/PLAN.md`](docs/PLAN.md) | Competitive analysis of the ten reference sites, design system, IA, phase plan |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Why things are built the way they are — the non-obvious calls |
 | [`docs/STATUS.md`](docs/STATUS.md) | What's done, what's left, known gaps |
+| [`docs/DEPLOY.md`](docs/DEPLOY.md) | Putting it on a server: requirements, cron, backups, monitoring, restore |
 | [`CLAUDE.md`](CLAUDE.md) | Conventions and traps for anyone (or any agent) working in this repo |

@@ -132,6 +132,30 @@ could seize the matching account. Linking only happens when the provider asserts
 `email_verified` / `verified_email`. Otherwise the login is **refused** and the
 reader is told to sign in with their password.
 
+Where there is *no* local account, the reader is still signed up — refusing
+would lock out anyone whose provider simply does not send the flag — but the
+account is created **unstamped** and goes through the ordinary verification
+mail. Stamping `email_verified_at` on an address nobody verified claims a
+verification that did not happen, and lets an account sit on an address whose
+real owner has not signed up yet. Commenting is what verification gates, so
+nothing is lost by making them prove it.
+
+### Account deletion is permanent, and comments survive it
+
+The account page says saved stories and reading history cannot be recovered, so
+signing back in with the same social identity resurrects nothing — it says the
+account was deleted, and the address stays spoken for because the soft-deleted
+row still holds the unique index.
+
+The delete is *soft* so a reader's published comments stay attributable, and
+`Comment::user()` therefore declares `withTrashed()`. Without it the relation
+went null the moment anybody deleted their account and the comment thread threw,
+which made the soft delete's entire purpose a comment in the code rather than a
+behaviour. `Article::author()` deliberately does **not** do this: every byline
+template guards `@if ($article->author)`, so a deleted staff account drops the
+byline instead of taking the page down. A comment without its author is not a
+comment; an article without a byline still is.
+
 ### Guarded attributes stay guarded
 
 `email_verified_at`, `moderated_by`, `moderated_at` and the `*_count` columns are
@@ -201,6 +225,21 @@ Every ad box renders at its full reserved aspect ratio whether filled or not.
 Layout shift from late-arriving creative is the single worst flaw across all ten
 reference sites.
 
+### An impression is what a reader saw, not what the server rendered
+
+`ads.impressions` is written by the browser. Counting it while building the page
+is one line and wrong in both directions: creatives are `loading="lazy"`, so a
+slot below the fold is frequently never fetched — measuring the front page for
+CLS found only one of its three slots had loaded — while every crawler that
+fetches the HTML would count as a reader. An advertiser paying per impression
+would be billed the second number for the first.
+
+So the client applies the industry rule — half the creative in view for one
+continuous second — and posts every slot that qualified in one beacon, which the
+endpoint turns into one query. It cannot prove the browser was honest, and
+nothing client-reported can; a server-side count would be just as forgeable, by
+loading the page, and wrong as well.
+
 ### Infinite scroll degrades
 
 The "আরও খবর" control is a real crawlable `<a href>` upgraded by Alpine. The
@@ -263,4 +302,8 @@ submission would be actively harmful.
 | One allow-list for articles, live entries and pages | A static page cannot carry markup an article may not | Three allow-lists is three things to keep in step with `.prose-editorial`, and nothing has yet wanted the difference. `SanitizeContentBodies::TARGETS` is the list of what is covered |
 | Body editor is a textarea with HTML helpers, not WYSIWYG | Editors must know a little HTML | The server-side sanitising a WYSIWYG would need now exists, so this is a UI decision rather than a safety one |
 | Views counted inline, not queued | A write on article reads | One `UPDATE` is cheaper than a queue round trip at this scale; a session guard stops refresh inflation |
-| Placeholder app icons | Not real branding | GD-drawn so the manifest validates; swap in real artwork |
+| App icons are drawn, and carry no lettering | They are shapes, not a wordmark | GD does no complex shaping, so Bangla conjuncts come out unformed and vowel signs out of order. A nameplate-shaped block beats a wrong nameplate — the same call `EpaperSeeder` makes. `brand:icons` redraws the set, `any` and `maskable` as separate files because only a *circle* of 80% diameter survives a launcher mask |
+| The masthead and imprint are a fictional demo identity that says so | The site cannot be mistaken for a working newspaper, which is the point | The imprint fields are a legal requirement for a real paper, `demo:purge` deliberately keeps them, and they held a plausible Bangla name and a real Dhaka media-district address. A plausible fake is worse than an obvious blank because a blank gets noticed |
+| A single-rung `srcset` is emitted rather than suppressed | Contradicts the usual advice against one-candidate srcsets | That advice is about stopping a browser reaching for something larger, and `ImageService` will not upscale, so for a slot-sized creative there is nothing larger. What there is, is WebP where the fallback is JPEG: 6.5 KB against 16.2 KB on the seeded sidebar creative |
+| Strict mode's lazy-load guard is closed by hand in `AppServiceProvider` | An app-level workaround for a framework behaviour | `Builder::hydrate()` sets the enforcing flag only when a query returned more than one row, so `first()`, `find()`, route-model binding and `Auth::user()` all lazy-load in silence — most of the models a controller holds. The rule `CLAUDE.md` opens with covered a fraction of what everyone assumed |
+| Cached models remain unguarded even so | A page built from a cached payload cannot demonstrate a violation | `unserialize()` fires no `retrieved`, and there is no hook that does. The payloads are cached *with* their relations, so there is normally nothing to lazy-load; what it costs is that such a page cannot be used to *test* for one |

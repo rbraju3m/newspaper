@@ -177,8 +177,10 @@ sketch.
 
 ## 5. Implementation Phases — as built
 
-Phases 0–5 are complete and verified against a live database. Phases 6–7 are
-outstanding. Deviations from the original plan are called out inline.
+Phases 0–5 are complete and verified against a live database. Phases 6 and 7
+are all but finished — what remains in each needs something this repository
+cannot supply, and is named below. Deviations from the original plan are called
+out inline.
 
 ### Phase 0 — Foundation ✅
 Laravel 13 · MySQL · Vite + Tailwind 4 + Alpine · self-hosted Noto Serif/Sans
@@ -223,9 +225,10 @@ comment moderation (single + bulk) · category tree · tags with merge · topic
 clusters · drag-and-drop front-page layout · users · ads · static pages ·
 settings.
 
-*Deviation:* e-paper upload and photo-gallery CRUD were in scope and are **not
-built** — the public-facing readers exist, but issues and galleries must be
-inserted by hand. Tracked in `STATUS.md`.
+*Deviation, since closed:* e-paper upload and photo-gallery CRUD were in scope
+and shipped late. Both now have full admin screens — drag ordering, multi-file
+upload, covers, deletion that takes its files with it — and both have demo
+seeders behind them.
 
 ### Phase 5 — Interactivity & polish ✅
 PWA (manifest, service worker, offline page, install prompt, update banner) ·
@@ -233,29 +236,55 @@ live blog with polling timeline and key-points rail · toast notifications ·
 skeleton loaders · sticky share rail · keyboard shortcuts · back-to-top ·
 offline banner.
 
-*Deviation:* push notifications were in scope. The service worker has the
-handlers, but subscription storage, VAPID config and the sending side are **not
-built**. Either finish or strip — see `STATUS.md`.
+*Deviation, since closed:* push notifications were in scope and only the
+service-worker handlers existed. The rest is built — `push_subscriptions`,
+VAPID config, `PushService`, subscribe/unsubscribe endpoints, an Alpine store,
+`push:keys`, `push:send`, and a send button in the article editor. Guests
+subscribe, because most readers of a news site are not signed in, and sending
+is always an action somebody takes rather than a model event.
 
-### Phase 6 — SEO & performance ⬜ *not started*
-`NewsArticle` JSON-LD, OG/Twitter cards, sitemaps and canonical URLs already
-shipped in Phase 2. What remains:
+### Phase 6 — SEO & performance ◐ *nothing unblocked left*
+`NewsArticle` JSON-LD, OG/Twitter cards, sitemaps and canonical URLs shipped in
+Phase 2. Since then:
 
-- **Wire `srcset`/`sizes` through the card and hero components.** `ImageService`
-  already produces a 320/640/960/1600 WebP ladder and `Media::srcset()` exists;
-  templates still emit a single `src`. Largest available mobile win.
-- AVIF alongside WebP where the source justifies it
-- Lighthouse ≥ 90 on homepage and article, mobile profile
-- Core Web Vitals against the budget in §6 (LCP < 2.5s, CLS < 0.1)
-- Reduce the cold-homepage query count (~80 cold vs 15 warm)
-- `hreflang` once a second locale exists
+- ~~Wire `srcset`/`sizes` through the card and hero components~~ **done**, and
+  through the gallery grid and the ad slots as well. A `w768` rung was added
+  when Lighthouse showed the hero taking a 960 where 768 would do.
+- ~~Lighthouse ≥ 90 on homepage and article, mobile~~ **done** — 95–99
+  performance, **100** accessibility, 100 best-practices, 100 SEO on both.
+- ~~Core Web Vitals against the budget~~ **done** — LCP 2.0–2.1s, CLS 0.000,
+  and zero layout-shift entries with every lazy ad creative forced to load.
+- ~~Reduce the cold-homepage query count~~ **done** — 93 to 48, and the cached
+  payload 555 KB to 41 KB by storing it packed.
+- **AVIF alongside WebP** — blocked on the box, not the code: this PHP has
+  neither `imageavif()` nor Imagick.
+- **`hreflang`** — needs a second locale to exist. The columns are there and
+  nothing else is.
 
-### Phase 7 — Hardening & launch ⬜ *not started*
-Test suite — only Laravel's stock `ExampleTest` stubs exist, and
-`php artisan test` currently fails because `phpunit.xml` targets SQLite
-`:memory:` while `pdo_sqlite` is not installed. All verification so far has been
-ad-hoc scripts · ~~HTML sanitising for editor-written bodies~~ (done) · ~~purge demo data and logins~~ (`demo:purge`, run at deploy) ·
-real branding · ~~rate-limit review~~ (60 of 61 write routes) · ~~counter drift~~ (`counters:recompute`, nightly) · ~~scheduled publishing~~ (`articles:publish-due`, every minute) · ~~backups~~ (`backup:run`, nightly) · ~~error tracking~~ (`ErrorAlerter` + `errors:digest`) · ~~deploy runbook~~ (`docs/DEPLOY.md`).
+### Phase 7 — Hardening & launch ◐ *one item, and it needs credentials*
+~~Test suite — only Laravel's stock `ExampleTest` stubs exist, and
+`php artisan test` fails because `phpunit.xml` targets SQLite `:memory:` while
+`pdo_sqlite` is not installed.~~ **694 tests, 3,067 assertions**, on MySQL
+against `newspaper_test`, because `Article::search()` silently degrades to
+`LIKE` on any other driver and the `MATCH ... AGAINST` path would never be
+exercised.
+
+Done since: ~~HTML sanitising for editor-written bodies~~ · ~~purge demo data
+and logins~~ (`demo:purge`) · ~~rate-limit review~~ (60 of 61 write routes) ·
+~~counter drift~~ (`counters:recompute`, nightly) · ~~scheduled publishing~~
+(`articles:publish-due`, every minute) · ~~backups~~ (`backup:run`, nightly,
+verified) · ~~error tracking~~ (`ErrorAlerter` + `errors:digest`) · ~~deploy
+runbook~~ (`docs/DEPLOY.md`) · ~~a health endpoint that fails when a dependency
+does~~ (`/up`) · ~~off-site backups and a dead-man's-switch~~ (`backup:sync`,
+`BACKUP_HEARTBEAT_URL`) · ~~real branding~~ (a demo identity that declares
+itself).
+
+**Open:** the off-site copy has never run against a real bucket. Everything
+about it is proven against a local directory standing in for the remote; what
+is unproven is the half only a real endpoint has — credentials, region and
+endpoint resolution, path-style addressing, and the multipart upload a 78 MB
+archive will take, which is the case where the ETag stops being an MD5.
+`STATUS.md` has the three commands.
 
 ---
 
@@ -267,8 +296,14 @@ before touching this code:
 1. **`cache.serializable_classes => false`** — no PHP classes may be
    unserialized from cache at all. Every cached Eloquent payload needs an
    explicit allow-list entry.
-2. **`Model::shouldBeStrict()`** — lazy loading and mass-assigning guarded
-   attributes both throw outside production.
+2. **`Model::shouldBeStrict()`** — mass-assigning guarded attributes throws
+   outside production, and so does lazy loading, but **only on models that
+   came back from a multi-row query**. `Builder::hydrate()` sets the enforcing
+   flag under `if (count($items) > 1)`, so `first()`, `find()`, route-model
+   binding and `Auth::user()` all lazy-load in silence — most of the models a
+   controller ever holds. `AppServiceProvider::closeTheLazyLoadingHole()`
+   closes it with a wildcard `eloquent.retrieved` listener; models restored
+   from the cache stay outside it, because `unserialize()` fires no event.
 3. **PHP attributes for `#[Scope]`, `#[Fillable]`, `#[Hidden]`** — the newer
    model conventions are used throughout.
 

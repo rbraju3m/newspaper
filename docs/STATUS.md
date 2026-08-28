@@ -37,13 +37,21 @@ Counted rather than remembered, 28 August 2026.
 | Imagery | 152 media · 744 WebP derivatives · 78 MB on disk |
 | Bundle (gzipped) | 16.9 KB CSS · 24.0 KB JS |
 
-Two of those differ from what a fresh `db:seed` produces, and the difference is
+Some of those differ from what a fresh `db:seed` produces, and the difference is
 manual verification rather than drift in the seeders: `EpaperSeeder` draws
 **six** issues and this box has five, because one was deleted by hand while the
 e-paper admin's delete path was being checked. The gallery and comment counts
 are likewise a few above the seeded figures for the same reason. Re-seeding
 does not restore them — every imagery seeder is idempotent and skips what
 already exists.
+
+One more piece of drift is worth knowing before it costs somebody twenty
+minutes: **`admin@newspaper.test` does not exist on this box.** `UserSeeder`
+creates it and the README lists it, but it was removed here at some point and
+the admin account is a real address instead. `editor@newspaper.test` and
+`reader@newspaper.test` are both present, and an editor reaches everything
+under `manage-taxonomy` — which is most of the admin, but not ads, pages, users
+or settings.
 
 ### Verification currently passing
 
