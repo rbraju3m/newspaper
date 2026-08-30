@@ -13,9 +13,11 @@ audience is on.
 > A deployment with a real publication behind it overrides all of it from
 > `.env`.
 
-**Status:** phases 0–5 complete, 6 and 7 all but finished — 694 tests, and the
-one thing still open needs credentials rather than code. See
-[`docs/STATUS.md`](docs/STATUS.md) for exactly where things stand.
+**Status:** phases 0–5 complete, 6 and 7 all but finished — 752 tests, and
+nothing unblocked left in the codebase. What remains needs credentials or a
+public hostname rather than code: the off-site backup copy has never run
+against a real bucket, and the two external watchers cannot be created from
+here. See [`docs/STATUS.md`](docs/STATUS.md) for exactly where things stand.
 
 ---
 

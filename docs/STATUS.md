@@ -21,21 +21,28 @@
 
 ### By the numbers
 
-Counted rather than remembered, 28 August 2026.
+Counted rather than remembered, 30 August 2026.
 
 | | |
 |---|---|
-| PHP files (app/database/routes/config) | 175 |
-| Models · Enums · Policies · Services | 24 · 5 · 3 · 7 |
-| Controllers · Artisan commands | 47 · 13 |
-| Blade templates | 115 |
+| PHP files (app/database/routes/config) | 179 |
+| Models · Enums · Policies · Services | 24 · 5 · 3 · 8 |
+| Controllers · Artisan commands | 47 · 14 |
+| Blade templates | 116 |
 | Test files · tests · assertions | 51 · 752 · 3,220 |
-| Routes | 139 total · 73 admin |
+| Routes | 140 total · 73 admin |
 | Database tables | 39 |
 | Content on this box | 55 categories · 374 articles · 110 comments · 37 users |
 | Demo modules | 5 e-paper issues (40 pages) · 8 photo galleries (64 images) |
 | Imagery | 152 media · 744 WebP derivatives · 78 MB on disk |
-| Bundle (gzipped) | 16.9 KB CSS · 24.0 KB JS |
+| Bundle (gzipped) | 17.0 KB CSS · 25.2 KB JS |
+
+The code figures moved on 30 August and the content ones did not: `Services`
+and `Artisan commands` each gained one — `RedirectResolver` and
+`redirects:import` — and `Support` gained `Avatar`, which is what carries the
+PHP-file count from 175 to 179. The JS bundle is 1.2 KB heavier than this table
+last claimed; that predates those three commits, none of which shipped
+JavaScript.
 
 Some of those differ from what a fresh `db:seed` produces, and the difference is
 manual verification rather than drift in the seeders: `EpaperSeeder` draws
