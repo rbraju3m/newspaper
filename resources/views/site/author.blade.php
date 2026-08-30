@@ -11,7 +11,7 @@
     'jobTitle' => $author->designation,
     'description' => $author->bio,
     'url' => route('author.show', $author),
-    'image' => $author->avatar_url,
+    'image' => $author->avatar_photo_url,
 ]), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) !!}
 </script>
 @endpush

@@ -801,6 +801,24 @@ They carry **no lettering**, and must not. GD does no complex shaping, so
 Bangla conjuncts and vowel signs come out unformed and out of order — the same
 reason `EpaperSeeder` draws a nameplate-shaped block rather than a nameplate.
 
+### Drawn images are wordless; SVG is the exception
+
+`brand:icons` and `EpaperSeeder` carry no lettering because **GD** does no
+complex shaping — Bangla conjuncts and vowel signs come out unformed and out
+of order.
+
+That rule is about GD, not about images. **An SVG is shaped by the browser**,
+so text in one renders correctly in Bangla. `App\Support\Avatar` relies on
+exactly that: the fallback avatar is an SVG data URI carrying real initials,
+where a GD-drawn PNG would have had to be a wordless shape.
+
+Two things follow if you touch it. It is delivered as a `data:` URI, so it is
+**not fetchable by a crawler** — anything putting an avatar into metadata
+wants `User::avatar_photo_url`, which is null when there is no real
+photograph. And the URI is built with `rawurlencode`, not a targeted escape,
+so it cannot carry a quote into the single-quoted Alpine expression in
+`account/index.blade.php`.
+
 ### Bangla in the UI
 
 All reader- and admin-facing strings are Bangla. Use the Blade directives rather
@@ -952,7 +970,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 742 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 752 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -1000,6 +1018,7 @@ coverage exists for both halves of the app:
 | `AdImpressionTest` | ad impressions counted from the browser, the one-query batch, what is refused, and that an ad with no URL is not a link |
 | `AdCreativeSizingTest` | ad creatives served at the slot size — the media link, the ladder, the single-rung case, and the cached payload |
 | `RedirectTest` | old-CMS URL preservation — that the lookup hangs off the 404 and costs a resolving request nothing, what matches, the loop and method guards, hit counting, and `redirects:import` including the rules it warns will never fire |
+| `AvatarTest` | the fallback avatar — that no page carrying a face reaches a third-party host, that Bangla initials survive into the SVG, that the data URI is inert in an attribute, and that structured data gets a real photograph or none |
 
 Every area the coverage table once listed as missing now has a file. What
 `OAuthSignInTest` still cannot reach is the half that only a real provider

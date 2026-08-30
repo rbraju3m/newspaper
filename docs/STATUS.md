@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile, cold homepage halved; AVIF remains, and it is blocked on the box |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 742 tests covering both halves, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters, rate limits and a demo identity that declares itself. **One thing left, and it needs credentials rather than code:** the off-site copy has never run against a real bucket |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 752 tests covering both halves, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters, rate limits and a demo identity that declares itself. **One thing left, and it needs credentials rather than code:** the off-site copy has never run against a real bucket |
 
 ### By the numbers
 
@@ -29,7 +29,7 @@ Counted rather than remembered, 28 August 2026.
 | Models · Enums · Policies · Services | 24 · 5 · 3 · 7 |
 | Controllers · Artisan commands | 47 · 13 |
 | Blade templates | 115 |
-| Test files · tests · assertions | 50 · 742 · 3,196 |
+| Test files · tests · assertions | 51 · 752 · 3,220 |
 | Routes | 139 total · 73 admin |
 | Database tables | 39 |
 | Content on this box | 55 categories · 374 articles · 110 comments · 37 users |
@@ -55,7 +55,7 @@ or settings.
 
 ### Verification currently passing
 
-- `php artisan test` — 742 tests, 3,196 assertions, nothing skipped or risky
+- `php artisan test` — 752 tests, 3,220 assertions, nothing skipped or risky
 - PHP lint clean across all 175 files; all 115 Blade templates compile
 - `npm run build` clean; `route:list --except-vendor` resolves all 139
 - Every reachable GET route crawled against seeded data — public and admin,
@@ -64,7 +64,7 @@ or settings.
   single-row fetches, which is what makes that sweep repeatable
 
 The checks above were ad-hoc scripts once. **They are committed tests now**,
-and this is what they cover — 742 tests, 3,196 assertions across 50 files:
+and this is what they cover — 752 tests, 3,220 assertions across 51 files:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -111,8 +111,10 @@ and this is what they cover — 742 tests, 3,196 assertions across 50 files:
 | `HomepageCacheTest` | 8 | what the front page costs to build and to read back: that the three card relations load once for the whole page however many blocks produced it, that every card leaves the build with its relations already on it, that a second build touches no content table, that the payload is stored packed and round-trips its model graph, that a truncated entry and one written by an older build both rebuild rather than 500, and that a cached null is not mistaken for a miss |
 | `BackupSyncTest` | 14 | the off-site copy and the monitoring around it: what goes up and what is skipped as already there, that a dry run writes nothing, that an unconfigured remote skips rather than failing the nightly cron, that a copy arriving truncated is deleted from the remote and fails the run, remote retention keeping the newest, `backup:run` taking the artifacts off-site itself — and the heartbeat, pinged on success, `/fail` on failure, silent when unconfigured, and never able to fail a good backup |
 | `FeedContentsTest` | 20 | what the three feeds *say*, as opposed to whether they parse: the RSS channel's own description of the publication, an item's canonical link, byline, pubDate and excerpt, the enclosure's real image type, the 40-item cap, that a draft, a scheduled story and a retraction all stay out, ordering newest-first, escaping that survives a round trip, the sitemap's homepage/category/article set with an inactive category and a draft absent, and Google News's 48-hour window at both edges |
-| `EpaperReaderTest` | 19 | the public e-paper reader: which issue `/epaper` opens and that an unpublished newer one does not take it over, a back issue by its own date, the rail's ordering, its cap of 14, that it never offers an unpublished issue and marks the one being read, pages in `page_number` order, the thumbnail fallback, the PDF button appearing only when there is a PDF, the empty states for a fresh install and for an issue published before its pages are uploaded, and that a malformed date falls through to the catch-all routes |
+| `EpaperReaderTest` | 31 | the public e-paper reader: which issue `/epaper` opens and that an unpublished newer one does not take it over, a back issue by its own date, the rail's ordering, its cap of 14, that it never offers an unpublished issue and marks the one being read, pages in `page_number` order, the thumbnail fallback, the PDF button appearing only when there is a PDF, the empty states for a fresh install and for an issue published before its pages are uploaded, that a malformed date falls through to the catch-all routes, and — since editions arrived — how a day holding two of them resolves, how `?edition=` names one, the canonical URL and its 301, the edition switcher, and that the rail stays inside the edition being read |
 | `OAuthSignInTest` | 24 | Google and Facebook sign-in: an unknown provider and one with no credentials both 404, a configured one reaches its real consent screen, the login page offers only what is configured, the three cases `resolveUser()` decides between, the refusal that stops an unverified provider email taking over a local account, a second provider linking to the same reader, no email and no id and a suspended reader and a throwing provider all refused, session fixation with a control that proves the harness, an unverified address creating an unverified account that gets the mail, and what a deleted reader is told on both the identity and the address route |
+| `RedirectTest` | 36 | old-CMS URL preservation: that the lookup hangs off the 404 so a live page wins and a resolving request never reads the table, deep legacy paths and `firstOrFail()` 404s, matching with or without a leading slash and case-insensitively, query-string rules and query carry-over, the self-loop and POST and admin/api guards, hit counting that leaves `updated_at` alone, and `redirects:import` — normalising, upserting, `--dry-run`, and the rules it warns will never fire because live content already answers them |
+| `AvatarTest` | 10 | the locally drawn fallback avatar: that no page carrying a face reaches a third-party host (with a control proving the page really renders one), that Bangla initials survive into the SVG, that the data URI is inert in every attribute it is printed in, that an uploaded or provider photograph still wins, and that structured data gets a real photograph or no key at all |
 
 Writing them turned up six defects that every manual pass had missed — see
 "What the test pass found" below.
@@ -437,7 +439,7 @@ guarding Laravel. `CLAUDE.md` has the shape.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 742 tests cover both halves of
+1. **Test coverage is started, not finished.** 752 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, the whole reader path from registration through
    bookmarks, history, comments, the newsletter and polls, what the three feeds
@@ -1006,8 +1008,12 @@ comes to disagree about what drift is.
 
 ### Smaller
 
-13. Scheduled articles need a cron entry (`status=scheduled` past its
-    `published_at` is counted on the dashboard but never auto-publishes).
+13. ~~Scheduled articles need a cron entry (`status=scheduled` past its
+    `published_at` is counted on the dashboard but never auto-publishes).~~
+    **Done**, and had been for a while — this entry was simply never struck
+    through. `articles:publish-due` runs every minute from
+    `routes/console.php`, and §"Decisions the runbook surfaced" above has
+    described it as fixed the whole time.
 14. ~~Ad impressions are never incremented — only clicks are.~~ **Done.**
     `impressions` sat at zero for the life of the project while `clicks` was
     maintained, so every CTR the admin showed was 0.0% by construction.
@@ -1252,20 +1258,54 @@ In rough order of value:
    payload 555 KB to 41 KB. See gaps 17 and 19.
 7. `hreflang` + canonical review once a second locale exists.
 
-Two things the Lighthouse pass will surface that are decisions, not bugs:
+Two things the Lighthouse pass surfaced. Both were described here as
+decisions rather than bugs, and both turned out to be neither — the first was
+real and is fixed, the second was simply untrue.
 
-- **Author avatars are third-party.** `User::avatar_url` falls back to
-  `ui-avatars.com` for all 36 seeded users, so every author page and comment
-  thread makes external requests. Seeding local avatars would remove them.
-- **Seeded ads are inactive.** All six ship `is_active = 0`, so `Ad::live()`
-  returns none and every slot renders its placeholder. The creatives now
-  exist; flip the flag if the pass should measure filled slots.
+- ~~**Author avatars are third-party.**~~ **Done, and not by seeding.**
+  `User::avatar_url` fell back to `ui-avatars.com` for anyone without an
+  uploaded photograph — 36 of the 37 users here — so every author page and
+  every comment thread sent a reader's IP address and the page they were on
+  to a service nobody chose, for something purely decorative.
+
+  Seeding local avatars, which is what this entry proposed, would have fixed
+  the demo box and left every real reader who signs up and never uploads one
+  still hitting that host. The *fallback* was the leak. It is drawn locally
+  now by `App\Support\Avatar`.
+
+  **An SVG data URI rather than a drawn PNG**, and that is the whole reason
+  this is not another `SeedImagery`. GD does no complex shaping — the reason
+  `brand:icons` and `EpaperSeeder` are wordless — but an SVG is shaped by the
+  *browser*, so `বার্তা সম্পাদক` gets a legible `বস`. Verified in Chrome at
+  88, 40 and 32px, the three sizes the site asks for.
+
+  Two things it buys beyond the point of it: no request at all, and it is
+  vector — `ui-avatars` returned a 64×64 PNG that the author page was
+  rendering at 88. The cost is ~460 bytes of inline markup per face, which
+  gzip removes almost entirely.
+
+  It also fixed something adjacent: the author page published that generated
+  fallback as `Person.image` in its JSON-LD, so a third-party URL stood as
+  the canonical photograph of a staff member who had never uploaded one.
+  `avatar_photo_url` returns null there instead, and `array_filter` drops the
+  key — no photograph rather than a drawn one.
+- ~~**Seeded ads are inactive.**~~ **This was wrong, and it mattered.** The
+  claim was that all six ship `is_active = 0` so every slot renders its
+  placeholder. `SiteSeeder` creates them with `is_active => true`, and this
+  box has six ads, six active, six live. There is no flag to flip.
+
+  Worth stating rather than quietly deleting: it means the Lighthouse and CLS
+  figures below were measured against **filled** slots, not placeholders —
+  which is the harder case and the one worth having, but not what this said.
+  The same wrong sentence was in a `MediaSeeder` docblock and is corrected
+  there too.
 
 Phase 7 started ahead of the remaining Phase 6 items, and with the cold
 homepage done there is now nothing unblocked left in Phase 6 at all: AVIF needs
 a rebuilt GD or `php-imagick` on this box, and `hreflang` needs a second locale
-to exist. Off-site backups and the health endpoint are done too, which leaves
-**real branding** as the last open item in Phase 7. The three test areas
+to exist. Off-site backups and the health endpoint are done too, and branding was
+closed as the fictional demo identity that declares itself — see gap 4 — so
+nothing in Phase 7 is open on this side of a credential. The three test areas
 that stood open alongside it are done.
 
 The uptime check itself is the one piece that cannot live here: `/up` now fails

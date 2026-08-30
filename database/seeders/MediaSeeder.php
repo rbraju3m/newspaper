@@ -237,10 +237,10 @@ class MediaSeeder extends Seeder
      * previewed six broken thumbnails and there was no creative to check the
      * reserved-box geometry against.
      *
-     * This does not change the public site on its own: all six seeded ads ship
-     * with `is_active = 0`, so `Ad::live()` returns none and every slot renders
-     * its "বিজ্ঞাপন" placeholder. Activating them is an editor's decision, not
-     * a seeder's.
+     * The seeded ads are active — `SiteSeeder` creates them with
+     * `is_active => true` — so a creative assigned here is one the public site
+     * starts serving. This docblock claimed the opposite for a long time and
+     * `STATUS.md` repeated it; both are corrected.
      */
     private function assignToAds(ImageService $service, ?int $userId): void
     {

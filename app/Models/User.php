@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\UserRole;
+use App\Support\Avatar;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -127,17 +128,44 @@ class User extends Authenticatable implements MustVerifyEmail
     // ── Accessors ────────────────────────────────────────────────────────
 
     /** Falls back to a generated initials avatar so the UI never shows a gap. */
+    /**
+     * Something to put in an `<img src>`, always.
+     *
+     * The fallback is drawn locally by `App\Support\Avatar` — it was
+     * `ui-avatars.com`, which meant a third-party request per face on every
+     * page carrying one, and a comment thread is a page full of faces.
+     *
+     * **Not a URL a crawler can fetch**, because the fallback is a data URI.
+     * Anything putting an avatar into metadata — structured data, `og:image`
+     * — wants `avatar_photo_url` below instead.
+     */
     protected function avatarUrl(): Attribute
     {
-        return Attribute::get(function (): string {
-            if ($this->avatar) {
-                return str_starts_with($this->avatar, 'http')
-                    ? $this->avatar
-                    : asset('storage/'.$this->avatar);
+        return Attribute::get(
+            fn (): string => $this->avatar_photo_url ?? Avatar::dataUri($this->initials)
+        );
+    }
+
+    /**
+     * The uploaded photograph, or null when there is not one.
+     *
+     * `avatar_url` always returns something, which is right for an `<img>`
+     * and wrong for everything else: the author page was publishing its
+     * generated fallback as `Person.image` in JSON-LD, so a third-party URL
+     * stood as the canonical picture of a staff member who had never uploaded
+     * one. `array_filter` drops the key when this is null, which is the
+     * honest answer — no photograph rather than a drawn one.
+     */
+    protected function avatarPhotoUrl(): Attribute
+    {
+        return Attribute::get(function (): ?string {
+            if (! $this->avatar) {
+                return null;
             }
 
-            return 'https://ui-avatars.com/api/?name='.urlencode($this->name)
-                .'&background=C8102E&color=fff&bold=true';
+            return str_starts_with($this->avatar, 'http')
+                ? $this->avatar
+                : asset('storage/'.$this->avatar);
         });
     }
 
