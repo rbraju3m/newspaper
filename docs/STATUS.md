@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile, cold homepage halved; AVIF remains, and it is blocked on the box |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 694 tests covering both halves, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters, rate limits and a demo identity that declares itself. **One thing left, and it needs credentials rather than code:** the off-site copy has never run against a real bucket |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 706 tests covering both halves, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters, rate limits and a demo identity that declares itself. **One thing left, and it needs credentials rather than code:** the off-site copy has never run against a real bucket |
 
 ### By the numbers
 
@@ -29,7 +29,7 @@ Counted rather than remembered, 28 August 2026.
 | Models · Enums · Policies · Services | 24 · 5 · 3 · 7 |
 | Controllers · Artisan commands | 47 · 13 |
 | Blade templates | 115 |
-| Test files · tests · assertions | 49 · 694 · 3,067 |
+| Test files · tests · assertions | 49 · 706 · 3,108 |
 | Routes | 139 total · 73 admin |
 | Database tables | 39 |
 | Content on this box | 55 categories · 374 articles · 110 comments · 37 users |
@@ -55,7 +55,7 @@ or settings.
 
 ### Verification currently passing
 
-- `php artisan test` — 694 tests, 3,067 assertions, nothing skipped or risky
+- `php artisan test` — 706 tests, 3,108 assertions, nothing skipped or risky
 - PHP lint clean across all 175 files; all 115 Blade templates compile
 - `npm run build` clean; `route:list --except-vendor` resolves all 139
 - Every reachable GET route crawled against seeded data — public and admin,
@@ -64,7 +64,7 @@ or settings.
   single-row fetches, which is what makes that sweep repeatable
 
 The checks above were ad-hoc scripts once. **They are committed tests now**,
-and this is what they cover — 694 tests, 3,067 assertions across 49 files:
+and this is what they cover — 706 tests, 3,108 assertions across 49 files:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -437,7 +437,7 @@ guarding Laravel. `CLAUDE.md` has the shape.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 694 tests cover both halves of
+1. **Test coverage is started, not finished.** 706 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, the whole reader path from registration through
    bookmarks, history, comments, the newsletter and polls, what the three feeds
@@ -848,11 +848,35 @@ comes to disagree about what drift is.
      runs, so the rule that fires is `uploaded`, not `max` — the messages now
      say so in Bangla, and `DEPLOY.md` carries the ini block the e-paper
      actually needs. Nothing in the code can work around it.
-   - **The public reader resolves an issue by date alone.** `/epaper/{date}`
-     takes the first published row for that date, so a second edition on the
-     same day is unreachable from the front end even though the admin can
-     create one. Pre-existing, out of scope here, and worth an `?edition=`
-     before anybody runs two editions.
+   - ~~**The public reader resolves an issue by date alone.**~~ **Done.**
+     `/epaper/{date}` took the first published row for that date, so a second
+     edition was unreachable from the front end even though the admin could
+     create one — and *which* one a reader got was whatever InnoDB returned
+     from an unordered `firstOrFail()`.
+
+     `?edition=` names one. Three things about the shape it took:
+
+     - **The bare date is not "any of them".** It resolves to the house
+       edition — the first key of `site.epaper_editions` — and falls back to
+       the alphabetically first only on a day the house edition skipped. That
+       half matters even on a paper that will only ever run one edition,
+       because "unordered" is not a behaviour anybody chose.
+     - **The house edition's URLs did not change.** `Epaper::url` omits the
+       parameter for it, so every existing link keeps its shape and a
+       single-edition install never sees a query string. An explicit
+       `?edition=main` is the same paper at a second address and answers 301,
+       the way `ArticleController` treats a stale slug.
+     - **An address nothing links to is only half a fix.** The header names
+       every edition published that day, and the back-issue rail is scoped to
+       the edition being read — unscoped it listed each date twice with both
+       links leading to the same issue. The admin's preview link had the same
+       bug and now uses `Epaper::url` too.
+
+     `EpaperReaderTest` covers it in thirteen tests, each checked by mutating
+     the thing it guards. One of them could not fail when first written:
+     `assertSee('barisal')` for an unlabelled edition's pill matched the
+     string inside its own `?edition=barisal` href, so it was green with no
+     label rendered at all. It asserts the anchor's text now.
 9. ~~**Photo galleries have no admin CRUD.**~~ **Done.** `Admin\GalleryController`
    plus two screens: a list with a create form, and an editor with drag
    ordering, multi-file upload, attach-from-library, per-image caption and
@@ -1357,9 +1381,9 @@ Picking up, in the order they are worth doing:
 **Nothing else is outstanding in the codebase.** Both items above need
 credentials or a hostname; neither needs code.
 
-Smaller and self-contained, if the above is blocked:
-`/epaper/{date}` cannot reach a second edition on the same day (gap 8), and the
-`redirects` table still has no middleware reading it (gap 12).
+Smaller and self-contained, if the above is blocked: the `redirects` table
+still has no middleware reading it (gap 12). `/epaper/{date}` reaching only one
+edition per day was the other one, and is now closed — see gap 8.
 
 ### What the last pass changed
 

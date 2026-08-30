@@ -19,10 +19,10 @@ use Tests\TestCase;
  * all, an issue with no pages yet, a page with no thumbnail — are exactly the
  * ones a newsroom produces at 4am while the paper is still being uploaded.
  *
- * `/epaper` is not its own render path: `index()` resolves the newest
- * published date and delegates to `show()`. Anything asserted about one holds
- * for the other, which is why the two are only distinguished where the
- * resolution itself is the thing under test.
+ * `/epaper` and `/epaper/{date}` resolve an issue differently and then render
+ * it identically, so anything asserted about one holds for the other. They are
+ * only distinguished where the resolution itself is the thing under test —
+ * which, since editions arrived, is more often than it used to be.
  */
 class EpaperReaderTest extends TestCase
 {
@@ -300,31 +300,226 @@ class EpaperReaderTest extends TestCase
             ->assertSee('ই-পেপার এখনো প্রকাশিত হয়নি');
     }
 
+    // ── Editions ─────────────────────────────────────────────────────────
+
     /**
      * Two editions on one day are legal — the admin's unique key is
-     * `(date, edition)`, not `date` — but the reader's URL carries only a
-     * date. Which edition it lands on is unspecified and the second is
-     * unreachable; what must not happen is a 500 or a page holding both.
+     * `(date, edition)`, not `date`. The reader's URL used to carry only the
+     * date, and the query behind it was an unordered `firstOrFail()`, so the
+     * second edition was unreachable and which one you got was whatever
+     * InnoDB returned.
      *
-     * This pins the shape rather than the choice. It is the test that should
-     * fail the day somebody adds `?edition=`.
+     * A page still holds exactly one issue. What changed is that the other
+     * one has an address.
      */
-    public function test_a_second_edition_on_the_same_day_is_not_reachable_by_date(): void
+    public function test_each_edition_of_one_day_is_reachable_by_name(): void
     {
-        $main = $this->issue('2026-08-20', attributes: ['edition' => 'main']);
-        $this->page($main, 1, section: 'প্রধান সংস্করণ');
+        $this->page($this->edition('2026-08-20', 'main'), 1, section: 'প্রধান পাতা');
+        $this->page($this->edition('2026-08-20', 'dhaka'), 1, section: 'ঢাকার পাতা');
 
-        $dhaka = $this->issue('2026-08-20', attributes: ['edition' => 'dhaka']);
-        $this->page($dhaka, 1, section: 'ঢাকা সংস্করণ');
+        $this->get('/epaper/2026-08-20?edition=dhaka')
+            ->assertOk()
+            ->assertSee('ঢাকার পাতা')
+            ->assertDontSee('প্রধান পাতা');
 
-        $html = $this->get('/epaper/2026-08-20')->assertOk()->getContent();
+        $this->get('/epaper/2026-08-20')
+            ->assertOk()
+            ->assertSee('প্রধান পাতা')
+            ->assertDontSee('ঢাকার পাতা');
+    }
 
-        $shown = array_filter(
-            ['প্রধান সংস্করণ', 'ঢাকা সংস্করণ'],
-            fn (string $label) => str_contains($html, $label),
+    /**
+     * The bare date is not "any of them". It resolves to the house edition —
+     * the first key of `site.epaper_editions` — whatever order the rows were
+     * created in, which the old unordered `firstOrFail()` did not.
+     *
+     * Created back to front on purpose: `dhaka` has the lower id, so a query
+     * with no ordering hands it back first.
+     */
+    public function test_the_bare_date_resolves_to_the_house_edition_whatever_order_the_rows_were_created(): void
+    {
+        $this->page($this->edition('2026-08-20', 'dhaka'), 1, section: 'ঢাকার পাতা');
+        $this->page($this->edition('2026-08-20', 'main'), 1, section: 'প্রধান পাতা');
+
+        $this->assertSame('main', Epaper::defaultEdition());
+
+        $this->get('/epaper/2026-08-20')
+            ->assertOk()
+            ->assertSee('প্রধান পাতা')
+            ->assertDontSee('ঢাকার পাতা');
+    }
+
+    /**
+     * A day the house edition skipped still has to resolve to the same issue
+     * on every request. Alphabetical is an arbitrary choice; being able to
+     * predict it is not.
+     */
+    public function test_a_day_with_no_house_edition_resolves_alphabetically_and_not_by_id(): void
+    {
+        $this->page($this->edition('2026-08-20', 'dhaka'), 1, section: 'ঢাকার পাতা');
+        $this->page($this->edition('2026-08-20', 'chittagong'), 1, section: 'চট্টগ্রামের পাতা');
+
+        $this->get('/epaper/2026-08-20')
+            ->assertOk()
+            ->assertSee('চট্টগ্রামের পাতা')
+            ->assertDontSee('ঢাকার পাতা');
+    }
+
+    public function test_an_edition_that_was_not_published_that_day_is_a_404(): void
+    {
+        $this->issue('2026-08-20', pages: 1);
+        $this->page($this->edition('2026-08-19', 'dhaka'), 1);
+
+        // Published, but not on this date.
+        $this->get('/epaper/2026-08-20?edition=dhaka')->assertNotFound();
+
+        // Never published at all.
+        $this->get('/epaper/2026-08-20?edition=sylhet')->assertNotFound();
+    }
+
+    public function test_an_unpublished_edition_is_not_served_to_a_reader(): void
+    {
+        $this->page($this->edition('2026-08-20', 'main'), 1, section: 'প্রধান পাতা');
+        $this->page($this->edition('2026-08-20', 'dhaka', published: false), 1);
+
+        $this->get('/epaper/2026-08-20?edition=dhaka')->assertNotFound();
+    }
+
+    /**
+     * The house edition's issues keep the URLs they have always had, so a
+     * single-edition paper — every install until somebody creates a second
+     * issue — never sees the query parameter at all. Naming it explicitly is
+     * the same paper at a second address, so it redirects once.
+     */
+    public function test_the_house_edition_has_one_canonical_url(): void
+    {
+        $this->issue('2026-08-20', pages: 1);
+
+        $this->assertSame(url('/epaper/2026-08-20'), Epaper::where('edition', 'main')->first()->url);
+
+        $this->get('/epaper/2026-08-20?edition=main')
+            ->assertRedirect(url('/epaper/2026-08-20'))
+            ->assertStatus(301);
+
+        $this->get('/epaper?edition=main')
+            ->assertRedirect(route('epaper.index'))
+            ->assertStatus(301);
+    }
+
+    /** A non-house edition carries its name and must not redirect anywhere. */
+    public function test_a_named_edition_does_not_redirect(): void
+    {
+        $this->page($this->edition('2026-08-20', 'dhaka'), 1);
+
+        $this->get('/epaper/2026-08-20?edition=dhaka')->assertOk();
+    }
+
+    /** The hub follows the edition asked for, not the newest issue overall. */
+    public function test_the_hub_opens_the_newest_issue_of_the_edition_asked_for(): void
+    {
+        $this->page($this->edition('2026-08-18', 'dhaka'), 1, section: 'ঢাকার পাতা');
+        $this->page($this->edition('2026-08-20', 'main'), 1, section: 'প্রধান পাতা');
+
+        $this->get('/epaper?edition=dhaka')
+            ->assertOk()
+            ->assertSee('১৮ আগস্ট ২০২৬', false)
+            ->assertSee('ঢাকার পাতা')
+            ->assertDontSee('প্রধান পাতা');
+    }
+
+    /**
+     * An edition that has never run is the empty state and not a 404: the hub
+     * is a place rather than a document, and `/epaper` already answers 200
+     * with nothing published at all.
+     */
+    public function test_the_hub_renders_the_empty_state_for_an_edition_that_has_never_run(): void
+    {
+        $this->issue('2026-08-20', pages: 1);
+
+        $this->get('/epaper?edition=sylhet')
+            ->assertOk()
+            ->assertSee('ই-পেপার এখনো প্রকাশিত হয়নি');
+    }
+
+    // ── The edition switcher ─────────────────────────────────────────────
+
+    /**
+     * Without this the second edition has an address nothing links to, which
+     * is the gap only half closed. It carries the configured Bangla label,
+     * and marks the one being read.
+     */
+    public function test_the_switcher_offers_every_edition_of_the_day_being_read(): void
+    {
+        $this->page($this->edition('2026-08-20', 'main'), 1);
+        $this->page($this->edition('2026-08-20', 'dhaka'), 1);
+
+        $switcher = $this->switcher($this->get('/epaper/2026-08-20')->assertOk()->getContent());
+
+        // Asserted as the pill's own text rather than as a substring of the
+        // page: an edition *key* appears in its own href, so `assertSee()` on
+        // one is green whether or not a label was ever rendered.
+        $this->assertSame('প্রধান সংস্করণ', $this->linkText($switcher, url('/epaper/2026-08-20')));
+        $this->assertSame('ঢাকা', $this->linkText($switcher, url('/epaper/2026-08-20?edition=dhaka')));
+
+        // The house edition is the one being read, so it is the one marked.
+        $this->assertStringContainsString(
+            'aria-current', $this->linkTo($switcher, url('/epaper/2026-08-20'))
         );
+        $this->assertStringNotContainsString(
+            'aria-current', $this->linkTo($switcher, url('/epaper/2026-08-20?edition=dhaka'))
+        );
+    }
 
-        $this->assertCount(1, $shown, 'The reader served both editions on one page.');
+    /** A paper running one edition gets no switcher to choose from one thing. */
+    public function test_no_switcher_is_drawn_when_the_day_holds_one_edition(): void
+    {
+        $this->issue('2026-08-20', pages: 1);
+
+        $this->get('/epaper/2026-08-20')
+            ->assertOk()
+            ->assertDontSee('aria-label="সংস্করণ"', false);
+    }
+
+    /**
+     * An edition the config does not label is still a legal row — the admin
+     * validates `edition` as any string up to 60 characters — so it falls
+     * back to its own key rather than rendering a blank pill.
+     */
+    public function test_an_unconfigured_edition_falls_back_to_its_own_key(): void
+    {
+        $this->page($this->edition('2026-08-20', 'main'), 1);
+        $this->page($this->edition('2026-08-20', 'barisal'), 1);
+
+        $switcher = $this->switcher($this->get('/epaper/2026-08-20')->assertOk()->getContent());
+
+        // Not `assertSee('barisal')`: the key is in the pill's own href, so
+        // that assertion passes with no label rendered at all.
+        $this->assertSame(
+            'barisal', $this->linkText($switcher, url('/epaper/2026-08-20?edition=barisal'))
+        );
+    }
+
+    // ── The rail, once there is more than one edition ────────────────────
+
+    /**
+     * Unscoped, a paper running two editions gets a rail of duplicated dates
+     * whose links all lead to the same issue — which is the old bug wearing a
+     * different hat.
+     */
+    public function test_the_rail_stays_inside_the_edition_being_read(): void
+    {
+        $this->page($this->edition('2026-08-20', 'dhaka'), 1);
+        $this->page($this->edition('2026-08-19', 'dhaka'), 1);
+        $this->page($this->edition('2026-08-18', 'main'), 1);
+
+        $html = $this->get('/epaper/2026-08-20?edition=dhaka')->assertOk()->getContent();
+        $rail = html_entity_decode($html);
+
+        $this->assertStringContainsString(url('/epaper/2026-08-19?edition=dhaka'), $rail);
+        $this->assertStringNotContainsString(url('/epaper/2026-08-18'), $rail);
+
+        // And the dates are not listed twice under one edition.
+        $this->assertSame(1, substr_count($rail, url('/epaper/2026-08-19?edition=dhaka')));
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
@@ -363,15 +558,58 @@ class EpaperReaderTest extends TestCase
         ]);
     }
 
+    /** One issue of a named edition, created after any earlier call. */
+    private function edition(string $date, string $edition, bool $published = true): Epaper
+    {
+        return $this->issue($date, published: $published, attributes: ['edition' => $edition]);
+    }
+
     /** The rail's anchor for one date, so its classes can be inspected. */
     private function railLink(string $html, string $date): string
     {
-        $needle = route('epaper.show', $date);
+        return $this->linkTo($html, route('epaper.show', $date));
+    }
 
-        $this->assertStringContainsString($needle, $html, "No rail link for {$date}.");
+    /** The visible text of the anchor pointing at one href. */
+    private function linkText(string $html, string $href): string
+    {
+        return trim(strip_tags($this->linkTo($html, $href)));
+    }
 
-        $start = strrpos(substr($html, 0, strpos($html, $needle)), '<a ');
+    /**
+     * The anchor pointing at one href, so its text and attributes can be
+     * inspected.
+     *
+     * Matched as a whole `<a>` element carrying that exact `href="…"`, not as
+     * a substring of the page. Both looser forms are wrong here and were:
+     * the bare URL matches the `<link rel="canonical">` in the head, and it is
+     * also a prefix of every `?edition=` variant of itself.
+     */
+    private function linkTo(string $html, string $href): string
+    {
+        preg_match_all('/<a\s[^>]*>.*?<\/a>/s', $html, $anchors);
 
-        return substr($html, $start, strpos($html, '</a>', $start) - $start);
+        foreach ($anchors[0] as $anchor) {
+            if (str_contains($anchor, 'href="'.e($href).'"')) {
+                return $anchor;
+            }
+        }
+
+        $this->fail("No link to {$href}.");
+    }
+
+    /**
+     * The edition switcher alone.
+     *
+     * The rail links to some of the same URLs, so an assertion made against
+     * the whole page can be satisfied by the wrong element.
+     */
+    private function switcher(string $html): string
+    {
+        $start = strpos($html, '<nav class="mt-2.5');
+
+        $this->assertNotFalse($start, 'No edition switcher on the page.');
+
+        return substr($html, $start, strpos($html, '</nav>', $start) - $start);
     }
 }

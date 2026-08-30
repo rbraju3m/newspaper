@@ -919,7 +919,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 694 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 706 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -961,7 +961,7 @@ coverage exists for both halves of the app:
 | `HomepageCacheTest` | what the front page costs — that card relations load once for the page rather than once per block, that the payload is stored packed and round-trips, and that an unreadable entry rebuilds instead of 500ing |
 | `BackupSyncTest` | the off-site copy — what goes up, what is skipped, what is deleted for failing verification — and the heartbeat and alerting around a failed run |
 | `FeedContentsTest` | what the three feeds *say* — the RSS channel and item fields, the canonical link, the 40-item cap, that a draft, a scheduled story and a retraction stay out, the sitemap's URL set, and Google News's 48-hour window |
-| `EpaperReaderTest` | the public e-paper — which issue `/epaper` opens, the back-issue rail, page order and the thumbnail fallback, the shapes a half-built issue takes, and that a malformed date falls through to the catch-alls |
+| `EpaperReaderTest` | the public e-paper — which issue `/epaper` opens, how a date with two editions resolves and how `?edition=` names one, the canonical URL, the edition switcher, the back-issue rail, page order and the thumbnail fallback, the shapes a half-built issue takes, and that a malformed date falls through to the catch-alls |
 | `OAuthSignInTest` | Google and Facebook sign-in — the provider guards, the three cases `resolveUser()` decides between, the account-takeover refusal, what a deleted reader is told, and session fixation |
 | `BrandingTest` | what a fresh install presents itself as — written static pages, an imprint that cannot be mistaken for a real one, a real favicon, and the manifest icon set |
 | `AdImpressionTest` | ad impressions counted from the browser, the one-query batch, what is refused, and that an ad with no URL is not a link |

@@ -28,7 +28,7 @@
                 @endunless
 
                 @if ($epaper->is_published)
-                    <a href="{{ route('epaper.show', $epaper->date->toDateString()) }}" target="_blank"
+                    <a href="{{ $epaper->url }}" target="_blank"
                        class="rounded-md p-1.5 text-muted hover:text-brand focus-visible:text-brand">
                         <x-ui.icon name="eye" class="h-4 w-4" />
                     </a>

@@ -1,5 +1,7 @@
 @extends('layouts.site')
-@section('title', 'ই-পেপার — '.config('site.name_bn'))
+@section('title', 'ই-পেপার'
+    .($epaper && $editions->count() > 1 ? ' — '.$epaper->edition_label : '')
+    .' — '.config('site.name_bn'))
 
 @section('content')
     <div class="mx-auto max-w-site px-4 py-5 lg:py-7">
@@ -10,6 +12,24 @@
                     <p class="mt-1 text-base text-muted">
                         @bndate($epaper->date), {{ App\Support\Bangla::weekday($epaper->date) }}
                     </p>
+                @endif
+
+                {{-- Only drawn when the day genuinely holds more than one
+                     issue, which on a single-edition paper is never. --}}
+                @if ($editions->count() > 1)
+                    <nav class="mt-2.5 flex flex-wrap gap-1.5" aria-label="সংস্করণ">
+                        @foreach ($editions as $issue)
+                            <a href="{{ $issue->url }}"
+                               @if ($issue->id === $epaper->id) aria-current="page" @endif
+                               @class([
+                                   'rounded-full border px-3 py-1 text-xs font-semibold transition',
+                                   'border-brand bg-brand text-white' => $issue->id === $epaper->id,
+                                   'border-line text-body hover:bg-surface-2 focus-visible:bg-surface-2' => $issue->id !== $epaper->id,
+                               ])>
+                                {{ $issue->edition_label }}
+                            </a>
+                        @endforeach
+                    </nav>
                 @endif
             </div>
 
@@ -45,7 +65,7 @@
                     <ul class="space-y-1.5">
                         @foreach ($recent as $issue)
                             <li>
-                                <a href="{{ route('epaper.show', $issue->date->toDateString()) }}"
+                                <a href="{{ $issue->url }}"
                                    @class([
                                        'block rounded-lg px-3 py-2 text-sm transition',
                                        'bg-brand text-white' => $epaper->id === $issue->id,
