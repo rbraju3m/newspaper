@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile, cold homepage halved; AVIF remains, and it is blocked on the box |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 706 tests covering both halves, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters, rate limits and a demo identity that declares itself. **One thing left, and it needs credentials rather than code:** the off-site copy has never run against a real bucket |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 742 tests covering both halves, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters, rate limits and a demo identity that declares itself. **One thing left, and it needs credentials rather than code:** the off-site copy has never run against a real bucket |
 
 ### By the numbers
 
@@ -29,7 +29,7 @@ Counted rather than remembered, 28 August 2026.
 | Models · Enums · Policies · Services | 24 · 5 · 3 · 7 |
 | Controllers · Artisan commands | 47 · 13 |
 | Blade templates | 115 |
-| Test files · tests · assertions | 49 · 706 · 3,108 |
+| Test files · tests · assertions | 50 · 742 · 3,196 |
 | Routes | 139 total · 73 admin |
 | Database tables | 39 |
 | Content on this box | 55 categories · 374 articles · 110 comments · 37 users |
@@ -55,7 +55,7 @@ or settings.
 
 ### Verification currently passing
 
-- `php artisan test` — 706 tests, 3,108 assertions, nothing skipped or risky
+- `php artisan test` — 742 tests, 3,196 assertions, nothing skipped or risky
 - PHP lint clean across all 175 files; all 115 Blade templates compile
 - `npm run build` clean; `route:list --except-vendor` resolves all 139
 - Every reachable GET route crawled against seeded data — public and admin,
@@ -64,7 +64,7 @@ or settings.
   single-row fetches, which is what makes that sweep repeatable
 
 The checks above were ad-hoc scripts once. **They are committed tests now**,
-and this is what they cover — 706 tests, 3,108 assertions across 49 files:
+and this is what they cover — 742 tests, 3,196 assertions across 50 files:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -437,7 +437,7 @@ guarding Laravel. `CLAUDE.md` has the shape.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 706 tests cover both halves of
+1. **Test coverage is started, not finished.** 742 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, the whole reader path from registration through
    bookmarks, history, comments, the newsletter and polls, what the three feeds
@@ -965,8 +965,44 @@ comes to disagree about what drift is.
 11. **Bilingual is scaffolded, not built.** `locale` and `translation_of`
     columns exist and slugs are unique per locale, but there is no English
     edition, no language switcher and no `hreflang`.
-12. **`redirects` table is unused.** No middleware consumes it yet — it exists
-    for migrating a client's old CMS URLs.
+12. ~~**`redirects` table is unused.**~~ **Done — and it is not middleware,
+    which is what this entry and `PLAN.md` both assumed.**
+    `App\Services\RedirectResolver` hangs off the 404, registered as an
+    exception render callback in `bootstrap/app.php`.
+
+    Two things rule middleware out. `/{category}` is constrained `.*`, so it
+    swallows every depth of path — `/2019/05/old-story.html` matches
+    `category.show` and 404s from *inside* the controller. Nothing reaches a
+    routing-level 404, so a `Route::fallback()` never fires and middleware
+    would have to run before the router to see anything. And running before
+    the router means a lookup on every request to the site, for ever, against
+    a table that is empty on every install that never migrated a CMS. Hooking
+    the 404 costs nothing on a request that resolves — asserted, not assumed:
+    `RedirectTest` counts the queries — and one indexed lookup on a request
+    that was already lost.
+
+    The ordering that falls out is also the right one: **a live page always
+    wins over a rule recorded for the same path.** A rule that could shadow
+    real content would be invisible until somebody noticed the wrong page.
+
+    `php artisan redirects:import mapping.csv` is the writer, because the
+    shape of this job is a file of thousands of rows exported from the system
+    being replaced, not a form filled in one URL at a time. `--dry-run`
+    reports without writing. Re-importing corrects destinations and keeps
+    `hits`, which is what tells an operator a year later which rules still
+    carry traffic and which can go.
+
+    **One limitation, and it is the one that matters for a real migration.**
+    `/{category}/{id}/{slug}` takes any numeric middle segment, so a
+    WordPress-style dated permalink — `/2019/05/old-story` — matches
+    `article.show` with article id 5. If article 5 exists the page never
+    404s, the rule never runs, and the reader is canonicalised to a story
+    with nothing to do with the one they asked for. That is a property of
+    this site's URL scheme rather than anything a redirect table can fix, so
+    `redirects:import` **names every rule that will never fire** — two batch
+    queries whatever the size of the file — while somebody still has the
+    mapping file open. Found by probing over HTTP, not by the suite: the rule
+    sat at zero hits and nothing said why.
 
 ### Smaller
 
@@ -1381,9 +1417,9 @@ Picking up, in the order they are worth doing:
 **Nothing else is outstanding in the codebase.** Both items above need
 credentials or a hostname; neither needs code.
 
-Smaller and self-contained, if the above is blocked: the `redirects` table
-still has no middleware reading it (gap 12). `/epaper/{date}` reaching only one
-edition per day was the other one, and is now closed — see gap 8.
+Both of the smaller self-contained items are now closed: `/epaper/{date}`
+reaching only one edition per day (gap 8), and the `redirects` table nothing
+read (gap 12). **Nothing unblocked remains in the codebase.**
 
 ### What the last pass changed
 

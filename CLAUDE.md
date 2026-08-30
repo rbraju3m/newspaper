@@ -23,6 +23,39 @@ if `auth.php` moves.
 `php artisan route:list` sorts alphabetically — it does **not** show match
 order. Verify ordering by matching a `Request` against the route collection.
 
+### Redirects fire at 404 time, so a numeric path segment can steal one
+
+`redirects` is read by `App\Services\RedirectResolver`, registered as an
+exception render callback in `bootstrap/app.php` — **not** as middleware,
+whatever `STATUS.md` and `PLAN.md` used to say. It has to be that way: the
+catch-all `/{category}` is constrained `.*`, so nothing reaches a
+routing-level 404 and a `Route::fallback()` would never fire. Hooking the 404
+also means the lookup costs nothing on a request that resolves, against a
+table that is empty on most installs.
+
+Two consequences.
+
+**A live page always wins over a rule recorded for the same path.** That is
+deliberate — a rule that shadowed real content would be invisible until
+somebody noticed the wrong page — but it means a rule can be silently dead.
+
+**A legacy URL with a numeric middle segment is captured by `article.show`.**
+`/{category}/{id}/{slug}` accepts any `[0-9]+` in the middle, so the
+WordPress-style permalink `/2019/05/old-story` routes to article **5**. If
+article 5 exists the page never 404s, the redirect never runs, and the reader
+is canonicalised to an unrelated story. Nothing throws and the rule sits at
+zero hits.
+
+That is a property of the URL scheme, not something the table can fix, so
+`redirects:import` names every rule that will never fire — checked against the
+route collection plus two batch queries. Anything that changes the catch-all
+constraints should re-check that warning still finds these.
+
+`prepareException()` runs *before* render callbacks, so a
+`ModelNotFoundException` from a `firstOrFail()` is already a
+`NotFoundHttpException` by the time the callback sees it. One hook covers both
+ways a page goes missing; do not add a second for the other.
+
 ### Strict mode is on
 
 `Model::shouldBeStrict()` outside production. This means:
@@ -919,7 +952,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 706 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 742 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -966,6 +999,7 @@ coverage exists for both halves of the app:
 | `BrandingTest` | what a fresh install presents itself as — written static pages, an imprint that cannot be mistaken for a real one, a real favicon, and the manifest icon set |
 | `AdImpressionTest` | ad impressions counted from the browser, the one-query batch, what is refused, and that an ad with no URL is not a link |
 | `AdCreativeSizingTest` | ad creatives served at the slot size — the media link, the ladder, the single-rung case, and the cached payload |
+| `RedirectTest` | old-CMS URL preservation — that the lookup hangs off the 404 and costs a resolving request nothing, what matches, the loop and method guards, hit counting, and `redirects:import` including the rules it warns will never fire |
 
 Every area the coverage table once listed as missing now has a file. What
 `OAuthSignInTest` still cannot reach is the half that only a real provider
@@ -1056,6 +1090,17 @@ That second call is worth knowing about on its own: the guard rotates the id
 itself on every login, so deleting a controller's explicit `regenerate()` does
 **not** reintroduce fixation and a test that appears to guard that line is
 really guarding the framework. Test the property, not the line.
+
+### Two `expectsOutputToContain()` on one line only match once
+
+Each call registers a Mockery expectation against `doWrite`, and Mockery
+routes a written line to the **first** matching expectation only. Two
+substrings that both appear in the *same* line therefore never both clear, and
+the second fails against output that plainly contains it — which reads exactly
+like the command not printing what it prints.
+
+Assert on `Artisan::output()` after `Artisan::call()` instead when more than
+one substring is being checked. `RedirectTest::import()` does.
 
 ### Two tests cannot share `errors-<pid>.log`
 

@@ -158,7 +158,7 @@ Route registration order is load-bearing — see `CLAUDE.md`.
 | `live_entries` | live-blog timeline, added in Phase 5 |
 | `article_related` | editor-curated related stories |
 | `comment_likes` | comment reactions |
-| `redirects` | old-CMS URL preservation — table exists, **no middleware consumes it yet** |
+| `redirects` | old-CMS URL preservation — read by `RedirectResolver` off the 404, not by middleware; written by `redirects:import` |
 
 **Not built:** `menus` / `menu_items` (navigation is driven by
 `categories.show_in_nav` instead, which turned out to be enough) and
