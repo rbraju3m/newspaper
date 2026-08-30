@@ -16,8 +16,8 @@
 | 3 | Auth & reader features — accounts, bookmarks, comments | **Done** |
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
-| 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile, cold homepage halved; AVIF remains, and it is blocked on the box |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 756 tests covering both halves, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters, rate limits and a demo identity that declares itself. **One thing left, and it needs credentials rather than code:** the off-site copy has never run against a real bucket |
+| 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile, cold homepage halved. Nothing unblocked remains: AVIF needs a rebuilt GD or `php-imagick` on the box, and `hreflang` waits on a second locale (gap 11) |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 756 tests covering both halves, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters, rate limits and a demo identity that declares itself. **Two things left, and neither needs code:** the off-site copy has never run against a real bucket, and the two external watchers need a public hostname |
 
 ### By the numbers
 
@@ -1463,51 +1463,131 @@ Picking up, in the order they are worth doing:
    `php artisan backup:run` once by hand after setting `BACKUP_HEARTBEAT_URL`
    and watch the heartbeat go green; a switch that was never armed looks
    exactly like a switch that has nothing to report.
-**Nothing else is outstanding in the codebase.** Both items above need
-credentials or a hostname; neither needs code.
+**Neither of those needs code.** Both need a credential or a public hostname,
+and neither can be finished from this box.
 
-Both of the smaller self-contained items are now closed: `/epaper/{date}`
-reaching only one edition per day (gap 8), and the `redirects` table nothing
-read (gap 12). **Nothing unblocked remains in the codebase.**
+After them, in the order they are worth doing:
+
+3. **Gap 11 — bilingual.** The only substantial feature still unbuilt, and the
+   one thing left that is a *decision* before it is work. The data layer is
+   already there: `articles.locale`, `articles.translation_of` with a
+   self-referencing foreign key, and `unique(slug, locale)`. Missing is an
+   English edition, a language switcher and `hreflang` — and it is what Phase
+   6's last item is explicitly waiting on.
+
+   Three readings, and they are not the same job. A **UI-only locale** puts
+   the interface in English and leaves content Bangla, which is smallest but
+   makes `translation_of` pointless. A **translated edition** gives an article
+   an English counterpart at `/en/…`, with a switcher that appears only when a
+   translation exists and `hreflang` pairs both ways — this is what the schema
+   was designed for. A **separate English desk** means independent English
+   articles with their own categories, which is largest and makes
+   `translation_of` optional rather than central.
+
+   Worth knowing before choosing: Bangla-first is not only templates. The
+   typography, the `@bn*` directives and the `class="lat"` convention all
+   assume Bangla is the default, and a second locale reaches the feeds, the
+   sitemap and the FULLTEXT index too. It is a phase, not an afternoon.
+4. **A contrast fix in the newsletter digest.** `emails/newsletter-digest`
+   prints the category name in the category's own colour on white, and
+   `--color-cat-lifestyle` (`#DB6B00`) is **3.43:1** — below WCAG AA. Four
+   real categories carry that colour. Found while building the avatar palette,
+   which excludes the same colour for the same reason and computes the ratio
+   in a test rather than trusting a comment; the digest was left alone because
+   it is a different file and deserves a deliberate change rather than being
+   folded into an unrelated one.
+
+Both of the smaller self-contained items named here for a long time are closed:
+`/epaper/{date}` reaching only one edition per day (gap 8), and the `redirects`
+table nothing read (gap 12).
 
 ### What the last pass changed
 
-Written down because most of it was found the same way, and that way is worth
-copying: **breaking something to check the test could see it.** Green was not
-evidence until a mutation proved it, and several of these were tests that had
-been passing without ever being able to fail.
+30 August 2026. Five commits, and the suite went **694 to 756** tests, 3,067
+to 3,243 assertions.
 
-Coverage closed the three areas this file had listed as missing — feed
-*contents*, the public e-paper reader, and OAuth sign-in — taking the suite
-from 590 to 670.
+The method is the part worth copying, and it is the same one the pass before
+used: **break the thing to check the test can see it.** Green was not treated
+as evidence until a mutation proved it — thirty-two mutations in all (ten on
+the e-paper editions, fifteen on the redirects, seven across the two avatar
+commits), every one caught by the test that claimed to guard it. **Three tests
+written in this pass turned out to be incapable of failing**, and two
+assertion mechanisms failed for the wrong reason.
 
-**Eight defects in the application.** The RSS enclosure that announced every
-image as a JPEG; deleting an account throwing on every article page carrying
-one of that reader's comments; a second provider identity on a deleted
-reader's address 500ing on a duplicate key; OAuth stamping `email_verified_at`
-on addresses no provider had verified; a stored social avatar written once and
-never refreshed; and three single-row lazy loads.
+**Two gaps closed.**
 
-**Five in the branding.** A masthead matching a real newspaper, an imprint that
-read as real, six pages of generated filler, a zero-byte `favicon.ico`, and a
-maskable icon whose corners were clipped.
+- **Gap 8 — a second e-paper edition had no address.** `epapers` is unique on
+  `(date, edition)` but the reader's URL carried only the date, behind an
+  unordered `firstOrFail()`: the second edition was unreachable and *which*
+  one a reader got was whatever InnoDB returned. `?edition=` names one, the
+  bare date resolves to the house edition deterministically, the house
+  edition's URLs did not change, and a switcher plus an edition-scoped rail
+  mean the other one is reachable rather than merely addressable.
+- **Gap 12 — the `redirects` table nothing read.** Now read by
+  `RedirectResolver` off the 404, *not* by middleware, which is what this file
+  and `PLAN.md` had both assumed. `/{category}` is constrained `.*`, so
+  nothing reaches a routing-level 404 and a lookup running before the router
+  would tax every request on the site to read a table that is empty on any
+  install that never migrated a CMS. `redirects:import` loads a mapping file.
 
-**Four in the harness itself**, and those are the ones worth remembering:
+**Three defects found by probing, not by the suite.**
 
-- **`LoginTest`'s session-rotation test could not fail.** Laravel's test client
-  does not carry cookies between calls, so the two ids it compared were always
-  different. It now carries the cookie and asserts a control first.
-- **Strict mode never covered single-row fetches.** `Builder::hydrate()` sets
-  the enforcing flag only when a query returned more than one row, so
-  `first()`, `find()`, route-model binding and `Auth::user()` all lazy-loaded
-  in silence. Closed permanently in `AppServiceProvider`.
-- **Two tests lazy-loaded after `fresh()`**, invisible for the same reason.
-- **One assertion in `BrandingTest` checked nothing** once the values it looped
-  over were all blank — PHPUnit flagged it risky, which is the only reason it
-  was noticed.
+The pattern is worth naming: each was found by driving the real thing over
+HTTP against seeded data *after* the tests were green.
 
-And two things were verified rather than assumed: the backup heartbeat has now
-been run against a real HTTP endpoint on both its success and failure paths,
-and the masthead has been checked against every public list of Bangladeshi
-newspapers that can be reached — with the limits of that check written down
-next to it, because "we checked it" is the part that survives retelling.
+- **A WordPress-style dated permalink silently serves the wrong article.**
+  `/2019/05/old-story` matches `article.show` with article id 5; if article 5
+  exists the page never 404s, the redirect rule never runs, and the reader is
+  canonicalised to an unrelated story with the rule sitting at zero hits. A
+  property of the URL scheme rather than anything the table can fix, so
+  `redirects:import` names every rule that will never fire.
+- **Every face on the site was a third-party request.** `User::avatar_url`
+  fell back to `ui-avatars.com`, so an author page or a comment thread sent a
+  reader's IP and the page they were on to a service nobody chose, for
+  something decorative. Drawn locally now as an SVG data URI — shaped by the
+  browser, which is the one way a drawn avatar can carry Bangla initials.
+- **The author page published that fallback as `Person.image`** in its
+  JSON-LD, so a third-party URL stood as a staff member's canonical
+  photograph.
+
+**Three documentation claims that were wrong**, one of them about measured
+performance: this file said all six seeded ads ship inactive so every slot
+renders a placeholder, when `SiteSeeder` creates them active — meaning the
+Lighthouse and CLS figures were measured against *filled* slots. Gap 13 had
+been fixed for a long time and never struck through, and Phase 7 was described
+as having branding open when gap 4 closed it.
+
+**Six figures in "By the numbers" had stopped matching a count**, in the one
+table whose entire claim is that somebody went and looked. Three were this
+pass's own doing; the gzipped JS bundle was 1.2 KB adrift and predates it.
+They are now checked by parsing the table and comparing against a fresh count
+rather than by re-reading the edits.
+
+**The three that could not fail**, because these are the shapes that repeat:
+
+- `assertSee('barisal')` for an unlabelled e-paper edition matched the string
+  inside its own `?edition=barisal` href — green with no label rendered at all.
+- A "does not warn" importer test used a single-segment path, which routes to
+  `category.show` and never reaches the article branch it was guarding.
+- An `assertDontSee` for a third-party avatar host ran against a page that
+  could render no faces at all. It asserts a control first now.
+
+**And two assertion mechanisms that failed for the wrong reason**, which costs
+the same time and reads worse, because the code looks broken and is not:
+
+- A link helper matched the bare URL, which is both a prefix of every
+  `?edition=` variant of itself *and* present in the page's
+  `<link rel="canonical">`.
+- Two `expectsOutputToContain()` calls whose substrings land in one written
+  line: each registers a Mockery expectation on `doWrite`, and Mockery routes
+  a call to the first matcher only, so the second fails against output that
+  plainly contains it.
+
+A fourth gap was anticipated rather than found: a colour hash collapsed to a
+constant would have passed every avatar test, so one was added that twenty
+distinct names must not land on the same handful.
+
+Two smaller things also went: Laravel's stock `welcome.blade.php`, dead and
+routed by nothing, and the single brand-red avatar — faces now take a colour
+from the site's own category palette, minus the one hue that fails WCAG AA
+against white.

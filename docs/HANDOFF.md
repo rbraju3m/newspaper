@@ -1,143 +1,163 @@
 ---
 artifact_contract: "ce-handoff/v1"
-created_at: "2026-08-28T10:50:21Z"
-title: "Newspaper launch checklist closed down to one blocked item"
-summary: "Closed the last test-coverage gaps and four launch gaps on the Bangla newspaper platform, fixed eleven app defects and four tests that could not fail; only the off-site backup bucket remains and it needs credentials."
-keywords: ["newspaper", "laravel", "bangla", "test-harness", "lazy-loading", "backups", "branding", "ad-impressions"]
-resume_focus: "Prove backup:sync against a real S3 bucket, or pick up gap 8 / gap 12"
+created_at: "2026-08-30T00:00:00Z"
+title: "Both remaining code gaps closed; only credentialled work and one scope decision left"
+summary: "Closed gaps 8 and 12 on the Bangla newspaper platform, removed the last third-party request from every page carrying a face, corrected four wrong documentation claims, and refreshed the counted figures. Nothing unblocked remains in the codebase; bilingual is the one substantial feature left and needs a scope decision first."
+keywords: ["newspaper", "laravel", "bangla", "epaper-editions", "redirects", "avatars", "mutation-testing", "documentation-drift"]
+resume_focus: "Decide the scope of gap 11 (bilingual), or finish the two credentialled items"
 repository: "newspaper"
 branch: "main"
-head: "16b85d8"
+head: "1b306d0"
 ---
 
 > A **snapshot** of where one session stopped, not a source of truth. Anything
 > here that contradicts [`STATUS.md`](STATUS.md), [`DECISIONS.md`](DECISIONS.md)
-> or [`CLAUDE.md`](CLAUDE.md) is out of date — those are maintained, this is
+> or [`CLAUDE.md`](../CLAUDE.md) is out of date — those are maintained, this is
 > written once and superseded by the next session. `head` above is the commit
-> before this file was added.
+> before this file was updated.
 
 # Where this was left
 
-A Bangla-first newspaper platform on Laravel 13. The session worked through the
-launch checklist in `docs/STATUS.md` from the top, item by item, as the user
-named each one. Everything that could be closed from inside the repository now
-is. **Tree is clean and pushed; nothing is in flight.**
+A Bangla-first newspaper platform on Laravel 13. **Tree is clean and pushed;
+nothing is in flight.** Suite: **756 tests, 3,243 assertions**, nothing skipped
+or risky. Lint, build and `storage/logs/laravel.log` all clean at the last run.
 
-Suite: **694 tests, 3,067 assertions**, nothing skipped or risky. Lint, build
-and `storage/logs/laravel.log` all clean at the last run.
+This session worked the launch checklist to its end. Every item that could be
+closed from inside the repository now is.
 
 ## Read these first, and what matters in each
 
-- `docs/STATUS.md` — the authoritative state. §"By the numbers" (counted, not
-  remembered), §"Verification currently passing", §"Known gaps" (numbered; 4,
-  14, 15 and 20 were closed this session), and §"Where this was left" at the
-  end, which is the shortest path to what remains.
-- `CLAUDE.md` — traps. The three added this session are the ones most likely to
-  bite: strict mode not covering single-row fetches, session-fixation tests that
-  cannot fail, and the branding/imprint rules.
-- `docs/DECISIONS.md` — why things are shaped as they are. New entries cover
-  client-side impressions, OAuth case 3, deletion semantics, and the single-rung
-  srcset.
-- `docs/DEPLOY.md` — §"Setting the two watchers up" is a copy-paste procedure
-  that was executed and verified as written.
+- `docs/STATUS.md` — the authoritative state. §"By the numbers" (verified
+  against a fresh count, not remembered), §"Known gaps", and §"Where this was
+  left" at the end, which is the shortest path to what remains and is ordered
+  by value.
+- `CLAUDE.md` — traps. Three were added this session and all three have cost
+  time already: that redirects fire at 404 time and a numeric path segment can
+  steal one, that drawn images are wordless but SVG is the exception, and that
+  two `expectsOutputToContain()` on one line only match once.
+- `docs/DECISIONS.md` — why things are shaped as they are. Sixteen entries
+  added this session, covering the e-paper edition URL shape, the redirect
+  resolver's placement, and the avatar palette.
+- `docs/DEPLOY.md` — audited this session and clean: all 23 artisan commands
+  it names exist, and its log paths match what the scheduler actually writes.
 
 ## What is actually left
 
-**One launch item, and it is blocked on credentials rather than code.**
-`backup:sync` has never run against a real bucket. Everything about it is proven
-against a local directory standing in for the remote; unproven is the half only
-a real endpoint has — credentials, region and endpoint resolution, path-style
-addressing, and the multipart upload a 78 MB archive takes, which is where the
-ETag stops being an MD5 and `verify()` falls back to size. Six `BACKUP_OFFSITE_*`
-values in `.env`, then the three commands in `STATUS.md` gap 5.
+**Two items, and neither needs code.**
 
-**Two external watchers**, blocked on a public hostname. The repo-side half is
-built and was verified end to end against a local HTTP listener: a good
-`backup:run` requests `/ping/<token>` and exits 0, a broken one requests
-`/ping/<token>/fail`, exits 1, and deletes the truncated dump. `/up` answers 200
-healthy and 500 with the database on a dead port. User chose **Better Stack**.
+`backup:sync` has never run against a real bucket — everything is proven
+against a local directory standing in for the remote, but not credentials,
+region resolution, path-style addressing, or the multipart upload a ~78 MB
+archive takes, which is where the ETag stops being an MD5 and `verify()` falls
+back to size. Six `BACKUP_OFFSITE_*` values in `.env`, then the three commands
+in `STATUS.md` gap 5.
 
-**Two small, self-contained, unblocked gaps** if something cold is wanted:
-gap 8 — `/epaper/{date}` resolves by date alone, so a second edition on the same
-day is unreachable and which one you get is an unordered `firstOrFail()`;
-gap 12 — the `redirects` table still has no middleware reading it.
+The two external watchers need a public hostname. The repo side is built and
+was driven over real HTTP against a local listener. User chose **Better Stack**;
+`DEPLOY.md` → "Setting the two watchers up" is copy-paste.
+
+**One decision, and it is the only substantial feature left.** Gap 11,
+bilingual. The data layer exists (`locale`, `translation_of`,
+`unique(slug, locale)`); an English edition, a switcher and `hreflang` do not.
+Three readings — UI-only locale, a translated edition, a separate English desk
+— and they are materially different jobs. The schema points at the translated
+edition. **Do not start this without asking which**; and know that Bangla-first
+reaches the typography, the `@bn*` directives, the `class="lat"` convention,
+the feeds, the sitemap and the FULLTEXT index, not just templates.
+
+**One small known defect, deliberately not fixed.**
+`emails/newsletter-digest.blade.php` prints the category name in the category's
+colour on white, and `#DB6B00` is 3.43:1 — below WCAG AA, on four real
+categories. Left alone because it is a different file from the avatar work that
+found it and deserves a deliberate change.
 
 ## Constraints the user set
 
-- **This is a demo/portfolio product, not a real client.** The user chose this
-  explicitly. The masthead, imprint and six static pages are a fictional
-  identity that declares itself. Do not invent an editor, publisher, address or
-  phone — those are a legal requirement on a real Bangladeshi masthead.
+- **This is a demo/portfolio product, not a real client.** The masthead,
+  imprint and six static pages are a fictional identity that declares itself.
+  Never invent an editor, publisher, address or phone — those are a legal
+  requirement on a real Bangladeshi masthead.
 - **Push to `main`.** Not a branch. The user confirmed every commit and push
   individually; they were never batched without asking.
-- **Deletion is permanent** (their decision, from three options): comments stay
-  attributable via `withTrashed()`, a deleted reader is told the truth and stays
-  deleted.
+- **Deletion is permanent** (their decision): comments stay attributable via
+  `withTrashed()`, a deleted reader is told the truth and stays deleted.
 
-## The habit that found most of the defects
+## The habit that found everything real
 
-Almost everything real was found by **breaking something to check the test could
-see it**. Green was not treated as evidence until a mutation proved it. Four
-tests turned out to be incapable of failing, including one written in this
-session. If you write a test here, mutate the thing it guards.
+Two habits, and between them they found every genuine defect this session.
 
-`CLAUDE.md` carries a repeatable vendor-patch sweep for lazy loads; the suite
-passes with that patch applied, which is what makes it re-runnable.
+**Break the thing to check the test can see it.** Thirty-two mutations across
+five commits, each caught by the test that claimed to guard it — and **three
+tests written in this session turned out to be incapable of failing**, with
+two more assertion mechanisms failing for the wrong reason. If you write a
+test here, mutate what it guards before believing it.
+
+**Then drive the real thing over HTTP anyway.** Every defect the suite could
+not see was found this way, with the tests already green: the dated-permalink
+collision that silently serves the wrong article, and both halves of the
+third-party avatar problem. Compile-time and test-time checks have repeatedly
+passed while the runtime path was wrong.
 
 ## Wrong paths you are likely to retry
 
 Each of these looked correct and was not:
 
-- **Session rotation via before/after `session()->getId()`** cannot fail —
-  Laravel's test client does not carry cookies between calls, so the ids always
-  differ. Use `TestCase::continuingSession()` and assert a control first.
-  Also: `SessionGuard::updateSession()` calls `regenerate(true)` itself, so
-  deleting a controller's explicit `regenerate()` does not reintroduce fixation.
-- **Proving no-lazy-load by rendering a page** whose models come from a cache
-  cannot fail. `unserialize()` fires no `retrieved`, so
-  `AppServiceProvider::closeTheLazyLoadingHole()` never stamps those models.
-  Assert against a freshly queried model.
-- **`assertDatabaseMissing` on a differently-cased email** cannot fail —
-  `users.email` is `utf8mb4_unicode_ci`. Read the stored value back instead.
-- **`dfp.portal.gov.bd`** (the Bangladeshi newspaper register) serves a default
-  Kubernetes placeholder certificate. It was deliberately not read over a
-  bypassed connection. The masthead check therefore covered ~5% of the register;
-  that limit is recorded in `config/site.php` and `STATUS.md`.
-- **`Article::imageSrcset`'s docblock** claimed it returns null rather than a
-  single-candidate srcset. It never did, and emitting one is correct here —
-  6.5 KB WebP against a 16.2 KB JPEG. Comment corrected in three places.
-- Reading only PHPUnit's `failures` and not its `errors` hid two findings during
-  the lazy-load sweep.
+- **Middleware for the `redirects` table.** `STATUS.md` and `PLAN.md` both
+  called it that. `/{category}` is constrained `.*`, so nothing reaches a
+  routing-level 404 — a `Route::fallback()` never fires, and middleware would
+  have to run before the router and query on every request to the site.
+- **Comparing `$request->url()` against a canonical URL that carries a query
+  parameter.** `url()` drops the query string, so the comparison never matches
+  and the redirect loops. Compare against the *requested* value instead.
+- **`assertSee()` on an identifier that also appears in its own href.** An
+  edition key, a slug, an id — the assertion is green with nothing rendered.
+  Assert the element's text.
+- **Chaining `expectsOutputToContain()` twice for substrings on one line.**
+  Mockery routes a `doWrite` call to the first matching expectation only.
+  Assert on `Artisan::output()` instead.
+- **`$model->increment()` on a partially-selected row.** Strict mode throws on
+  the attribute that was never loaded — it broke fourteen tests at once, which
+  is a confusing way to learn it.
+- **Assuming a designed palette is accessible.** Nine of the ten category
+  colours clear WCAG AA against white; `#DB6B00` is 3.43:1. Compute contrast,
+  do not trust the comment.
+- **Believing "By the numbers".** Six of its figures had drifted, in the one
+  table whose whole claim is that they were counted. Parse it and compare
+  against a fresh count.
 
 ## Machine-local state (this box only)
 
 - **`.env` sets `MAIL_MAILER=smtp` against a real account.** Anything calling
   `Mail::` from tinker or a scratch script sends live mail. The suite is safe —
-  `phpunit.xml` pins the `array` mailer. The README now says this loudly.
+  `phpunit.xml` pins the `array` mailer.
 - **`admin@newspaper.test` does not exist here** although `UserSeeder` creates
   it and the README lists it. `editor@newspaper.test` and
   `reader@newspaper.test` work (password `password`). The real admin is a
-  personal address. An editor reaches everything under `manage-taxonomy` but
-  not ads, pages, users or settings.
+  personal address.
 - **Demo data has drifted from a fresh seed**: five e-paper issues where the
-  seeder draws six, and a few extra comments and galleries — all from manual
-  verification of admin delete paths. Re-seeding does not restore them; the
-  imagery seeders are idempotent. Documented in `STATUS.md`.
-- Four extra database dumps (~2.2 MB) sit in `storage/app/backups/database/`
-  from testing the heartbeat. Gitignored, auto-pruned at 14 days, harmless.
-- Disk is at 97% (8.8 GB free). Relevant if a full `backup:run` including the
-  78 MB uploads archive is attempted.
-- A stubbed-browser harness for `ad-impressions.js` was written to a scratch
-  path and is not in the repo. The JS has **no automated coverage** — there is
-  no JS test runner here and adding one for one module was judged not worth it.
+  seeder draws six, plus a few extra comments and galleries, all from manual
+  verification of admin delete paths. Re-seeding does not restore them.
+- **Seeded ads are active**, six of six. `STATUS.md` and a `MediaSeeder`
+  docblock claimed the opposite for a long time; both are corrected, and it
+  means the Lighthouse and CLS figures were measured against filled slots.
+- **Headless Chrome is available** (`/bin/google-chrome`) and the box has
+  Bengali system fonts, so rendering can be checked with a screenshot rather
+  than reasoned about. That is how the avatar work was verified.
+- Disk was at 97% (8.8 GB free) at the last check. Relevant if a full
+  `backup:run` including the uploads archive is attempted.
+- `ad-impressions.js` still has **no automated coverage** — there is no JS test
+  runner here and adding one for a single module was judged not worth it.
 
 ## Verification performed
 
-Full suite after every change. Beyond that: mutation checks on every guard added
-(each fix fails its test when reverted); a crawl of all 48 reachable GET routes
-against seeded data, public and admin, signed in; the ad impression beacon and
-the backup heartbeat both driven over real HTTP; `/up` checked with
-`APP_DEBUG=false` because with debug on the route rethrows and shows something
-no monitor ever sees.
+Full suite after every change, plus: twenty-nine mutations; HTTP probes of
+every e-paper edition URL shape, every redirect shape, and every page carrying
+a face; Chrome screenshots of the avatar at 88/40/32px and of a real comment
+thread; a contrast computation over the whole category palette; an audit of
+`DEPLOY.md`'s commands, log paths and file paths; and a parse-and-compare of
+every figure in "By the numbers" against a fresh count — drift count zero.
+
+Probe data was removed after each run: the temporary e-paper edition, the
+imported redirect rules, and nothing else touched.
 
 No failures are outstanding.
