@@ -812,6 +812,13 @@ so text in one renders correctly in Bangla. `App\Support\Avatar` relies on
 exactly that: the fallback avatar is an SVG data URI carrying real initials,
 where a GD-drawn PNG would have had to be a wordless shape.
 
+Its colour comes from the site's **category** palette in
+`resources/css/app.css`, keyed on the reader's name — but only the nine hues
+that clear 4.5:1 against white. `--color-cat-lifestyle` (`#DB6B00`) is 3.43:1
+and is deliberately absent; `AvatarTest` computes the ratio for every entry
+rather than trusting that sentence, so a colour that fails AA cannot be added
+quietly.
+
 Two things follow if you touch it. It is delivered as a `data:` URI, so it is
 **not fetchable by a crawler** — anything putting an avatar into metadata
 wants `User::avatar_photo_url`, which is null when there is no real
@@ -970,7 +977,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 752 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 756 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -1018,7 +1025,7 @@ coverage exists for both halves of the app:
 | `AdImpressionTest` | ad impressions counted from the browser, the one-query batch, what is refused, and that an ad with no URL is not a link |
 | `AdCreativeSizingTest` | ad creatives served at the slot size — the media link, the ladder, the single-rung case, and the cached payload |
 | `RedirectTest` | old-CMS URL preservation — that the lookup hangs off the 404 and costs a resolving request nothing, what matches, the loop and method guards, hit counting, and `redirects:import` including the rules it warns will never fire |
-| `AvatarTest` | the fallback avatar — that no page carrying a face reaches a third-party host, that Bangla initials survive into the SVG, that the data URI is inert in an attribute, and that structured data gets a real photograph or none |
+| `AvatarTest` | the fallback avatar — that no page carrying a face reaches a third-party host, that Bangla initials survive into the SVG, that the data URI is inert in an attribute, that every palette colour clears WCAG AA against white and a reader's colour is stable without every reader sharing it, and that structured data gets a real photograph or none |
 
 Every area the coverage table once listed as missing now has a file. What
 `OAuthSignInTest` still cannot reach is the half that only a real provider

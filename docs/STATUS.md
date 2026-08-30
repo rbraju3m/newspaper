@@ -17,7 +17,7 @@
 | 4 | Admin CMS — dashboard, editor, moderation, layout manager | **Done** |
 | 5 | Interactivity — PWA, live blog, toasts, polish | **Done** |
 | 6 | SEO & performance — `srcset`, Lighthouse, Core Web Vitals | **Started** — imagery live, Lighthouse 99/98 mobile, cold homepage halved; AVIF remains, and it is blocked on the box |
-| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 752 tests covering both halves, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters, rate limits and a demo identity that declares itself. **One thing left, and it needs credentials rather than code:** the off-site copy has never run against a real bucket |
+| 7 | Hardening & launch — tests, backups, deploy runbook | **Started** — 756 tests covering both halves, every editor-written body sanitised, demo purge, deploy runbook, nightly backups verified, an off-site copy and a dead-man's-switch built, a health endpoint that fails when a dependency does, error alerting, scheduled publishing, self-healing counters, rate limits and a demo identity that declares itself. **One thing left, and it needs credentials rather than code:** the off-site copy has never run against a real bucket |
 
 ### By the numbers
 
@@ -28,8 +28,8 @@ Counted rather than remembered, 30 August 2026.
 | PHP files (app/database/routes/config) | 179 |
 | Models · Enums · Policies · Services | 24 · 5 · 3 · 8 |
 | Controllers · Artisan commands | 47 · 14 |
-| Blade templates | 116 |
-| Test files · tests · assertions | 51 · 752 · 3,220 |
+| Blade templates | 115 |
+| Test files · tests · assertions | 51 · 756 · 3,243 |
 | Routes | 140 total · 73 admin |
 | Database tables | 39 |
 | Content on this box | 55 categories · 374 articles · 110 comments · 37 users |
@@ -42,7 +42,9 @@ and `Artisan commands` each gained one — `RedirectResolver` and
 `redirects:import` — and `Support` gained `Avatar`, which is what carries the
 PHP-file count from 175 to 179. The JS bundle is 1.2 KB heavier than this table
 last claimed; that predates those three commits, none of which shipped
-JavaScript.
+JavaScript. Blade templates went the other way on 30 August, 116 to 115:
+`welcome.blade.php` was Laravel's stock file, reachable by no route and
+referenced by nothing, and was deleted.
 
 Some of those differ from what a fresh `db:seed` produces, and the difference is
 manual verification rather than drift in the seeders: `EpaperSeeder` draws
@@ -62,7 +64,7 @@ or settings.
 
 ### Verification currently passing
 
-- `php artisan test` — 752 tests, 3,220 assertions, nothing skipped or risky
+- `php artisan test` — 756 tests, 3,243 assertions, nothing skipped or risky
 - PHP lint clean across all 175 files; all 115 Blade templates compile
 - `npm run build` clean; `route:list --except-vendor` resolves all 139
 - Every reachable GET route crawled against seeded data — public and admin,
@@ -71,7 +73,7 @@ or settings.
   single-row fetches, which is what makes that sweep repeatable
 
 The checks above were ad-hoc scripts once. **They are committed tests now**,
-and this is what they cover — 752 tests, 3,220 assertions across 51 files:
+and this is what they cover — 756 tests, 3,243 assertions across 51 files:
 
 | File | Tests | Covers |
 |---|---|---|
@@ -121,7 +123,7 @@ and this is what they cover — 752 tests, 3,220 assertions across 51 files:
 | `EpaperReaderTest` | 31 | the public e-paper reader: which issue `/epaper` opens and that an unpublished newer one does not take it over, a back issue by its own date, the rail's ordering, its cap of 14, that it never offers an unpublished issue and marks the one being read, pages in `page_number` order, the thumbnail fallback, the PDF button appearing only when there is a PDF, the empty states for a fresh install and for an issue published before its pages are uploaded, that a malformed date falls through to the catch-all routes, and — since editions arrived — how a day holding two of them resolves, how `?edition=` names one, the canonical URL and its 301, the edition switcher, and that the rail stays inside the edition being read |
 | `OAuthSignInTest` | 24 | Google and Facebook sign-in: an unknown provider and one with no credentials both 404, a configured one reaches its real consent screen, the login page offers only what is configured, the three cases `resolveUser()` decides between, the refusal that stops an unverified provider email taking over a local account, a second provider linking to the same reader, no email and no id and a suspended reader and a throwing provider all refused, session fixation with a control that proves the harness, an unverified address creating an unverified account that gets the mail, and what a deleted reader is told on both the identity and the address route |
 | `RedirectTest` | 36 | old-CMS URL preservation: that the lookup hangs off the 404 so a live page wins and a resolving request never reads the table, deep legacy paths and `firstOrFail()` 404s, matching with or without a leading slash and case-insensitively, query-string rules and query carry-over, the self-loop and POST and admin/api guards, hit counting that leaves `updated_at` alone, and `redirects:import` — normalising, upserting, `--dry-run`, and the rules it warns will never fire because live content already answers them |
-| `AvatarTest` | 10 | the locally drawn fallback avatar: that no page carrying a face reaches a third-party host (with a control proving the page really renders one), that Bangla initials survive into the SVG, that the data URI is inert in every attribute it is printed in, that an uploaded or provider photograph still wins, and that structured data gets a real photograph or no key at all |
+| `AvatarTest` | 14 | the locally drawn fallback avatar: that no page carrying a face reaches a third-party host (with a control proving the page really renders one), that Bangla initials survive into the SVG, that the data URI is inert in every attribute it is printed in, that every palette colour clears WCAG AA against white — computed, not trusted — and that the one category colour which does not stays out, that a reader's colour is stable and that readers do not all collapse onto one, that an uploaded or provider photograph still wins, and that structured data gets a real photograph or no key at all |
 
 Writing them turned up six defects that every manual pass had missed — see
 "What the test pass found" below.
@@ -446,7 +448,7 @@ guarding Laravel. `CLAUDE.md` has the shape.
 
 ### Blocking a public launch
 
-1. **Test coverage is started, not finished.** 752 tests cover both halves of
+1. **Test coverage is started, not finished.** 756 tests cover both halves of
    the app: public routes, the admin authorisation matrix, the policies, Bangla
    search, comment moderation, the whole reader path from registration through
    bookmarks, history, comments, the newsletter and polls, what the three feeds

@@ -142,7 +142,7 @@ class User extends Authenticatable implements MustVerifyEmail
     protected function avatarUrl(): Attribute
     {
         return Attribute::get(
-            fn (): string => $this->avatar_photo_url ?? Avatar::dataUri($this->initials)
+            fn (): string => $this->avatar_photo_url ?? Avatar::dataUri($this->initials, $this->name)
         );
     }
 

@@ -108,6 +108,70 @@ class AvatarTest extends TestCase
         $this->assertStringContainsString('&lt;&amp;&gt;', $svg);
     }
 
+    // ── The palette ──────────────────────────────────────────────────────
+
+    /**
+     * Computed here rather than trusted from the comment beside the palette.
+     * White initials on a colour that does not clear 4.5:1 is unreadable, and
+     * the site's own category palette contains one such colour —
+     * `--color-cat-lifestyle`, `#DB6B00`, at 3.43:1 — so this is the check
+     * that keeps it out.
+     */
+    public function test_every_palette_colour_carries_white_text_at_wcag_aa(): void
+    {
+        foreach (Avatar::palette() as $hex) {
+            $this->assertGreaterThanOrEqual(
+                4.5,
+                $ratio = $this->contrastWithWhite($hex),
+                "{$hex} is {$ratio}:1 against white, below WCAG AA.",
+            );
+        }
+    }
+
+    /** The one the palette leaves out, pinned so it cannot drift back in. */
+    public function test_the_below_aa_category_colour_is_not_in_the_palette(): void
+    {
+        $this->assertLessThan(4.5, $this->contrastWithWhite('#DB6B00'));
+        $this->assertNotContains('#DB6B00', Avatar::palette());
+    }
+
+    /**
+     * Keyed on the name rather than the id, so the same person looks the same
+     * across a re-seed and between environments.
+     */
+    public function test_a_readers_colour_is_stable(): void
+    {
+        $this->assertSame(
+            Avatar::colorFor('বার্তা সম্পাদক'),
+            Avatar::colorFor('বার্তা সম্পাদক'),
+        );
+
+        $first = User::factory()->create(['name' => 'রুবিনা হক', 'avatar' => null])->fresh();
+        $again = User::factory()->create(['name' => 'রুবিনা হক', 'avatar' => null])->fresh();
+
+        $this->assertSame($first->avatar_url, $again->avatar_url);
+    }
+
+    /**
+     * The point of the change: a thread of readers is not a column of
+     * identical circles. Twenty distinct names must not collapse onto one
+     * colour — a hash that always returned index 0 would pass every other
+     * test in this file.
+     */
+    public function test_different_readers_get_different_colours(): void
+    {
+        $colours = [];
+
+        for ($i = 0; $i < 20; $i++) {
+            $colours[] = Avatar::colorFor("reader-{$i}");
+        }
+
+        $this->assertGreaterThan(
+            4, count(array_unique($colours)),
+            'The palette collapsed onto too few colours to tell readers apart.',
+        );
+    }
+
     // ── An uploaded photograph still wins ────────────────────────────────
 
     public function test_an_uploaded_avatar_is_used_instead(): void
@@ -159,6 +223,23 @@ class AvatarTest extends TestCase
             asset('storage/uploads/avatars/a.webp'),
             $this->schemaFor(route('author.show', $author))['image'],
         );
+    }
+
+    /** WCAG relative-luminance contrast of white against one hex colour. */
+    private function contrastWithWhite(string $hex): float
+    {
+        $channel = function (int $v): float {
+            $v /= 255;
+
+            return $v <= 0.03928 ? $v / 12.92 : (($v + 0.055) / 1.055) ** 2.4;
+        };
+
+        [$r, $g, $b] = array_map(
+            fn (string $pair): float => $channel(hexdec($pair)),
+            str_split(ltrim($hex, '#'), 2),
+        );
+
+        return 1.05 / (0.2126 * $r + 0.7152 * $g + 0.0722 * $b + 0.05);
     }
 
     /** The JSON-LD block on a page, decoded. */

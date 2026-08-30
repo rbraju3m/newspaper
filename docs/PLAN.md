@@ -264,7 +264,7 @@ Phase 2. Since then:
 ### Phase 7 — Hardening & launch ◐ *two items, and both need credentials*
 ~~Test suite — only Laravel's stock `ExampleTest` stubs exist, and
 `php artisan test` fails because `phpunit.xml` targets SQLite `:memory:` while
-`pdo_sqlite` is not installed.~~ **752 tests, 3,220 assertions**, on MySQL
+`pdo_sqlite` is not installed.~~ **756 tests, 3,243 assertions**, on MySQL
 against `newspaper_test`, because `Article::search()` silently degrades to
 `LIKE` on any other driver and the `MATCH ... AGAINST` path would never be
 exercised.

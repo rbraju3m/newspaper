@@ -32,8 +32,37 @@ namespace App\Support;
  */
 class Avatar
 {
-    /** Brand red, matching `--color-brand` in `resources/css/app.css`. */
-    private const BRAND = '#C8102E';
+    /**
+     * The colours an avatar may take, keyed off the reader's name.
+     *
+     * Every face used to be the same brand red, so a comment thread was a
+     * column of identical circles — an avatar that distinguishes nobody is
+     * doing none of its job.
+     *
+     * These are the site's own category colours from `resources/css/app.css`
+     * rather than a parallel palette invented here, so the faces sit inside
+     * the design rather than beside it. They are not *semantic* on an avatar:
+     * a category badge is a small label with text and an avatar is a circle
+     * with initials, and nothing reads one as the other.
+     *
+     * **`--color-cat-lifestyle` (`#DB6B00`) is deliberately absent.** White on
+     * it is 3.43:1, which is below WCAG AA. The other nine clear 4.5:1;
+     * `AvatarTest` computes the ratio for every entry here rather than
+     * trusting this comment, so adding one that fails is a failing test.
+     *
+     * Brand red stays first, which is what a single-colour install had.
+     */
+    private const PALETTE = [
+        '#C8102E',      // national — brand red
+        '#8B2FC9',      // politics
+        '#1A5FB4',      // international
+        '#0E7C66',      // business
+        '#197A3D',      // sports
+        '#C2185B',      // entertainment
+        '#B45309',      // opinion
+        '#0369A1',      // technology
+        '#6D28D9',      // education
+    ];
 
     /**
      * A square SVG of the initials on the brand colour, as a data URI.
@@ -47,19 +76,38 @@ class Avatar
      * including `account/index.blade.php`, where it sits inside a
      * single-quoted Alpine expression. The extra bytes buy that.
      */
-    public static function dataUri(string $initials): string
+    public static function dataUri(string $initials, string $seed = ''): string
     {
         // Escaped as XML as well, so a name holding `&` or `<` produces a
         // valid document rather than an image that silently fails to render.
         $text = htmlspecialchars($initials, ENT_XML1 | ENT_QUOTES, 'UTF-8');
 
         $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
-            .'<rect width="100" height="100" fill="'.self::BRAND.'"/>'
+            .'<rect width="100" height="100" fill="'.self::colorFor($seed).'"/>'
             .'<text x="50" y="50" fill="#fff" font-family="sans-serif" font-size="42"'
             .' font-weight="700" text-anchor="middle" dominant-baseline="central">'
             .$text
             .'</text></svg>';
 
         return 'data:image/svg+xml;charset=UTF-8,'.rawurlencode($svg);
+    }
+
+    /**
+     * A stable colour for one reader.
+     *
+     * Keyed on the name rather than the id, so the same person looks the same
+     * across a re-seed and between environments — an id-keyed colour shifts
+     * whenever the table is rebuilt, which is exactly when somebody is
+     * comparing screenshots.
+     */
+    public static function colorFor(string $seed): string
+    {
+        return self::PALETTE[abs(crc32($seed)) % count(self::PALETTE)];
+    }
+
+    /** The palette, for the test that checks its contrast. */
+    public static function palette(): array
+    {
+        return self::PALETTE;
     }
 }

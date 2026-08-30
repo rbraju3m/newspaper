@@ -13,7 +13,7 @@ audience is on.
 > A deployment with a real publication behind it overrides all of it from
 > `.env`.
 
-**Status:** phases 0–5 complete, 6 and 7 all but finished — 752 tests, and
+**Status:** phases 0–5 complete, 6 and 7 all but finished — 756 tests, and
 nothing unblocked left in the codebase. What remains needs credentials or a
 public hostname rather than code: the off-site backup copy has never run
 against a real bucket, and the two external watchers cannot be created from
