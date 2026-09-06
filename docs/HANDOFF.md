@@ -65,11 +65,11 @@ edition. **Do not start this without asking which**; and know that Bangla-first
 reaches the typography, the `@bn*` directives, the `class="lat"` convention,
 the feeds, the sitemap and the FULLTEXT index, not just templates.
 
-**One small known defect, deliberately not fixed.**
-`emails/newsletter-digest.blade.php` prints the category name in the category's
-colour on white, and `#DB6B00` is 3.43:1 — below WCAG AA, on four real
-categories. Left alone because it is a different file from the avatar work that
-found it and deserves a deliberate change.
+~~**One small known defect, deliberately not fixed.**~~ **Fixed on 6 September**
+— and it was two colours, not one: `#0891B2` fails as well at 3.68:1.
+`App\Support\Contrast` darkens a section label only as far as WCAG AA needs.
+See `STATUS.md` § "Where this was left" item 4 for what was done, and item 5
+for the same defect still standing in four of the site's own templates.
 
 ## Constraints the user set
 

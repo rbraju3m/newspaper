@@ -21,29 +21,44 @@
 
 ### By the numbers
 
-Counted rather than remembered, 30 August 2026.
+Counted rather than remembered, 6 September 2026.
 
 | | |
 |---|---|
-| PHP files (app/database/routes/config) | 179 |
+| PHP files (app/database/routes/config) | 180 |
 | Models · Enums · Policies · Services | 24 · 5 · 3 · 8 |
 | Controllers · Artisan commands | 47 · 14 |
 | Blade templates | 115 |
-| Test files · tests · assertions | 51 · 756 · 3,243 |
+| Test files · tests · assertions | 52 · 770 · 3,284 |
 | Routes | 140 total · 73 admin |
 | Database tables | 39 |
 | Content on this box | 55 categories · 374 articles · 110 comments · 37 users |
 | Demo modules | 5 e-paper issues (40 pages) · 8 photo galleries (64 images) |
-| Imagery | 152 media · 744 WebP derivatives · 78 MB on disk |
-| Bundle (gzipped) | 17.0 KB CSS · 25.2 KB JS |
+| Imagery | 153 media · 749 WebP derivatives · 78 MB on disk |
+| Bundle (gzipped, as `npm run build` reports it) | 13.1 KB CSS · 25.2 KB JS |
 
-The code figures moved on 30 August and the content ones did not: `Services`
-and `Artisan commands` each gained one — `RedirectResolver` and
-`redirects:import` — and `Support` gained `Avatar`, which is what carries the
-PHP-file count from 175 to 179. The JS bundle is 1.2 KB heavier than this table
-last claimed; that predates those three commits, none of which shipped
-JavaScript. Blade templates went the other way on 30 August, 116 to 115:
-`welcome.blade.php` was Laravel's stock file, reachable by no route and
+Three figures moved on 6 September because of that day's commit: `Support`
+gained `Contrast` (179 PHP files to 180), and the suite gained
+`Unit/ContrastTest` plus two tests in `NewsletterDigestTest` — 51 files to 52,
+756 tests to 770, 3,243 assertions to 3,284.
+
+Two more moved on their own, and both were found by re-counting rather than by
+remembering, which is the only reason this table is worth having. **Imagery is
+one media row and five derivatives above what was last recorded** (152/744 to
+153/749) — nothing in that commit writes media, so this is earlier manual
+work on the box. **The gzipped CSS is 13.1 KB, not the 17.0 KB claimed**, which
+is a 3.9 KB drift in the other direction from the JS one caught last time; no
+commit since has touched a stylesheet. Both figures are now what a count says.
+The row also names its own method, because 17.0 was not reproducible from
+`npm run build` and there is no way to tell from a number how it was taken:
+Vite's own gzip report, `app.css` plus `fonts.css`, `app.js` alone.
+
+Before that, on 30 August: `Services` and `Artisan commands` each gained one —
+`RedirectResolver` and `redirects:import` — and `Support` gained `Avatar`,
+which carried the PHP-file count from 175 to 179. The JS bundle is 1.2 KB
+heavier than this table once claimed; that predates those commits, none of
+which shipped JavaScript. Blade templates went the other way that day, 116 to
+115: `welcome.blade.php` was Laravel's stock file, reachable by no route and
 referenced by nothing, and was deleted.
 
 Some of those differ from what a fresh `db:seed` produces, and the difference is
@@ -1488,14 +1503,46 @@ After them, in the order they are worth doing:
    typography, the `@bn*` directives and the `class="lat"` convention all
    assume Bangla is the default, and a second locale reaches the feeds, the
    sitemap and the FULLTEXT index too. It is a phase, not an afternoon.
-4. **A contrast fix in the newsletter digest.** `emails/newsletter-digest`
-   prints the category name in the category's own colour on white, and
-   `--color-cat-lifestyle` (`#DB6B00`) is **3.43:1** — below WCAG AA. Four
-   real categories carry that colour. Found while building the avatar palette,
-   which excludes the same colour for the same reason and computes the ratio
-   in a test rather than trusting a comment; the digest was left alone because
-   it is a different file and deserves a deliberate change rather than being
-   folded into an unrelated one.
+4. ~~**A contrast fix in the newsletter digest.**~~ **Done, 6 September.**
+   `emails/newsletter-digest` printed the category name in the category's own
+   colour on white, and it turned out to be **two** colours below WCAG AA
+   rather than the one the avatar work had named: `#DB6B00` at **3.43:1**,
+   which four sections carry, and `#0891B2` (স্বাস্থ্য) at **3.68:1**, which
+   the earlier note missed because it was looking at the avatar palette's ten
+   entries and not at the eighteen colours the seeder actually writes.
+
+   `App\Support\Contrast::readable()` darkens a colour only as far as AA
+   needs, by a uniform mix toward black that preserves hue exactly, and
+   returns anything already passing verbatim — so `#DB6B00` becomes `#BB5B00`
+   at 4.56:1, `#0891B2` becomes `#07819E` at 4.52:1, and the other sixteen are
+   printed unchanged. Computed rather than substituted because
+   `categories.color` is an `<input type="color">` in the admin: any table of
+   known-bad values is one editor away from being wrong.
+
+   Checked by rendering the real digest against this box's own articles and
+   reading the colour off each label, not only in the suite — and by eight
+   mutations, including one that proves the "already clears AA is printed as
+   it is" assertion can fail.
+
+5. **The same defect is still on the site itself, in four templates.** The
+   digest was fixed because it was the item on this list; the fix was not
+   spread to the reader-facing pages that print a category or topic name in
+   its own colour, because that is a different judgement — those surfaces have
+   a dark theme as well as a light one, and a colour darkened for white is the
+   wrong move on `.dark`.
+
+   The four: `components/article/card.blade.php` (the card's section label),
+   `site/article.blade.php` (the kicker), `site/topic.blade.php` and
+   `components/home/topic-cluster.blade.php` (both topic labels, from
+   `topics.color`). The two category ones are live defects today, on the five
+   sections carrying `#DB6B00` or `#0891B2`. The topic ones are not yet: all
+   five seeded topics are brand red at 5.88:1 — checked, since that palette
+   never had been — and `topics.color` is the same editor-picked colour input,
+   so it is one edit away. Borders and dots are not affected — `mega-menu`, `category.blade.php` and
+   the admin lists use the colour as a rule or a swatch, where AA does not
+   apply. `Contrast::readable()` takes the background it is asked about, so
+   the mechanism for fixing these exists; what does not exist is a decision
+   about what the dark-theme answer should be.
 
 Both of the smaller self-contained items named here for a long time are closed:
 `/epaper/{date}` reaching only one edition per day (gap 8), and the `redirects`

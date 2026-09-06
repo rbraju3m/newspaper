@@ -4,6 +4,17 @@
     // reads — the shape has to say which one matters.
     $lead = $articles->first();
     $rest = $articles->skip(1);
+
+    // A section label is printed in that section's own colour, on the white
+    // the shell gives the content cell. Two of the eighteen seeded category
+    // colours do not carry text that small at WCAG AA there — #DB6B00 at
+    // 3.43:1 across four sections and #0891B2 at 3.68:1 — and the colour
+    // belongs to the category, so it cannot simply be left out the way the
+    // avatar palette leaves it out. `Contrast::readable` darkens the ones
+    // that fail, as little as AA needs, and returns the rest untouched.
+    $surface = '#FFFFFF';           // x-mail.shell's content cell
+    $label = fn (?string $color): string
+        => \App\Support\Contrast::readable($color ?: '#C8102E', $surface);
 @endphp
 
 <x-mail.shell :tagline="\App\Support\Bangla::fullDate(now())">
@@ -28,7 +39,7 @@
 
         @if ($lead->category)
             <div style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.02em;
-                        color:{{ $lead->category->color ?: '#C8102E' }};">{{ $lead->category->name }}</div>
+                        color:{{ $label($lead->category->color) }};">{{ $lead->category->name }}</div>
         @endif
 
         <a href="{{ $lead->url }}"
@@ -60,7 +71,7 @@
                     <td style="padding:14px 0;border-bottom:1px solid #E5E7EB;">
                         @if ($article->category)
                             <div style="margin:0 0 4px;font-size:11px;font-weight:700;
-                                        color:{{ $article->category->color ?: '#C8102E' }};">{{ $article->category->name }}</div>
+                                        color:{{ $label($article->category->color) }};">{{ $article->category->name }}</div>
                         @endif
                         <a href="{{ $article->url }}"
                            style="font-size:16px;line-height:1.5;font-weight:600;color:#14171A;

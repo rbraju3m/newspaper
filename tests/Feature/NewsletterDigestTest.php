@@ -7,6 +7,7 @@ use App\Models\Article;
 use App\Models\Category;
 use App\Models\NewsletterSubscriber;
 use App\Services\NewsletterService;
+use App\Support\Contrast;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -203,6 +204,88 @@ class NewsletterDigestTest extends TestCase
 
         Mail::assertSent(NewsletterDigest::class,
             fn (NewsletterDigest $mail) => str_contains($mail->subjectLine, 'সংসদে বাজেট পাস'));
+    }
+
+    // ── The section label ────────────────────────────────────────────────
+
+    /**
+     * A section label is printed in that section's own colour on white, and
+     * two of the eighteen seeded category colours do not carry text that
+     * small at WCAG AA — `#DB6B00` at 3.43:1, which four sections use, and
+     * `#0891B2` at 3.68:1.
+     *
+     * Both label sites are checked in one pass, because there are two of them
+     * — the lead and every row of the list — and a fix applied to one reads
+     * exactly like a fix applied to both. The count is the control: it also
+     * proves a label rendered at all, without which every assertion below
+     * passes against an email containing no sections.
+     *
+     * The ratio comes from `Contrast::ratio`, which `Unit\ContrastTest` pins
+     * against published constants rather than against itself.
+     */
+    public function test_a_section_colour_below_aa_is_darkened_in_the_label(): void
+    {
+        $lifestyle = Category::factory()->create(['name' => 'জীবনযাপন', 'color' => '#DB6B00']);
+
+        $this->article(['category_id' => $lifestyle->id, 'is_lead' => true]);
+        $this->article(['category_id' => $lifestyle->id]);
+
+        $colours = $this->labelColours($this->digest(), 'জীবনযাপন');
+
+        $this->assertCount(2, $colours,
+            'Expected a label on the lead and on the one row of the list.');
+
+        foreach ($colours as $colour) {
+            $this->assertNotSame('#DB6B00', strtoupper($colour),
+                'The section colour reached the label unchanged.');
+
+            $this->assertGreaterThanOrEqual(Contrast::AA, $ratio = Contrast::ratio($colour),
+                "The label is {$colour}, {$ratio}:1 on white, below WCAG AA.");
+        }
+    }
+
+    /**
+     * The other sixteen are the ones this must not touch. Darkening every
+     * label would clear AA everywhere and quietly repaint a design decision
+     * that was never wrong.
+     */
+    public function test_a_section_colour_that_already_clears_aa_is_printed_as_it_is(): void
+    {
+        $sport = Category::factory()->create(['name' => 'খেলা', 'color' => '#197A3D']);
+
+        $this->article(['category_id' => $sport->id, 'is_lead' => true]);
+
+        $this->assertSame(['#197A3D'], $this->labelColours($this->digest(), 'খেলা'));
+    }
+
+    /** The rendered HTML of the daily digest, as one subscriber receives it. */
+    private function digest(): string
+    {
+        $subscriber = $this->subscriber();
+
+        return (new NewsletterDigest(
+            $subscriber,
+            app(NewsletterService::class)->editionFor($subscriber, 'daily'),
+            'daily',
+            'আজকের খবর',
+        ))->render();
+    }
+
+    /**
+     * The colour each label for `$section` was actually printed in.
+     *
+     * Matched on the label element itself — `color:…;">NAME</` — rather than
+     * on the colour anywhere in the document, so a stylesheet or an unrelated
+     * element carrying the same value cannot stand in for a label.
+     */
+    private function labelColours(string $html, string $section): array
+    {
+        preg_match_all(
+            '/color:(#[0-9A-Fa-f]{3,6});">'.preg_quote($section, '/').'</',
+            $html, $matches,
+        );
+
+        return $matches[1];
     }
 
     // ── Deliverability ───────────────────────────────────────────────────

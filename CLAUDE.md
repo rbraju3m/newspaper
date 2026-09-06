@@ -856,6 +856,24 @@ They are defined light-first in `resources/css/app.css` and redefined under
 
 Ad slots must use `<x-ui.ad-slot>` so the box is reserved and CLS stays at zero.
 
+**A category's own colour is not safe as text.** `categories.color` is picked
+by an editor and printed as a section label in several places. Two of the
+eighteen the seeder writes do not clear WCAG AA against white — `#DB6B00` at
+3.43:1, which four sections carry, and `#0891B2` at 3.68:1 — so a label in the
+section's own colour is a label some readers cannot read.
+
+`App\Support\Contrast::readable($hex, $background)` returns the colour
+darkened (or lightened, on a dark background) only as far as AA requires, hue
+preserved, and returns anything already passing verbatim. The newsletter digest
+uses it. **The site's own templates do not yet** — the card label, the article
+kicker and the two topic labels still print the raw value, and they render on
+both themes, which is a decision nobody has made rather than an oversight.
+`STATUS.md` gap 5 names all four.
+
+The rule that matters when adding one: a colour used as a **border, a rule or a
+swatch** needs nothing, because AA is about text. A colour used as **text**
+goes through `Contrast::readable()`.
+
 ### Queries
 
 Listing pages use `ArticleQuery::cards()` — it selects only the columns a card
@@ -977,7 +995,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 756 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 770 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -1012,7 +1030,7 @@ coverage exists for both halves of the app:
 | `GallerySeederTest` | that `GallerySeeder` curates only the imagery seeding owns, and never twice inside one gallery |
 | `Unit/SeedImageryTest` | the seed arithmetic behind every drawn image, and that it raises no deprecation |
 | `PushNotificationTest` | Web Push — who may subscribe, the account switch, sending, pruning a gone browser, and who may press send |
-| `NewsletterTest`, `NewsletterDigestTest` | subscribe/verify/unsubscribe including one-click, and the digest — who receives it, what it holds, and that a quiet news day sends nothing |
+| `NewsletterTest`, `NewsletterDigestTest` | subscribe/verify/unsubscribe including one-click, and the digest — who receives it, what it holds, that a quiet news day sends nothing, and that a section label below WCAG AA is darkened while the sixteen that pass are printed untouched |
 | `PhotoImportTest` | `photos:import` — the transcode, the flattening, idempotency, and deterministic assignment |
 | `LiveBlogTest` | the live blog — appending, ordering, who may run one, and the polling cursor |
 | `LayoutReorderTest` | the front-page layout manager — drags within and across columns, the cache flush, and that a column change cannot collide |
@@ -1025,6 +1043,7 @@ coverage exists for both halves of the app:
 | `AdImpressionTest` | ad impressions counted from the browser, the one-query batch, what is refused, and that an ad with no URL is not a link |
 | `AdCreativeSizingTest` | ad creatives served at the slot size — the media link, the ladder, the single-rung case, and the cached payload |
 | `RedirectTest` | old-CMS URL preservation — that the lookup hangs off the 404 and costs a resolving request nothing, what matches, the loop and method guards, hit counting, and `redirects:import` including the rules it warns will never fire |
+| `Unit/ContrastTest` | the WCAG ratio and the smallest legible shade of a colour — against published constants, not against its own arithmetic |
 | `AvatarTest` | the fallback avatar — that no page carrying a face reaches a third-party host, that Bangla initials survive into the SVG, that the data URI is inert in an attribute, that every palette colour clears WCAG AA against white and a reader's colour is stable without every reader sharing it, and that structured data gets a real photograph or none |
 
 Every area the coverage table once listed as missing now has a file. What
