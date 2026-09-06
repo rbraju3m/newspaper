@@ -63,9 +63,8 @@ either edition is its own row linked by `translation_of`, and the switcher
 appears only where a published counterpart exists. What was deliberately left
 out is listed in `STATUS.md` item 3. Topics and tags joined the edition later
 the same day (`name_en` columns, `/en/topic` and `/en/tag`), and so did the
-byline block, the archive and the e-paper. What is still out is the
-block-driven English front page, the newsletter, `/video`, `/photo` and
-`/live` — the chrome omits a link to any of them in English, decided by
+byline block, the archive, the e-paper and the newsletter. What is still out
+is the block-driven English front page, `/video`, `/photo` and `/live` — the chrome omits a link to any of them in English, decided by
 `Route::has` rather than a list — and the 5xx error pages, which must stay
 dependency-free.
 

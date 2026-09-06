@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Article;
 use App\Models\NewsletterSubscriber;
+use App\Support\Locale;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -71,7 +72,14 @@ class NewsletterService
 
         // Most readers ask for everything, so the general edition is built
         // once and handed to all of them.
-        $key = $frequency.':'.implode(',', $categories);
+        //
+        // **The edition is part of the key.** `build()` goes through
+        // `ArticleQuery`, which scopes to whatever locale the process is in —
+        // and `newsletter:send` switches that per subscriber. Without the
+        // locale here, the first reader's edition would be handed to every
+        // reader after them regardless of which language they signed up in,
+        // and the memo would be the bug rather than the optimisation.
+        $key = Locale::current().':'.$frequency.':'.implode(',', $categories);
 
         return $this->memo[$key] ??= $this->build($frequency, $categories);
     }
@@ -92,19 +100,23 @@ class NewsletterService
     }
 
     /**
-     * A Bangla subject line naming the edition.
+     * A subject line naming the edition, in the language it is written in.
      *
      * Dated, because an inbox holding thirty of these needs them to be
      * distinguishable at a glance, and because a subject that never changes is
      * a subject a mail client will thread into one conversation and hide.
+     *
+     * Translated through `__()` like everything else, which means the caller
+     * has to be in the subscriber's locale when it calls — `newsletter:send`
+     * is, for the whole of one subscriber's turn.
      */
     public function subject(string $frequency, Collection $articles): string
     {
         $lead = $articles->first();
 
         $prefix = $frequency === 'weekly'
-            ? 'সপ্তাহের খবর'
-            : 'আজকের খবর';
+            ? __('সপ্তাহের খবর')
+            : __('আজকের খবর');
 
         // The lead headline in the subject, because "আজকের খবর" alone tells a
         // reader nothing about whether to open it.

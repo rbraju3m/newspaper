@@ -4,6 +4,7 @@ namespace App\Mail;
 
 use App\Models\Article;
 use App\Models\NewsletterSubscriber;
+use App\Support\Locale;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -37,7 +38,16 @@ class NewsletterDigest extends Mailable
         public Collection $articles,
         public string $frequency,
         public string $subjectLine,
-    ) {}
+    ) {
+        // Pinned to the row rather than left to whatever locale the process
+        // happens to be in. `newsletter:send` does switch for the whole of a
+        // subscriber's turn — it has to, because the *article selection*
+        // happens before this object exists — but a caller that forgets
+        // (`--to`, a test, a future admin "send me a preview") would
+        // otherwise render an English reader a Bangla mail with correct
+        // English links in it, which is the worst of both.
+        $this->locale($this->subscriber->locale);
+    }
 
     public function envelope(): Envelope
     {
@@ -47,7 +57,14 @@ class NewsletterDigest extends Mailable
     public function headers(): Headers
     {
         return new Headers(text: [
-            'List-Unsubscribe' => '<'.route('newsletter.unsubscribe.click', $this->subscriber->token).'>',
+            // The subscriber's own edition, like every other link in the
+            // message: the mail client posts this itself, so if it named the
+            // Bangla route a reader who signed up in English would be
+            // unsubscribed by an endpoint in a language they never chose —
+            // which works, but the confirmation they never see would not.
+            'List-Unsubscribe' => '<'.Locale::route(
+                'newsletter.unsubscribe.click', $this->subscriber->token, $this->subscriber->locale
+            ).'>',
             'List-Unsubscribe-Post' => 'List-Unsubscribe=One-Click',
             // Threads a reader's editions together as a series rather than as
             // unrelated mail, and tells a filter this is a list rather than a

@@ -85,6 +85,14 @@ class PreferenceController extends Controller
                 // Already-verified account email needs no second confirmation.
                 'verified_at' => $subscriber?->verified_at ?? ($user->hasVerifiedEmail() ? now() : null),
                 'ip' => $request->ip(),
+                // `locale` is deliberately absent. This screen is in the
+                // account area, which is Bangla-only, so writing the request's
+                // edition here would silently move a reader who subscribed on
+                // /en back to the Bangla digest every time they changed their
+                // frequency. The column keeps whatever the sign-up captured,
+                // and defaults to Bangla on a first subscription from here.
+                // If the account area ever gets an English edition, this is
+                // still not the place — it needs a control the reader can see.
             ],
         );
     }

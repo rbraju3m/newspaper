@@ -107,19 +107,44 @@ Bangla one.
 
 ### Bangla-only surfaces are omitted in English, not translated
 
-The newsletter, `/video`, `/photo` and `/live` have no `/en` routes. The
-masthead tagline is dropped in English rather than translated, and the chrome
-**omits a link to a page the edition does not have** — `Route::has` on
+`/video`, `/photo` and `/live` have no `/en` routes. The masthead tagline is
+dropped in English rather than translated, and the chrome **omits a link to a
+page the edition does not have** — `Route::has` on
 `Locale::routeName($name)` decides, not a hand-kept list, so the day one of
 those is registered under `en.` the link appears without anything being
 edited.
 
-**Topics, tags, the byline block, the archive and the e-paper used to be on
-that list and are not any more.** `topics.name_en` + `description_en`,
+**Topics, tags, the byline block, the archive, the e-paper and the newsletter
+used to be on that list and are not any more.** `topics.name_en` + `description_en`,
 `tags.name_en`, `users.designation_en` + `bio_en`, `epaper_pages.section_en`
 and `site.epaper_editions_en` are the columns and config; `/en/topic`,
 `/en/tag`, `/en/author`, `/en/archive` and `/en/epaper` are the routes; and
 the `display_*` accessors and `url()` methods do the work the guards used to.
+
+**The newsletter is the one surface where the reader is not standing on a
+URL.** Every other decision in this system comes from the request or from a
+row that a request created; the digest goes out from cron hours later, and
+nothing in that process knows what a subscriber can read. So
+`newsletter_subscribers.locale` is captured at sign-up from the box they used,
+and `newsletter:send` runs **each subscriber's whole turn** in their edition —
+article selection, subject line and mail rendering are one decision, wrapped
+in a `finally` so a throw cannot leave the rest of the run in the failed
+reader's language.
+
+Three things that follow, and each was a mutation that passed until it was
+tested for:
+
+- **`NewsletterService`'s edition memo is keyed on the locale.** Without it,
+  the first subscriber's edition is handed to everyone behind them whatever
+  language they signed up in, and the optimisation becomes the bug.
+- **Every link in the mail comes off the row, not the request** — including
+  `List-Unsubscribe`, which the mail client posts on the reader's behalf.
+  `NewsletterDigest` also pins `->locale()` from the row, so a caller that
+  forgets to switch (`--to`, a test) still sends the right language.
+- **The account preferences screen deliberately does not write `locale`.** It
+  lives in the Bangla-only account area and does not ask about language, so
+  writing the request's edition there would move an English subscriber back to
+  the Bangla digest every time they changed their frequency.
 
 **The e-paper is the one surface that is not per-edition.** There is one
 printed paper: its page images are Bangla from either side, and `Epaper::url()`
@@ -1172,7 +1197,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 847 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 854 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -1220,7 +1245,7 @@ coverage exists for both halves of the app:
 | `AdImpressionTest` | ad impressions counted from the browser, the one-query batch, what is refused, and that an ad with no URL is not a link |
 | `AdCreativeSizingTest` | ad creatives served at the slot size — the media link, the ladder, the single-rung case, and the cached payload |
 | `RedirectTest` | old-CMS URL preservation — that the lookup hangs off the 404 and costs a resolving request nothing, what matches, the loop and method guards, hit counting, and `redirects:import` including the rules it warns will never fire |
-| `BilingualTest` | the English edition — route order matched against the route collection, leakage in both directions and the control that says both editions render, an article's URL following its own row, canonicalisation out of the wrong edition, the switcher and `hreflang` including the untranslated and draft cases, that no Bangla chrome survives an English page and that the detector can fail, section naming and its fallback, the two translation files agreeing, the admin's translate action and its `translation_of` guard, topics and tags in both editions, and the byline block — the English author card, the author page in both editions, the JSON-LD following the edition, the fallbacks going opposite ways, the archive and e-paper in both editions, that an English 404 stays English, and that a section cannot take a slug the `/en` prefix owns |
+| `BilingualTest` | the English edition — route order matched against the route collection, leakage in both directions and the control that says both editions render, an article's URL following its own row, canonicalisation out of the wrong edition, the switcher and `hreflang` including the untranslated and draft cases, that no Bangla chrome survives an English page and that the detector can fail, section naming and its fallback, the two translation files agreeing, the admin's translate action and its `translation_of` guard, topics and tags in both editions, and the byline block — the English author card, the author page in both editions, the JSON-LD following the edition, the fallbacks going opposite ways, the archive and e-paper in both editions, that an English 404 stays English, that a section cannot take a slug the `/en` prefix owns, and the newsletter — which digest a sign-up box subscribes you to, that the send loop and the edition memo do not leak between languages, and that changing your preferences does not change your edition |
 | `TranslateArticlesTest` | `articles:translate` — that it only inserts, is idempotent, is deterministic on the source id, keeps the original's publication time, and refuses a draft source |
 | `Unit/FmtTest` | the locale switch behind the `@bn*` directives, including the three English answers that are not translations |
 | `SectionLabelTest` | the section and topic labels — that each of the four templates carries a legible colour for both themes, that the editor's raw colour is gone from text and still present on a border, and that the surfaces the labels are computed against still match `app.css` |

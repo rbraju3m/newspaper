@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Models\NewsletterSubscriber;
+use App\Support\Locale;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -23,11 +24,17 @@ use Illuminate\Mail\Mailables\Envelope;
  */
 class NewsletterVerify extends Mailable
 {
-    public function __construct(public NewsletterSubscriber $subscriber) {}
+    public function __construct(public NewsletterSubscriber $subscriber)
+    {
+        // Pinned to the row. This one is sent from a request whose locale is
+        // already right, but pinning costs nothing and makes the mail correct
+        // wherever it is constructed.
+        $this->locale($this->subscriber->locale);
+    }
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'সাবস্ক্রিপশন নিশ্চিত করুন — '.config('site.name_bn'));
+        return new Envelope(subject: __('সাবস্ক্রিপশন নিশ্চিত করুন').' — '.Locale::siteName());
     }
 
     public function content(): Content
@@ -36,7 +43,7 @@ class NewsletterVerify extends Mailable
             view: 'emails.newsletter-verify',
             text: 'emails.newsletter-verify-text',
             with: [
-                'verifyUrl' => route('newsletter.verify', $this->subscriber->token),
+                'verifyUrl' => $this->subscriber->verifyUrl(),
                 'name' => $this->subscriber->name,
             ],
         );

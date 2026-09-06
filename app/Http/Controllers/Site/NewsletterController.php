@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Site;
 use App\Http\Controllers\Controller;
 use App\Mail\NewsletterVerify;
 use App\Models\NewsletterSubscriber;
+use App\Support\Locale;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -29,6 +30,10 @@ class NewsletterController extends Controller
             'user_id' => $request->user()?->id,
             'ip' => $request->ip(),
             'unsubscribed_at' => null,
+            // The edition the box they used belongs to. This is the only
+            // moment the reader is standing on a URL — the digest goes out
+            // from cron hours later and has no other way to know.
+            'locale' => Locale::current(),
         ])->save();
 
         $this->sendVerification($subscriber);
@@ -36,7 +41,7 @@ class NewsletterController extends Controller
         // The same answer whether the address was new, already subscribed, or
         // already confirmed. Anything else turns this box into an oracle for
         // "is this person a reader of ours", which is not ours to disclose.
-        return back()->with('status', 'ধন্যবাদ! নিশ্চিত করতে আপনার ইমেইল দেখুন।');
+        return back()->with('status', __('ধন্যবাদ! নিশ্চিত করতে আপনার ইমেইল দেখুন।'));
     }
 
     /**
@@ -73,7 +78,8 @@ class NewsletterController extends Controller
     {
         $subscriber->forceFill(['verified_at' => now(), 'unsubscribed_at' => null])->save();
 
-        return redirect()->route('home')->with('status', 'আপনার সাবস্ক্রিপশন নিশ্চিত হয়েছে।');
+        return redirect()->to(Locale::route('home', [], $subscriber->locale))
+            ->with('status', __('আপনার সাবস্ক্রিপশন নিশ্চিত হয়েছে।'));
     }
 
     /**
@@ -105,6 +111,7 @@ class NewsletterController extends Controller
             return response('', 200);
         }
 
-        return redirect()->route('home')->with('status', 'আপনাকে আর নিউজলেটার পাঠানো হবে না।');
+        return redirect()->to(Locale::route('home', [], $subscriber->locale))
+            ->with('status', __('আপনাকে আর নিউজলেটার পাঠানো হবে না।'));
     }
 }

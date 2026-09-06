@@ -1,4 +1,4 @@
-{{ config('site.name_bn') }} — {{ $frequency === 'weekly' ? 'সপ্তাহের খবর' : 'আজকের খবর' }}
+{{ \App\Support\Locale::siteName() }} — {{ $frequency === 'weekly' ? __('সপ্তাহের খবর') : __('আজকের খবর') }}
 @bnfulldate()
 @foreach ($articles as $article)
 
@@ -9,6 +9,6 @@
 @endforeach
 
 --
-আপনি {{ config('site.name_bn') }}-এর {{ $frequency === 'weekly' ? 'সাপ্তাহিক' : 'দৈনিক' }} নিউজলেটার পাচ্ছেন।
-নিউজলেটার বন্ধ করতে: {{ $unsubscribeUrl }}
-পছন্দ পরিবর্তন করতে: {{ route('account.preferences') }}
+{{ __(':paper-এর :frequency নিউজলেটার পাচ্ছেন।', ['paper' => \App\Support\Locale::siteName(), 'frequency' => $frequency === 'weekly' ? __('সাপ্তাহিক') : __('দৈনিক')]) }}
+{{ __('নিউজলেটার বন্ধ করতে:') }} {{ $unsubscribeUrl }}
+{{ __('পছন্দ পরিবর্তন করতে:') }} {{ route('account.preferences') }}

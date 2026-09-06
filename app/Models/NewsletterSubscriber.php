@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Locale;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -11,7 +12,7 @@ use Illuminate\Support\Str;
 class NewsletterSubscriber extends Model
 {
     protected $fillable = [
-        'user_id', 'email', 'name', 'token', 'categories', 'frequency',
+        'user_id', 'email', 'name', 'token', 'categories', 'frequency', 'locale',
         'verified_at', 'unsubscribed_at', 'last_sent_at', 'ip',
     ];
 
@@ -75,9 +76,24 @@ class NewsletterSubscriber extends Model
         return array_values(array_filter(array_map('intval', $this->categories ?? [])));
     }
 
+    /**
+     * The confirmation page, in **this subscriber's** edition.
+     *
+     * Read off the row, not off the request, and this is the one model where
+     * that distinction is load-bearing in both directions: the link is written
+     * into an email by a cron process that is standing on no URL at all, and
+     * it is followed days later by a reader who may arrive from anywhere. The
+     * page they land on has to be in the language the mail was in.
+     */
     public function unsubscribeUrl(): string
     {
-        return route('newsletter.unsubscribe', $this->token);
+        return Locale::route('newsletter.unsubscribe', $this->token, $this->locale);
+    }
+
+    /** The double opt-in link, same rule. */
+    public function verifyUrl(): string
+    {
+        return Locale::route('newsletter.verify', $this->token, $this->locale);
     }
 
     public function getRouteKeyName(): string

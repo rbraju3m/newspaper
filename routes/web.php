@@ -145,6 +145,17 @@ Route::prefix(App\Support\Locale::ALTERNATE)
         // the same reason `/topic` and `/tag` sit above the outer ones.
         Route::get('/topic/{topic:slug}', Site\TopicController::class)->name('topic.show');
         Route::get('/tag/{tag:slug}', Site\TagController::class)->name('tag.show');
+        // The newsletter, so the box in the /en footer signs a reader up to
+        // the English edition and the links inside that mail stay in it.
+        Route::post('/newsletter/subscribe', [Site\NewsletterController::class, 'store'])
+            ->middleware('throttle:newsletter')->name('newsletter.subscribe');
+        Route::get('/newsletter/verify/{subscriber:token}', [Site\NewsletterController::class, 'verify'])
+            ->name('newsletter.verify');
+        Route::get('/newsletter/unsubscribe/{subscriber:token}', [Site\NewsletterController::class, 'confirm'])
+            ->name('newsletter.unsubscribe');
+        Route::post('/newsletter/unsubscribe/{subscriber:token}', [Site\NewsletterController::class, 'destroy'])
+            ->middleware('throttle:newsletter')->name('newsletter.unsubscribe.click');
+
         Route::get('/archive', Site\ArchiveController::class)->name('archive');
 
         // The e-paper is one printed paper, not one per edition — these are

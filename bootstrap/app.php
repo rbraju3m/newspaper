@@ -44,8 +44,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // no session and no token to send. The 64-character subscriber token in
         // the URL is the credential, and the only thing the request can do is
         // stop that address receiving mail.
+        // Every edition's copy of the route: the mail client posts to whichever
+        // one was in the message it was given.
         $middleware->validateCsrfTokens(except: [
             'newsletter/unsubscribe/*',
+            '*/newsletter/unsubscribe/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

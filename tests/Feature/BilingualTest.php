@@ -4,13 +4,16 @@ namespace Tests\Feature;
 
 use App\Models\Article;
 use App\Models\Category;
+use App\Mail\NewsletterDigest;
 use App\Models\Epaper;
+use App\Models\NewsletterSubscriber;
 use App\Models\Tag;
 use App\Models\Topic;
 use App\Models\User;
 use App\Support\Locale;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
@@ -105,6 +108,9 @@ class BilingualTest extends TestCase
             '/en/rss' => 'en.feed.rss',
             '/en/sitemap.xml' => 'en.feed.sitemap',
             '/en/api/breaking' => 'en.api.breaking',
+            '/newsletter/verify/x' => 'newsletter.verify',
+            '/en/newsletter/verify/x' => 'en.newsletter.verify',
+            '/en/newsletter/unsubscribe/x' => 'en.newsletter.unsubscribe',
             '/archive' => 'archive',
             '/en/archive' => 'en.archive',
             '/epaper' => 'epaper.index',
@@ -904,6 +910,193 @@ class BilingualTest extends TestCase
         // The control: the Bangla chrome does offer them.
         $bangla = $this->get('/latest')->assertOk()->getContent();
         $this->assertStringContainsString('href="'.url('/video').'"', $bangla);
+    }
+
+    // ── The newsletter ───────────────────────────────────────────────────
+
+    /**
+     * The newsletter is the one surface where the reader is **not standing on
+     * a URL** when the decision is made. The digest goes out from cron hours
+     * later, and nothing in that process knows what a subscriber can read —
+     * so the edition is captured on the row at sign-up, from the box they
+     * used.
+     */
+    public function test_the_box_a_reader_used_decides_which_digest_they_get(): void
+    {
+        Mail::fake();
+
+        $this->post('/en/newsletter/subscribe', ['email' => 'reader@gmail.com'])->assertRedirect();
+        $this->assertSame(Locale::ALTERNATE, NewsletterSubscriber::firstWhere('email', 'reader@gmail.com')->locale);
+
+        $this->post('/newsletter/subscribe', ['email' => 'পাঠক@gmail.com'])->assertRedirect();
+        $this->assertSame(Locale::DEFAULT, NewsletterSubscriber::firstWhere('email', 'পাঠক@gmail.com')->locale);
+    }
+
+    /**
+     * `newsletter:send` runs each subscriber's turn in their own edition —
+     * which stories they get, what the subject says, and what language the
+     * mail renders in are one decision.
+     */
+    public function test_each_subscriber_is_mailed_their_own_edition(): void
+    {
+        Mail::fake();
+
+        $bn = $this->subscriber(Locale::DEFAULT);
+        $en = $this->subscriber(Locale::ALTERNATE);
+
+        $banglaStory = $this->article('bn', ['title' => 'বাংলা শিরোনাম', 'published_at' => now()->subHour()]);
+        $englishStory = $this->article('en', ['title' => 'An English headline', 'published_at' => now()->subHour()]);
+
+        $this->artisan('newsletter:send')->assertSuccessful();
+
+        Mail::assertSent(NewsletterDigest::class, function (NewsletterDigest $mail) use ($bn, $banglaStory, $englishStory) {
+            if (! $mail->hasTo($bn->email)) {
+                return false;
+            }
+
+            $ids = $mail->articles->pluck('id');
+
+            return $ids->contains($banglaStory->id) && ! $ids->contains($englishStory->id);
+        });
+
+        Mail::assertSent(NewsletterDigest::class, function (NewsletterDigest $mail) use ($en, $banglaStory, $englishStory) {
+            if (! $mail->hasTo($en->email)) {
+                return false;
+            }
+
+            $ids = $mail->articles->pluck('id');
+
+            return $ids->contains($englishStory->id) && ! $ids->contains($banglaStory->id);
+        });
+    }
+
+    /**
+     * The memo in `NewsletterService` is keyed on the edition as well as the
+     * frequency and the followed sections. Without that, the first
+     * subscriber's edition would be handed to everyone behind them whatever
+     * language they signed up in — the optimisation would be the bug.
+     */
+    public function test_the_edition_memo_does_not_leak_between_languages(): void
+    {
+        $service = app(\App\Services\NewsletterService::class);
+
+        $bn = $this->subscriber(Locale::DEFAULT);
+        $en = $this->subscriber(Locale::ALTERNATE);
+
+        $this->article('bn', ['published_at' => now()->subHour()]);
+        $this->article('en', ['published_at' => now()->subHour()]);
+
+        // Bangla first, so its edition is the one that would be reused.
+        app()->setLocale(Locale::DEFAULT);
+        $banglaEdition = $service->editionFor($bn, 'daily')->pluck('locale')->unique();
+
+        app()->setLocale(Locale::ALTERNATE);
+        $englishEdition = $service->editionFor($en, 'daily')->pluck('locale')->unique();
+
+        $this->assertSame([Locale::DEFAULT], $banglaEdition->all());
+        $this->assertSame([Locale::ALTERNATE], $englishEdition->all());
+    }
+
+    /** The mail itself, both parts, and the subject line. */
+    public function test_the_digest_renders_in_the_subscribers_language(): void
+    {
+        $en = $this->subscriber(Locale::ALTERNATE);
+        $article = $this->article('en', ['published_at' => now()->subHour()]);
+
+        app()->setLocale(Locale::ALTERNATE);
+        $service = app(\App\Services\NewsletterService::class);
+        $articles = $service->editionFor($en, 'daily');
+        $subject = $service->subject('daily', $articles);
+        app()->setLocale(Locale::DEFAULT);
+
+        $this->assertStringStartsWith("Today's news", $subject);
+
+        // Rendered from the Bangla process on purpose: the mailable pins its
+        // own locale from the row, so a caller that forgot to switch still
+        // sends the right language.
+        $mail = new NewsletterDigest($en, $articles, 'daily', $subject);
+        $html = $mail->render();
+
+        $this->assertStringContainsString('What you need to know this morning.', $html);
+        $this->assertStringContainsString('Unsubscribe', $html);
+        $this->assertStringNotContainsString('আজ সকালে যা জানা দরকার।', $html);
+    }
+
+    /**
+     * Every link in the message stays in the reader's edition, including the
+     * one the *mail client* posts on their behalf. A `List-Unsubscribe` that
+     * named the Bangla route would still work — and the confirmation page a
+     * reader who clicks the visible link lands on would be in a language they
+     * never chose.
+     */
+    public function test_the_links_in_a_digest_stay_in_the_subscribers_edition(): void
+    {
+        $en = $this->subscriber(Locale::ALTERNATE);
+        $article = $this->article('en', ['published_at' => now()->subHour()]);
+
+        $mail = new NewsletterDigest($en, collect([$article]), 'daily', 'Today');
+
+        $this->assertSame(
+            '<'.route('en.newsletter.unsubscribe.click', $en->token).'>',
+            $mail->headers()->text['List-Unsubscribe'],
+        );
+
+        $this->assertStringContainsString(route('en.newsletter.unsubscribe', $en->token), $mail->render());
+        $this->assertSame(route('en.newsletter.unsubscribe', $en->token), $en->unsubscribeUrl());
+    }
+
+    /** The confirmation page and the one-click POST both exist under /en. */
+    public function test_an_english_subscriber_can_unsubscribe_inside_their_edition(): void
+    {
+        $en = $this->subscriber(Locale::ALTERNATE);
+
+        $this->get(route('en.newsletter.unsubscribe', $en->token))->assertOk()
+            ->assertSee('Unsubscribe?')->assertDontSee('নিউজলেটার বন্ধ করবেন?');
+
+        // RFC 8058 one-click, with no session and no token — the URL is the
+        // credential, and the route has to be exempt in both editions.
+        $this->post(route('en.newsletter.unsubscribe.click', $en->token), ['List-Unsubscribe' => 'One-Click'])
+            ->assertOk();
+
+        $this->assertNotNull($en->fresh()->unsubscribed_at);
+    }
+
+    /**
+     * The account preferences screen is Bangla-only and does not ask about
+     * language, so it must not silently move an English subscriber back to
+     * the Bangla digest every time they change their frequency.
+     */
+    public function test_changing_preferences_does_not_change_a_subscribers_edition(): void
+    {
+        $user = User::factory()->create(['email' => 'reader@gmail.com'])->fresh();
+
+        $subscriber = NewsletterSubscriber::create([
+            'email' => $user->email, 'locale' => Locale::ALTERNATE, 'frequency' => 'daily',
+        ]);
+        $subscriber->forceFill(['verified_at' => now()])->save();
+
+        $this->actingAs($user)->patch(route('account.preferences.update'), [
+            'newsletter' => '1', 'newsletter_frequency' => 'weekly',
+        ])->assertRedirect();
+
+        $fresh = $subscriber->fresh();
+
+        $this->assertSame('weekly', $fresh->frequency, 'The change the reader asked for did not happen.');
+        $this->assertSame(Locale::ALTERNATE, $fresh->locale, 'Their edition was changed behind their back.');
+    }
+
+    private function subscriber(string $locale): NewsletterSubscriber
+    {
+        $subscriber = NewsletterSubscriber::create([
+            'email' => $locale.'-'.fake()->unique()->userName().'@gmail.com',
+            'name' => 'রফিক',
+            'locale' => $locale,
+            'frequency' => 'daily',
+        ]);
+
+        $subscriber->forceFill(['verified_at' => now()->subWeek()])->save();
+
+        return $subscriber->fresh();
     }
 
     // ── The translation files ────────────────────────────────────────────

@@ -5,7 +5,9 @@ namespace App\Console\Commands;
 use App\Mail\NewsletterDigest;
 use App\Models\NewsletterSubscriber;
 use App\Services\NewsletterService;
+use App\Support\Locale;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -76,26 +78,36 @@ class SendNewsletter extends Command
             $newsletter, $frequency, $dry, &$sent, &$skipped, &$failed
         ) {
             foreach ($subscribers as $subscriber) {
-                $articles = $newsletter->editionFor($subscriber, $frequency);
+                // The whole of one subscriber's turn runs in their edition:
+                // which stories they get, what the subject line says, and what
+                // language the mail renders in are one decision, and this is
+                // the only place that knows it. A cron process is standing on
+                // no URL, so unlike every other surface the answer comes off
+                // the row.
+                $this->inEdition($subscriber, function () use (
+                    $subscriber, $newsletter, $frequency, $dry, &$sent, &$skipped, &$failed
+                ) {
+                    $articles = $newsletter->editionFor($subscriber, $frequency);
 
-                // Nothing published in their sections this window. Skipped, and
-                // deliberately *not* stamped: they are still due whenever there
-                // is something to say.
-                if ($articles->isEmpty()) {
-                    $skipped++;
+                    // Nothing published in their sections this window. Skipped,
+                    // and deliberately *not* stamped: they are still due
+                    // whenever there is something to say.
+                    if ($articles->isEmpty()) {
+                        $skipped++;
 
-                    continue;
-                }
+                        return;
+                    }
 
-                if ($dry) {
-                    $sent++;
+                    if ($dry) {
+                        $sent++;
 
-                    continue;
-                }
+                        return;
+                    }
 
-                $this->deliver($subscriber, $articles, $frequency, $newsletter)
-                    ? $sent++
-                    : $failed++;
+                    $this->deliver($subscriber, $articles, $frequency, $newsletter)
+                        ? $sent++
+                        : $failed++;
+                });
             }
         });
 
@@ -126,6 +138,30 @@ class SendNewsletter extends Command
         }
 
         return NewsletterSubscriber::query()->dueFor($frequency, $since);
+    }
+
+    /**
+     * Run one subscriber's turn in their own edition, and put the process back
+     * afterwards.
+     *
+     * `finally`, not a trailing `setLocale()`: a throw from the send would
+     * otherwise leave every remaining subscriber in the failed one's language.
+     * `deliver()` catches its own exceptions, so this is guarding the
+     * selection and the subject line as much as the mail.
+     */
+    private function inEdition(NewsletterSubscriber $subscriber, callable $work): void
+    {
+        $before = App::getLocale();
+
+        App::setLocale(in_array($subscriber->locale, Locale::ALL, true)
+            ? $subscriber->locale
+            : Locale::DEFAULT);
+
+        try {
+            $work();
+        } finally {
+            App::setLocale($before);
+        }
     }
 
     private function deliver(

@@ -2,15 +2,14 @@
     <p style="margin:0 0 14px;font-size:19px;font-weight:700;color:#14171A;
               font-family:'Noto Serif Bengali',Georgia,serif;">
         @if ($name)
-            {{ $name }}, একটি ধাপ বাকি
+            {{ __(':name, একটি ধাপ বাকি', ['name' => $name]) }}
         @else
-            আর একটি ধাপ বাকি
+            {{ __('আর একটি ধাপ বাকি') }}
         @endif
     </p>
 
     <p style="margin:0 0 20px;">
-        {{ config('site.name_bn') }} নিউজলেটার পেতে নিচের বোতামে ক্লিক করে আপনার
-        ইমেইল ঠিকানাটি নিশ্চিত করুন।
+        {{ __(':paper নিউজলেটার পেতে নিচের বোতামে ক্লিক করে আপনার ইমেইল ঠিকানাটি নিশ্চিত করুন।', ['paper' => \App\Support\Locale::siteName()]) }}
     </p>
 
     {{-- Bulletproof-ish button: a table cell with a background, because Outlook
@@ -21,13 +20,13 @@
                 <a href="{{ $verifyUrl }}"
                    style="display:inline-block;padding:13px 30px;color:#FFFFFF;font-size:15px;
                           font-weight:700;text-decoration:none;
-                          font-family:'Noto Sans Bengali',Arial,sans-serif;">সাবস্ক্রিপশন নিশ্চিত করুন</a>
+                          font-family:'Noto Sans Bengali',Arial,sans-serif;">{{ __('সাবস্ক্রিপশন নিশ্চিত করুন') }}</a>
             </td>
         </tr>
     </table>
 
     <p style="margin:0 0 8px;font-size:13px;color:#616874;">
-        বোতামটি কাজ না করলে এই ঠিকানাটি ব্রাউজারে কপি করুন:
+        {{ __('বোতামটি কাজ না করলে এই ঠিকানাটি ব্রাউজারে কপি করুন:') }}
     </p>
     {{-- Latin run, so Inter — and word-break, because a 64-character token
          overflows a 600px table on a phone otherwise. --}}
@@ -35,8 +34,6 @@
               font-family:Inter,Arial,sans-serif;color:#1A5FB4;">{{ $verifyUrl }}</p>
 
     <x-slot:footer>
-        আপনি এই ইমেইলটি পেয়েছেন কারণ {{ config('site.name_bn') }}-এ এই ঠিকানাটি দিয়ে
-        নিউজলেটারের অনুরোধ করা হয়েছিল। আপনি না করে থাকলে কিছুই করতে হবে না — নিশ্চিত
-        না করা পর্যন্ত আমরা কোনো নিউজলেটার পাঠাব না।
+        {{ __('আপনি এই ইমেইলটি পেয়েছেন কারণ :paper-এ এই ঠিকানাটি দিয়ে নিউজলেটারের অনুরোধ করা হয়েছিল। আপনি না করে থাকলে কিছুই করতে হবে না — নিশ্চিত না করা পর্যন্ত আমরা কোনো নিউজলেটার পাঠাব না।', ['paper' => \App\Support\Locale::siteName()]) }}
     </x-slot:footer>
 </x-mail.shell>

@@ -7,7 +7,7 @@
                 <p class="mt-1 text-sm text-muted">{{ __('প্রতিদিন সকালে বাছাই করা খবর পেতে সাবস্ক্রাইব করুন।') }}</p>
             </div>
 
-            <form action="{{ route('newsletter.subscribe') }}" method="POST"
+            <form action="{{ \App\Support\Locale::route('newsletter.subscribe') }}" method="POST"
                   class="flex w-full max-w-md items-center gap-2">
                 @csrf
                 <label for="nl-email" class="sr-only">{{ __('ইমেইল ঠিকানা') }}</label>

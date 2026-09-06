@@ -20,8 +20,8 @@
 <x-mail.shell :tagline="\App\Support\Bangla::fullDate(now())">
     <p style="margin:0 0 20px;font-size:14px;color:#616874;">
         {{ $name ? $name.', ' : '' }}{{ $frequency === 'weekly'
-            ? 'গত সাত দিনের বাছাই করা খবর।'
-            : 'আজ সকালে যা জানা দরকার।' }}
+            ? __('গত সাত দিনের বাছাই করা খবর।')
+            : __('আজ সকালে যা জানা দরকার।') }}
     </p>
 
     {{-- ── Lead ──────────────────────────────────────────────────────── --}}
@@ -55,7 +55,7 @@
 
         <p style="margin:0 0 26px;font-size:12px;color:#8A9099;">
             @bnago($lead->published_at)
-            @if ($lead->reading_time) · @bn($lead->reading_time) মিনিট পড়া @endif
+            @if ($lead->reading_time) · @bn($lead->reading_time) {{ __('মিনিট পড়া') }} @endif
         </p>
     @endif
 
@@ -63,7 +63,7 @@
     @if ($rest->isNotEmpty())
         <div style="border-top:2px solid #14171A;padding-top:14px;margin-bottom:6px;
                     font-size:13px;font-weight:700;color:#14171A;
-                    font-family:'Noto Serif Bengali',Georgia,serif;">আরও খবর</div>
+                    font-family:'Noto Serif Bengali',Georgia,serif;">{{ __('আরও খবর') }}</div>
 
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
             @foreach ($rest as $article)
@@ -87,22 +87,24 @@
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:26px 0 0;">
         <tr>
             <td style="border:1px solid #C8102E;border-radius:8px;">
-                <a href="{{ url('/') }}"
+                <a href="{{ \App\Support\Locale::route('home') }}"
                    style="display:inline-block;padding:11px 26px;color:#C8102E;font-size:14px;
                           font-weight:700;text-decoration:none;
-                          font-family:'Noto Sans Bengali',Arial,sans-serif;">সব খবর দেখুন</a>
+                          font-family:'Noto Sans Bengali',Arial,sans-serif;">{{ __('সব খবর দেখুন') }}</a>
             </td>
         </tr>
     </table>
 
     <x-slot:footer>
-        আপনি {{ config('site.name_bn') }}-এর
-        {{ $frequency === 'weekly' ? 'সাপ্তাহিক' : 'দৈনিক' }} নিউজলেটার পাচ্ছেন।<br>
+        {{ __(':paper-এর :frequency নিউজলেটার পাচ্ছেন।', [
+            'paper' => \App\Support\Locale::siteName(),
+            'frequency' => $frequency === 'weekly' ? __('সাপ্তাহিক') : __('দৈনিক'),
+        ]) }}<br>
         {{-- Plainly worded and plainly visible. A reader who cannot find this
              presses "spam" instead, and that is the one signal there is no
              recovering from. --}}
-        <a href="{{ $unsubscribeUrl }}" style="color:#616874;text-decoration:underline;">নিউজলেটার বন্ধ করুন</a>
+        <a href="{{ $unsubscribeUrl }}" style="color:#616874;text-decoration:underline;">{{ __('নিউজলেটার বন্ধ করুন') }}</a>
         &nbsp;·&nbsp;
-        <a href="{{ route('account.preferences') }}" style="color:#616874;text-decoration:underline;">পছন্দ পরিবর্তন করুন</a>
+        <a href="{{ route('account.preferences') }}" style="color:#616874;text-decoration:underline;">{{ __('পছন্দ পরিবর্তন করুন') }}</a>
     </x-slot:footer>
 </x-mail.shell>
