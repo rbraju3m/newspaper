@@ -49,6 +49,11 @@ class ArticleQuery
      */
     public const CARD_RELATIONS = [
         'category:id,name,name_en,slug,path,color',
+        // `designation` but not `designation_en`: the only listing that prints a
+        // byline's job title is `/opinion`, which has no English edition, so the
+        // English column would be a dead varchar on every card on every page.
+        // If `/en/opinion` is ever added, it has to be added here in the same
+        // commit — the accessor reads a column this select does not carry.
         'author:id,name,slug,avatar,designation',
         'featuredImage:id,disk,path,conversions,width,height',
     ];

@@ -145,6 +145,8 @@ Route::prefix(App\Support\Locale::ALTERNATE)
         // the same reason `/topic` and `/tag` sit above the outer ones.
         Route::get('/topic/{topic:slug}', Site\TopicController::class)->name('topic.show');
         Route::get('/tag/{tag:slug}', Site\TagController::class)->name('tag.show');
+        // One person, two pages: this one lists their English stories.
+        Route::get('/author/{user:slug}', Site\AuthorController::class)->name('author.show');
 
         Route::get('/rss', [Site\FeedController::class, 'rss'])->name('feed.rss');
         Route::get('/sitemap.xml', [Site\FeedController::class, 'sitemap'])->name('feed.sitemap');

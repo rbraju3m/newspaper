@@ -20,6 +20,7 @@ class UserSeeder extends Seeder
                 'status' => 'active',
                 'email_verified_at' => now(),
                 'designation' => 'প্রধান সম্পাদক',
+                'designation_en' => 'Editor-in-Chief',
             ],
         );
 
@@ -32,6 +33,7 @@ class UserSeeder extends Seeder
                 'status' => 'active',
                 'email_verified_at' => now(),
                 'designation' => 'বার্তা সম্পাদক',
+                'designation_en' => 'News Editor',
             ],
         );
 

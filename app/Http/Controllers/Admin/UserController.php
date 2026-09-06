@@ -42,6 +42,7 @@ class UserController extends Controller
             'phone' => ['nullable', 'regex:/^01[3-9]\d{8}$/', 'unique:users,phone'],
             'role' => ['required', Rule::enum(UserRole::class)],
             'designation' => ['nullable', 'string', 'max:120'],
+            'designation_en' => ['nullable', 'string', 'max:120'],
             'password' => ['required', 'confirmed', Password::defaults()],
         ]);
 
@@ -66,7 +67,12 @@ class UserController extends Controller
             'email' => ['required', 'email:rfc', 'max:190', Rule::unique('users')->ignore($user->id)],
             'phone' => ['nullable', 'regex:/^01[3-9]\d{8}$/', Rule::unique('users')->ignore($user->id)],
             'designation' => ['nullable', 'string', 'max:120'],
+            // Optional, and empty means the author card simply does not
+            // appear on /en — it degrades to a byline rather than showing a
+            // Bangla job title under an English headline.
+            'designation_en' => ['nullable', 'string', 'max:120'],
             'bio' => ['nullable', 'string', 'max:500'],
+            'bio_en' => ['nullable', 'string', 'max:500'],
             'status' => ['required', 'in:active,suspended'],
         ]);
 

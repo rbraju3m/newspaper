@@ -44,15 +44,36 @@ class UserFactory extends Factory
         return $this->state(fn () => [
             'role' => UserRole::Editor,
             'designation' => 'সহকারী সম্পাদক',
+            'designation_en' => 'Assistant Editor',
         ]);
     }
 
+    /**
+     * The two designations are picked as a **pair**, not independently.
+     *
+     * Drawing the English one from its own `randomElement` would give a
+     * reporter "ক্রীড়া প্রতিবেদক" in Bangla and "Special Correspondent" in
+     * English — two different jobs for one person, which is the kind of demo
+     * data that looks fine until somebody reads both editions.
+     */
     public function reporter(): static
     {
-        return $this->state(fn () => [
-            'role' => UserRole::Reporter,
-            'designation' => fake()->randomElement(['নিজস্ব প্রতিবেদক', 'ক্রীড়া প্রতিবেদক', 'বিশেষ প্রতিনিধি']),
-            'bio' => BanglaContent::sentence(16),
-        ]);
+        $desks = [
+            ['নিজস্ব প্রতিবেদক', 'Staff Correspondent'],
+            ['ক্রীড়া প্রতিবেদক', 'Sports Correspondent'],
+            ['বিশেষ প্রতিনিধি', 'Special Correspondent'],
+        ];
+
+        return $this->state(function () use ($desks) {
+            [$bn, $en] = fake()->randomElement($desks);
+
+            return [
+                'role' => UserRole::Reporter,
+                'designation' => $bn,
+                'designation_en' => $en,
+                'bio' => BanglaContent::sentence(16),
+                'bio_en' => 'Writes for the paper from Dhaka.',
+            ];
+        });
     }
 }

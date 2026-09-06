@@ -64,6 +64,12 @@
                             </div>
                             <textarea name="bio" rows="2" placeholder="পরিচিতি"
                                       class="w-full rounded border border-line-strong bg-canvas px-2 py-1.5 text-sm">{{ $user->bio }}</textarea>
+                            {{-- Optional. Empty means no author card on /en at
+                                 all, rather than a Bangla one. --}}
+                            <input name="designation_en" value="{{ $user->designation_en }}" placeholder="পদবি (ইংরেজি)"
+                                   class="lat mt-2 w-full rounded border border-line-strong bg-canvas px-2 py-1.5 text-sm">
+                            <textarea name="bio_en" rows="2" placeholder="পরিচিতি (ইংরেজি)"
+                                      class="lat mt-2 w-full rounded border border-line-strong bg-canvas px-2 py-1.5 text-sm">{{ $user->bio_en }}</textarea>
                             <button type="submit" class="rounded bg-brand px-3 py-1.5 text-xs font-semibold text-white">
                                 সংরক্ষণ
                             </button>
@@ -111,6 +117,7 @@
             <x-form.input name="email" label="ইমেইল" type="email" :required="true" />
             <x-form.input name="phone" label="মোবাইল" type="tel" />
             <x-form.input name="designation" label="পদবি" />
+            <x-form.input name="designation_en" label="পদবি (ইংরেজি)" class="lat" />
 
             <div>
                 <label for="n-role" class="mb-1.5 block text-sm font-semibold text-ink">ভূমিকা</label>

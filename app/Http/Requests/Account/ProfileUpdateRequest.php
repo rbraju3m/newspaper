@@ -16,6 +16,9 @@ class ProfileUpdateRequest extends FormRequest
             'email' => ['required', 'email:rfc', 'max:190', Rule::unique('users')->ignore($id)],
             'phone' => ['nullable', 'regex:/^01[3-9]\d{8}$/', Rule::unique('users')->ignore($id)],
             'bio' => ['nullable', 'string', 'max:500'],
+            // A staff member writes their own English biography here; a
+            // reader has no author page and simply never fills it in.
+            'bio_en' => ['nullable', 'string', 'max:500'],
             'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048', 'dimensions:max_width=2000,max_height=2000'],
         ];
     }

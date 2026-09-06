@@ -70,8 +70,15 @@ English story published would have gone onto the Bangla front page.
 
 Two smaller ones worth knowing:
 
-- **A partial `category:` select feeding a template that prints
-  `display_name` must include `name_en`.** Strict mode makes a missing
+- **A partial select feeding a template that prints a `display_*` accessor
+  must carry the English column.** This has now bitten three times —
+  `category:` on the article page, `tags:` on the tag strip, `author:` on the
+  byline block — so treat it as a rule rather than a surprise.
+  `ArticleQuery::CARD_RELATIONS` is the deliberate exception: it carries
+  `designation` and *not* `designation_en`, because `/opinion` is the only
+  listing that prints a job title and it has no English edition. Adding
+  `/en/opinion` means adding the column in the same commit, and
+  `BilingualTest` asserts that coupling rather than leaving it to memory. Strict mode makes a missing
   attribute a `MissingAttributeException`, so it is a 500 rather than a lazy
   load — and `layout.categories` is *cached*, so an old payload has to be
   swept with `cache:clear` on deploy. `DEPLOY.md` says so.
@@ -81,18 +88,21 @@ Two smaller ones worth knowing:
 
 ### Bangla-only surfaces are omitted in English, not translated
 
-The e-paper, the archive and the newsletter have no `/en` routes, and the
-author bio and designation have no English column. Every one of those is
-**hidden** on an English page rather than rendered in Bangla: they are guarded
-on `Locale::isDefault()`, and the masthead tagline is dropped the same way. A
-byline *name* stays, because a person's name is their name in either edition.
+The e-paper, the archive and the newsletter have no `/en` routes. Each is
+**hidden** on an English page rather than rendered in Bangla — guarded on
+`Locale::isDefault()` — and the masthead tagline is dropped the same way.
 
-**Topics and tags used to be on that list and are not any more.** Both now
-carry `name_en` (`topics` also carries `description_en`) and both have `/en`
-routes, so `Topic::display_name`, `Tag::display_name` and their `url()`
-methods do the work the guards used to. Anything else moving off this list
-needs the same three things — a column, a route, and a display accessor —
-and the guard removed in the same commit.
+**Topics, tags and the byline block used to be on that list and are not any
+more.** `topics.name_en` + `description_en`, `tags.name_en`,
+`users.designation_en` + `bio_en` are columns; `/en/topic`, `/en/tag` and
+`/en/author` are routes; and `display_name` / `display_designation` /
+`display_bio` / `url()` do the work the guards used to.
+
+Anything else moving off this list needs the same three things — **a column, a
+route, and a display accessor** — with the `Locale::isDefault()` guard removed
+in the same commit. `users.name` deliberately has no English twin: a person's
+name is their name in either edition, and a `name_en` would be a romanisation
+nobody agrees on that the newsroom then has to keep in step.
 
 Two details that are easy to get wrong when extending it:
 
@@ -101,12 +111,14 @@ Two details that are easy to get wrong when extending it:
   percent-encoded Bangla address. A second slug column would give a tag two
   identities and force `Tag::articles()` to choose one; the Bangla site
   already ships such URLs everywhere.
-- **A name falls back to Bangla; a description falls back to nothing.** A
+- **A name falls back to Bangla; everything else falls back to nothing.** A
   heading has to render something or the page has none, so `display_name`
-  degrades to the Bangla name rather than to the slug. A description is
-  optional everywhere it appears, so `Topic::display_description` returns
-  null in English rather than putting a Bangla paragraph under an English
-  heading. The two go opposite ways on purpose.
+  degrades to the Bangla name rather than to the slug. Everything that is not
+  a heading — `Topic::display_description`, `User::display_designation`,
+  `User::display_bio` — returns null in English instead of putting Bangla
+  prose under an English heading. The author card simply does not appear for
+  a reporter who has no English biography, which is a byline degrading to a
+  name and a face rather than a mistake.
 
 `BilingualTest` asserts the absence of Bangla script anywhere in the text of
 an English page — not the presence of a few English words, which is what a
@@ -1131,7 +1143,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 831 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 839 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -1179,7 +1191,7 @@ coverage exists for both halves of the app:
 | `AdImpressionTest` | ad impressions counted from the browser, the one-query batch, what is refused, and that an ad with no URL is not a link |
 | `AdCreativeSizingTest` | ad creatives served at the slot size — the media link, the ladder, the single-rung case, and the cached payload |
 | `RedirectTest` | old-CMS URL preservation — that the lookup hangs off the 404 and costs a resolving request nothing, what matches, the loop and method guards, hit counting, and `redirects:import` including the rules it warns will never fire |
-| `BilingualTest` | the English edition — route order matched against the route collection, leakage in both directions and the control that says both editions render, an article's URL following its own row, canonicalisation out of the wrong edition, the switcher and `hreflang` including the untranslated and draft cases, that no Bangla chrome survives an English page and that the detector can fail, section naming and its fallback, the two translation files agreeing, the admin's translate action and its `translation_of` guard, and topics and tags in both editions including the name/description fallbacks going opposite ways |
+| `BilingualTest` | the English edition — route order matched against the route collection, leakage in both directions and the control that says both editions render, an article's URL following its own row, canonicalisation out of the wrong edition, the switcher and `hreflang` including the untranslated and draft cases, that no Bangla chrome survives an English page and that the detector can fail, section naming and its fallback, the two translation files agreeing, the admin's translate action and its `translation_of` guard, topics and tags in both editions, and the byline block — the English author card, the author page in both editions, the JSON-LD following the edition, and the fallbacks going opposite ways |
 | `TranslateArticlesTest` | `articles:translate` — that it only inserts, is idempotent, is deterministic on the source id, keeps the original's publication time, and refuses a draft source |
 | `Unit/FmtTest` | the locale switch behind the `@bn*` directives, including the three English answers that are not translations |
 | `SectionLabelTest` | the section and topic labels — that each of the four templates carries a legible colour for both themes, that the editor's raw colour is gone from text and still present on a border, and that the surfaces the labels are computed against still match `app.css` |

@@ -20,7 +20,7 @@
                              loading="lazy" class="h-12 w-12 rounded-full object-cover ring-1 ring-line">
                         <div class="min-w-0">
                             <p class="truncate text-sm font-semibold text-ink">{{ $article->author?->name }}</p>
-                            <p class="truncate text-xs text-muted">{{ $article->author?->designation }}</p>
+                            <p class="truncate text-xs text-muted">{{ $article->author?->display_designation }}</p>
                         </div>
                     </div>
 

@@ -26,7 +26,7 @@
                             </h3>
                         </a>
                         @if ($article->author)
-                            <a href="{{ route('author.show', $article->author) }}"
+                            <a href="{{ $article->author->url() }}"
                                class="-mb-1.5 mt-0.5 block truncate py-1.5 text-xs font-medium
                                       text-muted hover:text-brand">
                                 {{ $article->author->name }}

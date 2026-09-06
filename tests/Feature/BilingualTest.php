@@ -104,6 +104,8 @@ class BilingualTest extends TestCase
             '/en/rss' => 'en.feed.rss',
             '/en/sitemap.xml' => 'en.feed.sitemap',
             '/en/api/breaking' => 'en.api.breaking',
+            '/author/x' => 'author.show',
+            '/en/author/x' => 'en.author.show',
             '/topic/x' => 'topic.show',
             '/en/topic/x' => 'en.topic.show',
             '/tag/x' => 'tag.show',
@@ -553,6 +555,169 @@ class BilingualTest extends TestCase
 
         $this->assertSame(0, Tag::whereNull('name_en')->count(),
             'A seeded tag has no English name: '.Tag::whereNull('name_en')->pluck('name')->implode(', '));
+    }
+
+    // ── The byline block ─────────────────────────────────────────────────
+
+    /**
+     * The author card was the last surface `/en` hid, and it was hidden on
+     * `Locale::isDefault()`. It is guarded on the **edition's own biography**
+     * now, which gives the same answer for a reporter who has only a Bangla
+     * one and a better answer for a reporter who has both.
+     */
+    public function test_the_author_card_shows_the_english_biography_on_en(): void
+    {
+        $author = User::factory()->reporter()->create([
+            'designation' => 'বিশেষ প্রতিনিধি', 'designation_en' => 'Special Correspondent',
+            'bio' => 'বাংলা পরিচিতি', 'bio_en' => 'Writes from Dhaka.',
+        ])->fresh();
+
+        $bn = $this->article('bn', ['author_id' => $author->id]);
+        $en = $this->article('en', ['author_id' => $author->id]);
+
+        $this->get($bn->url)->assertOk()
+            ->assertSee('বিশেষ প্রতিনিধি')->assertSee('বাংলা পরিচিতি')
+            ->assertDontSee('Special Correspondent');
+
+        $this->get($en->url)->assertOk()
+            ->assertSee('Special Correspondent')->assertSee('Writes from Dhaka.')
+            ->assertDontSee('বিশেষ প্রতিনিধি')->assertDontSee('বাংলা পরিচিতি');
+    }
+
+    /**
+     * A job title and a biography fall back to **nothing**, which is the
+     * opposite of a section or topic name and deliberate. A name has to
+     * render or the page has no heading; neither of these is a heading, so an
+     * English page with no card beats one with a Bangla job title under an
+     * English headline.
+     */
+    public function test_a_reporter_with_no_english_details_gets_no_card_on_en(): void
+    {
+        $author = User::factory()->reporter()->create([
+            'designation' => 'বিশেষ প্রতিনিধি', 'designation_en' => null,
+            'bio' => 'বাংলা পরিচিতি', 'bio_en' => null,
+        ])->fresh();
+
+        $en = $this->article('en', ['author_id' => $author->id]);
+
+        $html = $this->get($en->url)->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('বাংলা পরিচিতি', $html);
+        $this->assertStringNotContainsString('বিশেষ প্রতিনিধি', $html);
+
+        // The byline itself stays: a person's name is their name either way.
+        $this->assertStringContainsString($author->name, $html);
+    }
+
+    /** One person, two pages — each listing that reporter's own edition. */
+    public function test_an_author_page_exists_in_both_editions_and_is_scoped(): void
+    {
+        $author = User::factory()->reporter()->create([
+            'designation_en' => 'Staff Correspondent', 'bio_en' => 'Writes from Dhaka.',
+        ])->fresh();
+
+        $bn = $this->article('bn', ['author_id' => $author->id, 'title' => 'বাংলা ফাঁস']);
+        $en = $this->article('en', ['author_id' => $author->id, 'title' => 'The English one']);
+
+        $this->get(route('author.show', $author))->assertOk()
+            ->assertSee($bn->title, false)->assertDontSee($en->title, false);
+
+        $this->get(route('en.author.show', $author))->assertOk()
+            ->assertSee($en->title, false)->assertDontSee($bn->title, false)
+            ->assertSee('Staff Correspondent');
+    }
+
+    public function test_an_english_byline_links_into_the_english_edition(): void
+    {
+        $author = User::factory()->reporter()->create(['bio_en' => 'Writes from Dhaka.'])->fresh();
+        $en = $this->article('en', ['author_id' => $author->id]);
+
+        $html = $this->get($en->url)->assertOk()->getContent();
+
+        $this->assertStringContainsString(route('en.author.show', $author), $html);
+        $this->assertStringNotContainsString(route('author.show', $author).'"', $html);
+    }
+
+    public function test_an_author_page_pairs_itself_with_hreflang(): void
+    {
+        $author = User::factory()->reporter()->create()->fresh();
+
+        $html = $this->get(route('en.author.show', $author))->assertOk()->getContent();
+
+        $this->assertStringContainsString('hreflang="en-BD"', $html);
+        $this->assertMatchesRegularExpression(
+            '/hreflang="x-default"\s*\n?\s*href="'.preg_quote(route('author.show', $author), '/').'"/',
+            $html,
+        );
+    }
+
+    /**
+     * The structured data has to describe the person the *page* describes. A
+     * `Person` whose `jobTitle` is Bangla on an English URL is the sort of
+     * mismatch a search engine surfaces verbatim in a result.
+     */
+    public function test_the_author_json_ld_follows_the_edition(): void
+    {
+        $author = User::factory()->reporter()->create([
+            'designation' => 'বিশেষ প্রতিনিধি', 'designation_en' => 'Special Correspondent',
+            'bio' => 'বাংলা পরিচিতি', 'bio_en' => 'Writes from Dhaka.',
+        ])->fresh();
+
+        foreach ([
+            route('author.show', $author) => ['বিশেষ প্রতিনিধি', 'বাংলা পরিচিতি'],
+            route('en.author.show', $author) => ['Special Correspondent', 'Writes from Dhaka.'],
+        ] as $url => [$title, $description]) {
+            $html = $this->get($url)->assertOk()->getContent();
+
+            preg_match('#<script type="application/ld\+json">(.*?)</script>#s', $html, $m);
+            $schema = json_decode(trim($m[1]), true, flags: JSON_THROW_ON_ERROR);
+
+            $this->assertSame($title, $schema['jobTitle']);
+            $this->assertSame($description, $schema['description']);
+            $this->assertSame($url, $schema['url']);
+        }
+    }
+
+    /**
+     * The third time a partial select has been caught missing an English
+     * column, so it is asserted rather than remembered.
+     *
+     * `ArticleController` selects the author's four English-relevant columns
+     * because the byline block prints both accessors. Under strict mode a
+     * column left out is a `MissingAttributeException` — a 500 on the page,
+     * not a lazy load — so rendering the page *is* the assertion.
+     */
+    public function test_the_article_select_carries_the_english_author_columns(): void
+    {
+        $author = User::factory()->reporter()->create([
+            'designation' => 'বিশেষ প্রতিনিধি', 'designation_en' => 'Staff Correspondent',
+            'bio' => 'বাংলা', 'bio_en' => 'Writes from Dhaka.',
+        ])->fresh();
+
+        [$bn, $en] = [
+            $this->article('bn', ['author_id' => $author->id]),
+            $this->article('en', ['author_id' => $author->id]),
+        ];
+
+        $this->get($en->url)->assertOk()->assertSee('Staff Correspondent');
+        $this->get($bn->url)->assertOk()->assertSee('বিশেষ প্রতিনিধি');
+    }
+
+    /**
+     * `/opinion` is the one listing that prints a byline's job title, and it
+     * has no English edition — so `CARD_RELATIONS` deliberately carries
+     * `designation` and not `designation_en`, and this is what says so. If
+     * `/en/opinion` is ever added, that select needs the English column in
+     * the same commit or the page is a 500.
+     */
+    public function test_the_card_select_deliberately_omits_the_english_designation(): void
+    {
+        $this->assertContains('author:id,name,slug,avatar,designation', \App\Services\ArticleQuery::CARD_RELATIONS);
+
+        $this->assertArrayNotHasKey(
+            'en.opinion', collect(\Illuminate\Support\Facades\Route::getRoutes()->getRoutesByName())->all(),
+            'An English opinion listing exists, so CARD_RELATIONS must now carry designation_en.',
+        );
     }
 
     // ── The translation files ────────────────────────────────────────────

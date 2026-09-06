@@ -34,7 +34,7 @@
     'author' => $article->author ? [
         '@type' => 'Person',
         'name' => $article->author->name,
-        'url' => route('author.show', $article->author),
+        'url' => $article->author->url(),
     ] : null,
     'publisher' => [
         '@type' => 'Organization',
@@ -95,7 +95,7 @@
                         {{-- Byline row: author, dateline, timestamp, reading time --}}
                         <div class="mt-5 flex flex-wrap items-center gap-x-4 gap-y-3 border-y border-line py-3">
                             @if ($article->author)
-                                <a href="{{ route('author.show', $article->author) }}"
+                                <a href="{{ $article->author->url() }}"
                                    class="flex items-center gap-2.5 group">
                                     <img src="{{ $article->author->avatar_url }}" alt=""
                                          width="40" height="40"
@@ -229,26 +229,25 @@
                     <x-article.share-bar :article="$article" class="mt-6 border-t border-line pt-5" />
 
                     {{-- Author box --}}
-                    {{-- The author card is Bangla-only. `users.designation` and
-                         `users.bio` are one piece of Bangla prose per staff
-                         member with no English counterpart, and a Bangla
-                         paragraph under an English article reads as a mistake
-                         rather than as a byline. The byline itself stays: a
-                         person's name is their name in either edition. --}}
-                    @if ($article->author?->bio && \App\Support\Locale::isDefault())
+                    {{-- Guarded on the *edition's* biography, not on the row
+                         having one at all: a reporter with a Bangla bio and no
+                         English one has no card on /en, which is the same
+                         answer the old `isDefault()` guard gave and now the
+                         right one for the right reason. --}}
+                    @if ($article->author?->display_bio)
                         <aside class="mt-8 flex gap-4 rounded-xl border border-line bg-surface p-5">
                             <img src="{{ $article->author->avatar_url }}" alt=""
                                  width="64" height="64" loading="lazy"
                                  class="h-16 w-16 shrink-0 rounded-full object-cover ring-1 ring-line">
                             <div>
-                                <a href="{{ route('author.show', $article->author) }}"
+                                <a href="{{ $article->author->url() }}"
                                    class="font-headline text-lg font-bold text-ink hover:text-brand">
                                     {{ $article->author->name }}
                                 </a>
-                                @if ($article->author->designation)
-                                    <p class="text-xs text-muted">{{ $article->author->designation }}</p>
+                                @if ($article->author->display_designation)
+                                    <p class="text-xs text-muted">{{ $article->author->display_designation }}</p>
                                 @endif
-                                <p class="mt-1.5 text-sm text-body">{{ $article->author->bio }}</p>
+                                <p class="mt-1.5 text-sm text-body">{{ $article->author->display_bio }}</p>
                             </div>
                         </aside>
                     @endif

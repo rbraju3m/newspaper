@@ -25,18 +25,18 @@ Counted rather than remembered, 6 September 2026 (three times that day; see belo
 
 | | |
 |---|---|
-| PHP files (app/database/routes/config) | 186 |
+| PHP files (app/database/routes/config) | 187 |
 | Models · Enums · Policies · Services | 24 · 5 · 3 · 8 |
 | Controllers · Artisan commands | 47 · 15 |
 | Blade templates | 116 |
-| Test files · tests · assertions | 56 · 831 · 3,673 |
-| Routes | 150 total · 74 admin |
+| Test files · tests · assertions | 56 · 839 · 3,716 |
+| Routes | 151 total · 74 admin |
 | Database tables | 39 |
 | Content on this box | 55 categories · 374 Bangla + 50 English articles · 110 comments · 37 users |
 | Demo modules | 5 e-paper issues (40 pages) · 8 photo galleries (64 images) |
 | Imagery | 153 media · 749 WebP derivatives · 78 MB on disk |
 | Bundle (gzipped, as `npm run build` reports it) | 13.1 KB CSS · 25.2 KB JS |
-| Translated UI strings | 135, in `lang/en.json` |
+| Translated UI strings | 136, in `lang/en.json` |
 
 Three commits on 6 September. The first added `App\Support\Contrast` (179 PHP
 files to 180) with `Unit/ContrastTest` and two tests in `NewsletterDigestTest`
@@ -50,7 +50,10 @@ table shows.
 A fourth commit that day took topics and tags into the English edition: one
 migration (`topics.name_en`, `topics.description_en`, `tags.name_en`), two
 routes, four more `lang/en.json` keys, and eight tests — 823 → 831 and
-3,622 → 3,673, in the same file rather than a new one.
+3,622 → 3,673, in the same file rather than a new one. A fifth did the byline
+block: `users.designation_en` and `bio_en`, an `/en/author` route, and seven
+more tests — 831 → 839 and 3,673 → 3,716. Every figure above was re-counted
+after that fifth commit, not carried forward from the fourth.
 
 The third commit that day built the English edition (gap 11) and moved six:
 five new PHP files — `Locale`, `Fmt`, `SetLocale`, `TranslateArticles`,
@@ -1536,18 +1539,28 @@ After them, in the order they are worth doing:
    nothing, because an English heading over a Bangla standfirst is worse than
    no standfirst.
 
+   **The byline block followed them.** `users.designation_en` and
+   `users.bio_en` are new columns, `/en/author/{slug}` is a route, and the
+   author card on an English article is guarded on the *edition's* biography
+   rather than on the locale — so a reporter with both gets a card, and one
+   with only Bangla gets a byline with no card, which is what the old guard
+   gave everybody. The author page exists in both editions and each lists that
+   reporter's own stories. `users.name` deliberately gains no English twin.
+
    **What is still deliberately out**, and it is a real list rather than an
    oversight. There is no block-driven English front page: the homepage layout
    is editor-managed with one position per column, and a second edition of it
    is a second thing for the desk to keep current — a stale English front page
    is worse than an honest list of the latest stories. The e-paper, the
-   archive and the newsletter have no `/en` routes, and the author bio and
-   designation have no English column; each of those is **hidden** on an
-   English page rather than rendered in Bangla. Google News's sitemap stays
-   Bangla-only, because the English desk is not a registered publication.
+   archive and the newsletter have no `/en` routes and are **hidden** on an
+   English page rather than rendered in Bangla. `/opinion` is the one listing
+   that prints a job title and has no English edition, which is why
+   `ArticleQuery::CARD_RELATIONS` carries `designation` and not
+   `designation_en`. Google News's sitemap stays Bangla-only, because the
+   English desk is not a registered publication.
 
-   Anything else joining the edition needs the same three things topics and
-   tags needed — a column, a route, and a display accessor — with the
+   Anything else joining the edition needs the same three things these did —
+   a column, a route, and a display accessor — with the
    `Locale::isDefault()` guard removed in the same commit.
 
    **What it cost to get right**, worth knowing before extending it. Locale

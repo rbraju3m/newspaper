@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\UserRole;
 use App\Support\Avatar;
+use App\Support\Locale;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -26,7 +27,8 @@ class User extends Authenticatable implements MustVerifyEmail
 
     protected $fillable = [
         'name', 'slug', 'email', 'phone', 'password', 'role', 'status',
-        'avatar', 'designation', 'bio', 'social', 'preferences',
+        'avatar', 'designation', 'designation_en', 'bio', 'bio_en',
+        'social', 'preferences',
     ];
 
     protected function casts(): array
@@ -139,6 +141,44 @@ class User extends Authenticatable implements MustVerifyEmail
      * Anything putting an avatar into metadata — structured data, `og:image`
      * — wants `avatar_photo_url` below instead.
      */
+    /**
+     * The staff member's job title in the edition being read, or **null**.
+     *
+     * Falls back to nothing rather than to the Bangla title, which is the
+     * opposite of `Category::display_name` and deliberate: a name has to
+     * render something or the page has no heading, and a job title is not a
+     * heading. The author card degrades to a name and a face, which is a
+     * byline; a Bangla job title under an English headline is a mistake.
+     */
+    protected function displayDesignation(): Attribute
+    {
+        return Attribute::get(fn (): ?string => Locale::isDefault()
+            ? $this->designation
+            : $this->designation_en);
+    }
+
+    /** The biography in the edition being read, or null. Same rule. */
+    protected function displayBio(): Attribute
+    {
+        return Attribute::get(fn (): ?string => Locale::isDefault()
+            ? $this->bio
+            : $this->bio_en);
+    }
+
+    /**
+     * The author page's URL in the edition the reader is in.
+     *
+     * **The person is not per-edition; the page is.** There is one row, one
+     * name and one slug — an English article's byline links to
+     * `/en/author/{slug}`, which lists that reporter's English stories, and
+     * the Bangla one lists their Bangla stories. `ArticleQuery` does the
+     * scoping; this only picks the address.
+     */
+    public function url(): string
+    {
+        return Locale::route('author.show', $this);
+    }
+
     protected function avatarUrl(): Attribute
     {
         return Attribute::get(

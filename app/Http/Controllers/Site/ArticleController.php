@@ -21,7 +21,12 @@ class ArticleController extends Controller
                 // MissingAttributeException under strict mode rather than a
                 // lazy load — a 500 on the page, not a slow one.
                 'category:id,name,name_en,slug,path,color',
-                'author:id,name,slug,avatar,designation,bio',
+                // The English columns for the same reason the category and
+                // tag selects carry theirs: the byline block prints
+                // `display_designation` and `display_bio`, and a column left
+                // out of a partial select is a MissingAttributeException
+                // under strict mode. Third time this shape has bitten.
+                'author:id,name,slug,avatar,designation,designation_en,bio,bio_en',
                 // `name_en` for the same reason the category select carries
                 // it: the tag strip prints `display_name`, and a column left
                 // out of a partial select is a MissingAttributeException

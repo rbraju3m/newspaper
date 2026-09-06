@@ -133,5 +133,6 @@
     "বিষয়": "Topic",
     ":count টি খবর": ":count stories",
     "এই বিষয়ে কোনো খবর নেই": "No stories on this topic yet",
-    "বিশেষ আয়োজন": "Special coverage"
+    "বিশেষ আয়োজন": "Special coverage",
+    ":count টি প্রতিবেদন": ":count reports"
 }

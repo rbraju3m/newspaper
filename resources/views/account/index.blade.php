@@ -65,6 +65,25 @@
                 @error('bio')<p class="mt-1.5 text-xs font-medium text-brand">{{ $message }}</p>@enderror
             </div>
 
+            {{-- Only staff have a public author page, so only staff are asked
+                 for the English version. A reader would never see either one
+                 rendered anywhere. --}}
+            @if ($user->role->isStaff())
+                <div>
+                    <label for="f-bio-en" class="mb-1.5 block text-sm font-semibold text-ink">
+                        নিজের সম্পর্কে (ইংরেজি) <span class="font-normal text-muted">(ঐচ্ছিক)</span>
+                    </label>
+                    <textarea id="f-bio-en" name="bio_en" rows="3" maxlength="500"
+                              class="lat w-full rounded-lg border border-line-strong bg-canvas px-3.5 py-2.5
+                                     text-base text-ink outline-none focus:border-brand
+                                     focus:ring-2 focus:ring-brand/20">{{ old('bio_en', $user->bio_en) }}</textarea>
+                    <p class="mt-1.5 text-xs text-muted">
+                        খালি থাকলে ইংরেজি সংস্করণে আপনার পরিচিতি দেখানো হবে না।
+                    </p>
+                    @error('bio_en')<p class="mt-1.5 text-xs font-medium text-brand">{{ $message }}</p>@enderror
+                </div>
+            @endif
+
             <button type="submit"
                     class="rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
                 সংরক্ষণ করুন
