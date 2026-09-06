@@ -37,9 +37,40 @@ class Contrast
     /** WCAG AA for text below 18.66px bold / 24px regular, which every label here is. */
     public const AA = 4.5;
 
+    /**
+     * The two surfaces a section label is printed on, and the reason there
+     * are two.
+     *
+     * These are `--color-surface` from `resources/css/app.css`, light and
+     * dark. `--color-canvas` is not used even though some cards sit on it,
+     * because in both themes it is the *easier* background: on light it is
+     * `#F7F8FA`, darker than white and so kinder to dark text, and on dark it
+     * is `#0E1113`, darker than the surface and so kinder to light text.
+     * Solving for the surface is conservative in both directions.
+     *
+     * `ContrastTest` reads both values back out of `app.css`, because these
+     * are a copy of somebody else's numbers and a theme edit would otherwise
+     * leave every label computed against a background that no longer exists.
+     */
+    public const SURFACE_LIGHT = '#FFFFFF';
+
+    public const SURFACE_DARK = '#171A1D';
+
     private const WHITE = [255, 255, 255];
 
     private const BLACK = [0, 0, 0];
+
+    /**
+     * Memo for `readable()`, which is called once per card per theme.
+     *
+     * A homepage renders around a hundred cards drawn from a handful of
+     * sections, so this turns two hundred scans into a dozen. Safe because
+     * the function is pure, and bounded by the number of distinct colours an
+     * editor has picked.
+     *
+     * @var array<string, string>
+     */
+    private static array $memo = [];
 
     /**
      * The WCAG relative-luminance contrast ratio between two colours, 1–21.
@@ -74,6 +105,11 @@ class Contrast
      */
     public static function readable(string $hex, string $on = '#FFFFFF', float $target = self::AA): string
     {
+        return self::$memo[$hex.'|'.$on.'|'.$target] ??= self::compute($hex, $on, $target);
+    }
+
+    private static function compute(string $hex, string $on, float $target): string
+    {
         $rgb = self::rgb($hex);
         $background = self::rgb($on);
 
@@ -100,6 +136,26 @@ class Contrast
         }
 
         return self::hex($towards);
+    }
+
+    /**
+     * The declarations that make one editor-picked colour legible on both
+     * themes, for a `style` attribute.
+     *
+     * **Two custom properties rather than one computed colour, because the
+     * server does not know which theme the reader is in.** The theme is a
+     * class on `<html>` that Alpine sets from `localStorage` — so a single
+     * value computed here would be right for one theme and wrong for the
+     * other, and on this palette *wrong* is the common case: sixteen of the
+     * eighteen seeded category colours fail AA on the dark surface, against
+     * two on the light one. `.section-label` in `app.css` picks between them.
+     */
+    public static function labelStyle(?string $hex, string $fallback = '#C8102E'): string
+    {
+        $hex = $hex ?: $fallback;
+
+        return '--label-light:'.self::readable($hex, self::SURFACE_LIGHT)
+            .';--label-dark:'.self::readable($hex, self::SURFACE_DARK);
     }
 
     /** `$rgb` moved `$amount` of the way to `$towards`, which preserves hue. */

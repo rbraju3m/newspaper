@@ -8,7 +8,8 @@
 
         <header class="mb-6 rounded-xl border border-line bg-surface p-5 lg:p-6"
                 style="border-top: 3px solid {{ $topic->color }}">
-            <span class="text-2xs font-bold uppercase tracking-wide" style="color: {{ $topic->color }}">
+            <span class="section-label text-2xs font-bold uppercase tracking-wide"
+                  style="{{ \App\Support\Contrast::labelStyle($topic->color) }}">
                 বিশেষ আয়োজন
             </span>
             <h1 class="font-headline text-3xl font-bold text-ink lg:text-4xl">{{ $topic->name }}</h1>

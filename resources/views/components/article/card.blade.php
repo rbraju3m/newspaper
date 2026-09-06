@@ -120,8 +120,8 @@
 
         <div class="{{ $variant === 'list' ? 'min-w-0 flex-1' : '' }}">
             @if ($showCategory && $article->category)
-                <span class="text-2xs font-bold uppercase tracking-wide"
-                      style="color: {{ $article->category->color }}">
+                <span class="section-label text-2xs font-bold uppercase tracking-wide"
+                      style="{{ \App\Support\Contrast::labelStyle($article->category->color) }}">
                     {{ $article->kicker ?: $article->category->name }}
                 </span>
             @endif

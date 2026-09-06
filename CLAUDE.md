@@ -856,23 +856,47 @@ They are defined light-first in `resources/css/app.css` and redefined under
 
 Ad slots must use `<x-ui.ad-slot>` so the box is reserved and CLS stays at zero.
 
-**A category's own colour is not safe as text.** `categories.color` is picked
-by an editor and printed as a section label in several places. Two of the
-eighteen the seeder writes do not clear WCAG AA against white — `#DB6B00` at
-3.43:1, which four sections carry, and `#0891B2` at 3.68:1 — so a label in the
-section's own colour is a label some readers cannot read.
+**A category's own colour is not safe as text, and the dark theme is the bad
+half.** `categories.color` and `topics.color` are picked with an
+`<input type="color">` and printed as a section label in five places. Against
+white, two of the eighteen colours the seeder writes fail WCAG AA — `#DB6B00`
+at 3.43:1 and `#0891B2` at 3.68:1. **Against the dark surface, sixteen of the
+eighteen fail**, and the two that pass there are precisely the two that fail on
+white. The light theme was the visible tenth of this.
 
-`App\Support\Contrast::readable($hex, $background)` returns the colour
-darkened (or lightened, on a dark background) only as far as AA requires, hue
-preserved, and returns anything already passing verbatim. The newsletter digest
-uses it. **The site's own templates do not yet** — the card label, the article
-kicker and the two topic labels still print the raw value, and they render on
-both themes, which is a decision nobody has made rather than an oversight.
-`STATUS.md` gap 5 names all four.
+So a label needs *two* answers, and the server cannot pick between them: the
+theme is a class on `<html>` that Alpine restores from `localStorage`, long
+after the HTML was built. Each label therefore carries both:
 
-The rule that matters when adding one: a colour used as a **border, a rule or a
-swatch** needs nothing, because AA is about text. A colour used as **text**
-goes through `Contrast::readable()`.
+```blade
+<span class="section-label text-2xs font-bold uppercase tracking-wide"
+      style="{{ \App\Support\Contrast::labelStyle($article->category->color) }}">
+```
+
+`labelStyle()` emits `--label-light` and `--label-dark`, each moved only as far
+as AA needs against that theme's `--color-surface`, hue preserved, and each
+returned verbatim when it already passes. `.section-label` in
+`resources/css/app.css` is what reads them — **the inline style alone does
+nothing**, and a label that renders in `--color-ink` instead of its section's
+colour means the class was left off.
+
+Three things follow.
+
+**`Contrast::SURFACE_LIGHT` and `SURFACE_DARK` are a copy of `--color-surface`
+from `app.css`,** and nothing links the files. `SectionLabelTest` parses the
+stylesheet and compares, because a theme edit would otherwise leave every label
+computed against a background that no longer exists — and it would look fine,
+since the labels would still be *a* colour.
+
+**`--color-canvas` is deliberately not used**, although some cards sit on it.
+In both themes it is the easier background — lighter-theme canvas is darker
+than white, dark-theme canvas is darker than the surface — so solving for the
+surface is conservative both ways.
+
+**A colour used as a border, a rule or a swatch needs none of this**, because
+AA is about text. The category page's underline and the block headers still
+print the editor's raw colour and must keep doing so; `SectionLabelTest` pins
+that too, so a fix that swept every occurrence would fail.
 
 ### Queries
 
@@ -995,7 +1019,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 770 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 779 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -1043,6 +1067,7 @@ coverage exists for both halves of the app:
 | `AdImpressionTest` | ad impressions counted from the browser, the one-query batch, what is refused, and that an ad with no URL is not a link |
 | `AdCreativeSizingTest` | ad creatives served at the slot size — the media link, the ladder, the single-rung case, and the cached payload |
 | `RedirectTest` | old-CMS URL preservation — that the lookup hangs off the 404 and costs a resolving request nothing, what matches, the loop and method guards, hit counting, and `redirects:import` including the rules it warns will never fire |
+| `SectionLabelTest` | the section and topic labels — that each of the four templates carries a legible colour for both themes, that the editor's raw colour is gone from text and still present on a border, and that the surfaces the labels are computed against still match `app.css` |
 | `Unit/ContrastTest` | the WCAG ratio and the smallest legible shade of a colour — against published constants, not against its own arithmetic |
 | `AvatarTest` | the fallback avatar — that no page carrying a face reaches a third-party host, that Bangla initials survive into the SVG, that the data URI is inert in an attribute, that every palette colour clears WCAG AA against white and a reader's colour is stable without every reader sharing it, and that structured data gets a real photograph or none |
 

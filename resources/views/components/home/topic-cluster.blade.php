@@ -9,7 +9,8 @@
              style="border-top: 3px solid {{ $topic->color }}">
         <div class="mb-4 flex items-end justify-between gap-4">
             <div>
-                <span class="text-2xs font-bold uppercase tracking-wide" style="color: {{ $topic->color }}">
+                <span class="section-label text-2xs font-bold uppercase tracking-wide"
+                      style="{{ \App\Support\Contrast::labelStyle($topic->color) }}">
                     বিশেষ আয়োজন
                 </span>
                 <h2 class="font-headline text-xl font-bold text-ink lg:text-2xl">{{ $topic->name }}</h2>

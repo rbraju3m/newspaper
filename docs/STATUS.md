@@ -21,7 +21,7 @@
 
 ### By the numbers
 
-Counted rather than remembered, 6 September 2026.
+Counted rather than remembered, 6 September 2026 (twice that day; see below).
 
 | | |
 |---|---|
@@ -29,7 +29,7 @@ Counted rather than remembered, 6 September 2026.
 | Models · Enums · Policies · Services | 24 · 5 · 3 · 8 |
 | Controllers · Artisan commands | 47 · 14 |
 | Blade templates | 115 |
-| Test files · tests · assertions | 52 · 770 · 3,284 |
+| Test files · tests · assertions | 53 · 779 · 3,324 |
 | Routes | 140 total · 73 admin |
 | Database tables | 39 |
 | Content on this box | 55 categories · 374 articles · 110 comments · 37 users |
@@ -37,10 +37,14 @@ Counted rather than remembered, 6 September 2026.
 | Imagery | 153 media · 749 WebP derivatives · 78 MB on disk |
 | Bundle (gzipped, as `npm run build` reports it) | 13.1 KB CSS · 25.2 KB JS |
 
-Three figures moved on 6 September because of that day's commit: `Support`
-gained `Contrast` (179 PHP files to 180), and the suite gained
-`Unit/ContrastTest` plus two tests in `NewsletterDigestTest` — 51 files to 52,
-756 tests to 770, 3,243 assertions to 3,284.
+Two commits on 6 September. The first added `App\Support\Contrast` (179 PHP
+files to 180) with `Unit/ContrastTest` and two tests in `NewsletterDigestTest`
+— 51 test files to 52, 756 tests to 770, 3,243 assertions to 3,284. The second
+took the same fix to the site's own templates and added `SectionLabelTest`: 52
+files to 53, 779 tests, 3,324 assertions. It added no PHP or Blade file,
+because it edited four existing templates and one existing class. The gzipped
+CSS moved 12.40 KB to 12.45 KB for the two new rules, inside the rounding this
+table shows.
 
 Two more moved on their own, and both were found by re-counting rather than by
 remembering, which is the only reason this table is worth having. **Imagery is
@@ -1524,25 +1528,35 @@ After them, in the order they are worth doing:
    mutations, including one that proves the "already clears AA is printed as
    it is" assertion can fail.
 
-5. **The same defect is still on the site itself, in four templates.** The
-   digest was fixed because it was the item on this list; the fix was not
-   spread to the reader-facing pages that print a category or topic name in
-   its own colour, because that is a different judgement — those surfaces have
-   a dark theme as well as a light one, and a colour darkened for white is the
-   wrong move on `.dark`.
+5. ~~**The same defect is still on the site itself, in four templates.**~~
+   **Done, 6 September**, and the dark theme turned out to be the whole story.
 
-   The four: `components/article/card.blade.php` (the card's section label),
-   `site/article.blade.php` (the kicker), `site/topic.blade.php` and
-   `components/home/topic-cluster.blade.php` (both topic labels, from
-   `topics.color`). The two category ones are live defects today, on the five
-   sections carrying `#DB6B00` or `#0891B2`. The topic ones are not yet: all
-   five seeded topics are brand red at 5.88:1 — checked, since that palette
-   never had been — and `topics.color` is the same editor-picked colour input,
-   so it is one edit away. Borders and dots are not affected — `mega-menu`, `category.blade.php` and
-   the admin lists use the colour as a rule or a swatch, where AA does not
-   apply. `Contrast::readable()` takes the background it is asked about, so
-   the mechanism for fixing these exists; what does not exist is a decision
-   about what the dark-theme answer should be.
+   The four are `components/article/card.blade.php` (the card's section
+   label), `site/article.blade.php` (the kicker), `site/topic.blade.php` and
+   `components/home/topic-cluster.blade.php`. Deferring them had been the
+   right call for the wrong reason: the worry was that a colour darkened for
+   white is wrong on `.dark`. It is worse than wrong. **Sixteen of the
+   eighteen seeded category colours fail AA against the dark surface**
+   (`#171A1D`), against two on white — and the two that pass on dark are
+   exactly the two that fail on light. The digest defect was the visible tenth
+   of one that was mostly in the theme nobody had measured.
+
+   The server cannot choose between them, because the theme is a class Alpine
+   restores from `localStorage` after the HTML is built. So each label carries
+   both answers as custom properties — `Contrast::labelStyle()` emits
+   `--label-light` and `--label-dark` — and `.section-label` in `app.css`
+   picks. `Contrast::SURFACE_LIGHT`/`SURFACE_DARK` are a copy of
+   `--color-surface`, and `SectionLabelTest` parses the stylesheet to check
+   they still agree, because nothing else links the two files.
+
+   Borders were left alone deliberately, and that is pinned too: the category
+   page's underline and the block headers still carry the editor's raw colour,
+   because AA is about text, and a sweep of every occurrence would have
+   repainted a design decision that was never wrong.
+
+   Checked on the running site in both themes rather than only in the suite.
+   `/education` on dark is the clearest case — `#6D28D9` at 2.46:1 becoming
+   `#9968E4` at 4.54:1.
 
 Both of the smaller self-contained items named here for a long time are closed:
 `/epaper/{date}` reaching only one edition per day (gap 8), and the `redirects`

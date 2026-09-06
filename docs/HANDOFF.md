@@ -68,8 +68,10 @@ the feeds, the sitemap and the FULLTEXT index, not just templates.
 ~~**One small known defect, deliberately not fixed.**~~ **Fixed on 6 September**
 — and it was two colours, not one: `#0891B2` fails as well at 3.68:1.
 `App\Support\Contrast` darkens a section label only as far as WCAG AA needs.
-See `STATUS.md` § "Where this was left" item 4 for what was done, and item 5
-for the same defect still standing in four of the site's own templates.
+The same fix then went to the site's four other colour labels, and that is
+where the real finding was: **sixteen of the eighteen seeded category colours
+fail AA on the dark surface**, against two on white. See `STATUS.md` § "Where
+this was left" items 4 and 5 — both closed.
 
 ## Constraints the user set
 

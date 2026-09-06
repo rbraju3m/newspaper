@@ -80,8 +80,8 @@
 
                     <header>
                         @if ($article->kicker)
-                            <span class="text-sm font-bold uppercase tracking-wide"
-                                  style="color: {{ $article->category->color }}">{{ $article->kicker }}</span>
+                            <span class="section-label text-sm font-bold uppercase tracking-wide"
+                                  style="{{ \App\Support\Contrast::labelStyle($article->category->color) }}">{{ $article->kicker }}</span>
                         @endif
 
                         <h1 class="mt-1 font-headline text-3xl font-bold leading-tight text-ink lg:text-5xl">

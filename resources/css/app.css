@@ -189,6 +189,17 @@
 
     /* Reserved ad boxes — prevents CLS, the #1 flaw on every reference site */
     .ad-slot { display: grid; place-items: center; background: var(--color-surface-2); overflow: hidden; }
+
+    /* A section or topic label, printed in the section's own editor-picked
+       colour. The two properties are set inline per element by
+       App\Support\Contrast::labelStyle(), which darkens or lightens that
+       colour only as far as WCAG AA needs against each theme's surface —
+       sixteen of the eighteen seeded category colours fail AA on the dark
+       one. The server cannot know which theme the reader is in, so it sends
+       both and this chooses. Falls back to the ink colour if a template
+       forgets the style attribute, rather than to an unstyled inherit. */
+    .section-label { color: var(--label-light, var(--color-ink)); }
+    .dark .section-label { color: var(--label-dark, var(--color-ink)); }
 }
 
 /* -------------------------------------------------------------------------
