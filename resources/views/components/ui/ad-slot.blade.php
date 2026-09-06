@@ -26,6 +26,6 @@
             <x-ui.ad-creative :ad="$ad" :dim="$dim" />
         @endif
     @else
-        <span class="text-2xs uppercase tracking-widest text-muted/60">বিজ্ঞাপন</span>
+        <span class="text-2xs uppercase tracking-widest text-muted/60">{{ __('বিজ্ঞাপন') }}</span>
     @endif
 </div>

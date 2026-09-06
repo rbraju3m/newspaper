@@ -4,6 +4,10 @@
     // Inline SVGs — no icon-font request, no CLS, and they inherit currentColor.
     $paths = [
         'menu'      => '<path d="M4 6h16M4 12h16M4 18h16"/>',
+        // The edition switcher. A globe rather than a flag: a language is not
+        // a country, and every flag anybody picks for Bangla or English is
+        // somebody's politics.
+        'globe'     => '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9S9.5 5.5 12 3z"/>',
         'close'     => '<path d="M6 6l12 12M18 6L6 18"/>',
         'search'    => '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
         'sun'       => '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',

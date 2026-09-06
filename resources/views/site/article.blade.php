@@ -1,6 +1,6 @@
 @extends('layouts.site')
 
-@section('title', ($article->meta_title ?: $article->title).' — '.config('site.name_bn'))
+@section('title', ($article->meta_title ?: $article->title).' — '.\App\Support\Locale::siteName())
 @section('description', $article->meta_description ?: ($article->excerpt ?? ''))
 @section('canonical', $article->url)
 @section('og_type', 'article')
@@ -11,7 +11,7 @@
 @push('head')
     <meta property="article:published_time" content="{{ $article->published_at?->toIso8601String() }}">
     <meta property="article:modified_time" content="{{ $article->updated_at?->toIso8601String() }}">
-    <meta property="article:section" content="{{ $article->category?->name }}">
+    <meta property="article:section" content="{{ $article->category?->display_name }}">
     @foreach ($article->tags as $tag)
         <meta property="article:tag" content="{{ $tag->name }}">
     @endforeach
@@ -28,7 +28,7 @@
     'image' => $article->image_url ? [$article->image_url] : null,
     'datePublished' => $article->published_at?->toIso8601String(),
     'dateModified' => $article->updated_at?->toIso8601String(),
-    'articleSection' => $article->category?->name,
+    'articleSection' => $article->category?->display_name,
     'inLanguage' => $article->locale,
     'wordCount' => str_word_count(strip_tags((string) $article->body)),
     'author' => $article->author ? [
@@ -38,7 +38,7 @@
     ] : null,
     'publisher' => [
         '@type' => 'Organization',
-        'name' => config('site.name_bn'),
+        'name' => \App\Support\Locale::siteName(),
         'logo' => ['@type' => 'ImageObject', 'url' => asset('images/logo.png')],
     ],
 ]), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) !!}
@@ -68,7 +68,7 @@
         <div class="mx-auto max-w-site px-4 py-5 lg:py-7">
             @include('site.partials.breadcrumb', [
                 'items' => [
-                    ['label' => $article->category->name, 'url' => $article->category->url()],
+                    ['label' => $article->category->display_name, 'url' => $article->category->url()],
                     ['label' => Str::limit($article->title, 40)],
                 ],
             ])
@@ -120,16 +120,16 @@
                                      whole preview. --}}
                                 @if ($article->published_at)
                                     <time datetime="{{ $article->published_at->toIso8601String() }}">
-                                        প্রকাশ: @bndate($article->published_at), @bntime($article->published_at)
+                                        {{ __('প্রকাশ:') }} @bndate($article->published_at), @bntime($article->published_at)
                                     </time>
                                 @else
                                     <span class="rounded bg-surface-2 px-1.5 py-0.5 font-semibold text-ink">
-                                        অপ্রকাশিত খসড়া
+                                        {{ __('অপ্রকাশিত খসড়া') }}
                                     </span>
                                 @endif
                                 <span class="flex items-center gap-1">
                                     <x-ui.icon name="clock" class="h-3.5 w-3.5" />
-                                    @bn($article->reading_time) মিনিট পড়া
+                                    @bn($article->reading_time) {{ __('মিনিট পড়া') }}
                                 </span>
                                 <span class="flex items-center gap-1">
                                     <x-ui.icon name="eye" class="h-3.5 w-3.5" />
@@ -141,16 +141,18 @@
                                  reference site offers either, despite very dense
                                  Bangla type. --}}
                             <div class="ml-auto flex items-center gap-1">
+                                @include('site.partials.edition-switch', ['article' => $article])
+
                                 <button type="button" @click="$store.reader.smaller()"
                                         :disabled="!$store.reader.canShrink"
                                         class="rounded-md border border-line px-2 py-1 text-xs font-bold
                                                text-body hover:border-brand hover:text-brand disabled:opacity-40"
-                                        aria-label="অ− ফন্ট ছোট করুন">অ−</button>
+                                        aria-label="{{ __('ফন্ট ছোট করুন') }}">{{ __('অ') }}−</button>
                                 <button type="button" @click="$store.reader.bigger()"
                                         :disabled="!$store.reader.canGrow"
                                         class="rounded-md border border-line px-2 py-1 text-sm font-bold
                                                text-body hover:border-brand hover:text-brand disabled:opacity-40"
-                                        aria-label="অ+ ফন্ট বড় করুন">অ+</button>
+                                        aria-label="{{ __('ফন্ট বড় করুন') }}">{{ __('অ') }}+</button>
 
                                 <button type="button"
                                         @click="$store.reader.toggleBookmark({{ $article->id }}, '{{ route('account.bookmarks.toggle', $article) }}')"
@@ -158,7 +160,7 @@
                                                hover:border-brand hover:text-brand"
                                         :class="$store.reader.has({{ $article->id }}) && 'border-brand text-brand'"
                                         :aria-pressed="$store.reader.has({{ $article->id }})"
-                                        aria-label="সংরক্ষণ করুন">
+                                        aria-label="{{ __('সংরক্ষণ করুন') }}">
                                     <x-ui.icon name="bookmark" class="h-4 w-4" />
                                 </button>
                             </div>
@@ -211,9 +213,13 @@
                         {!! $article->body !!}
                     </div>
 
-                    @if ($article->tags->isNotEmpty())
+                    {{-- Tags and topics link to `/tag` and `/topic`, which have no
+                         English edition, so the strips are hidden there rather than
+                         offering a reader a Bangla word that leaves the edition. The
+                         rows stay linked in the database for when those routes exist. --}}
+                    @if ($article->tags->isNotEmpty() && \App\Support\Locale::isDefault())
                         <div class="mt-7 flex flex-wrap items-center gap-2">
-                            <span class="text-sm font-semibold text-ink">বিষয়:</span>
+                            <span class="text-sm font-semibold text-ink">{{ __('বিষয়:') }}</span>
                             @foreach ($article->tags as $tag)
                                 <a href="{{ route('tag.show', $tag) }}"
                                    class="rounded-full bg-surface-2 px-3 py-1 text-sm text-body
@@ -227,7 +233,13 @@
                     <x-article.share-bar :article="$article" class="mt-6 border-t border-line pt-5" />
 
                     {{-- Author box --}}
-                    @if ($article->author?->bio)
+                    {{-- The author card is Bangla-only. `users.designation` and
+                         `users.bio` are one piece of Bangla prose per staff
+                         member with no English counterpart, and a Bangla
+                         paragraph under an English article reads as a mistake
+                         rather than as a byline. The byline itself stays: a
+                         person's name is their name in either edition. --}}
+                    @if ($article->author?->bio && \App\Support\Locale::isDefault())
                         <aside class="mt-8 flex gap-4 rounded-xl border border-line bg-surface p-5">
                             <img src="{{ $article->author->avatar_url }}" alt=""
                                  width="64" height="64" loading="lazy"
@@ -251,7 +263,7 @@
                          so the article page does not need restructuring then. --}}
                     <section id="comments" class="mt-10 scroll-mt-24">
                         <x-ui.section-header
-                            :title="'মন্তব্য ('.App\Support\Bangla::digits($article->comments_count).')'" />
+                            :title="__('মন্তব্য (:count)', ['count' => App\Support\Fmt::digits($article->comments_count)])" />
                         <x-comment.thread :article="$article" />
                     </section>
                 </article>
@@ -260,7 +272,7 @@
                     <div class="space-y-6 lg:sticky lg:top-20">
                         @if ($moreFromCategory->isNotEmpty())
                             <section class="rounded-xl border border-line bg-surface p-4">
-                                <x-ui.section-header :title="$article->category->name.' থেকে আরও'"
+                                <x-ui.section-header :title="__(':section থেকে আরও', ['section' => $article->category->display_name])"
                                                      :href="$article->category->url()"
                                                      :color="$article->category->color" />
                                 <div class="space-y-4">
@@ -279,7 +291,7 @@
             {{-- Related --}}
             @if ($related->isNotEmpty())
                 <section class="mt-12 border-t border-line pt-8">
-                    <x-ui.section-header title="সম্পর্কিত খবর" />
+                    <x-ui.section-header :title="__('সম্পর্কিত খবর')" />
                     <div class="grid gap-x-6 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
                         @foreach ($related as $item)
                             <x-article.card :article="$item" variant="standard" />

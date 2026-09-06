@@ -15,7 +15,12 @@ class ArticleController extends Controller
     {
         $article = Article::query()
             ->with([
-                'category:id,name,slug,path,color',
+                // `name_en` because the English edition's breadcrumb and
+                // "more from" heading print `Category::display_name`, and a
+                // column left out of a partial select is a
+                // MissingAttributeException under strict mode rather than a
+                // lazy load — a 500 on the page, not a slow one.
+                'category:id,name,name_en,slug,path,color',
                 'author:id,name,slug,avatar,designation,bio',
                 'tags:id,name,slug',
                 'topics:id,name,slug,color',

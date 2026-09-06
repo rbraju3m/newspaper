@@ -36,6 +36,11 @@ return [
     'name_en' => env('SITE_NAME_EN', 'Dainik Alorekha'),
     'tagline' => env('SITE_TAGLINE', 'সময়ের সাথে সত্যের পথে'),
     'description' => env('SITE_DESCRIPTION', 'বাংলাদেশ ও বিশ্বের সর্বশেষ খবর, রাজনীতি, খেলা, বিনোদন, ব্যবসা ও মতামত।'),
+    // The English edition's default meta description. Not a translation of the
+    // line above — it is the fallback a search engine shows for a page with no
+    // description of its own, so it has to read as English copy rather than as
+    // a list of the same words in the other script.
+    'description_en' => env('SITE_DESCRIPTION_EN', 'The latest news from Bangladesh and the world: politics, sport, business, entertainment and opinion.'),
 
     'editor' => env('SITE_EDITOR', ''),
     'publisher' => env('SITE_PUBLISHER', ''),

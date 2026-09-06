@@ -11,7 +11,7 @@
      )"
      aria-hidden="true">
     <div class="pointer-events-auto sticky top-24 flex flex-col items-center gap-1.5">
-        <span class="mb-1 text-2xs font-semibold uppercase tracking-wide text-muted">শেয়ার</span>
+        <span class="mb-1 text-2xs font-semibold uppercase tracking-wide text-muted">{{ __('শেয়ার') }}</span>
 
         @foreach ([
             ['facebook', '#1877F2'],
@@ -28,7 +28,7 @@
             </button>
         @endforeach
 
-        <button type="button" @click="copy(); $store.toast.success('লিংক কপি হয়েছে')" tabindex="-1"
+        <button type="button" @click="copy(); $store.toast.success('{{ __('লিংক কপি হয়েছে') }}')" tabindex="-1"
                 class="flex h-9 w-9 items-center justify-center rounded-full border border-line
                        bg-surface text-body transition hover:border-brand hover:text-brand">
             <x-ui.icon name="copy" class="h-4 w-4" x-show="!copied" />

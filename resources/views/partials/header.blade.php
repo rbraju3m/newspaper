@@ -16,16 +16,16 @@
             <p class="text-muted">@bnfulldate()</p>
 
             <div class="flex items-center gap-4">
-                <a href="{{ route('epaper.index') }}" class="font-medium text-body hover:text-brand">ই-পেপার</a>
+                <a href="{{ route('epaper.index') }}" class="font-medium text-body hover:text-brand">{{ __('ই-পেপার') }}</a>
                 <span class="h-3 w-px bg-line"></span>
-                <a href="{{ route('archive') }}" class="font-medium text-body hover:text-brand">আর্কাইভ</a>
+                <a href="{{ route('archive') }}" class="font-medium text-body hover:text-brand">{{ __('আর্কাইভ') }}</a>
                 <span class="h-3 w-px bg-line"></span>
                 <a href="{{ route('live') }}" class="flex items-center gap-1.5 font-medium text-body hover:text-brand">
                     <span class="relative flex h-1.5 w-1.5">
                         <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand opacity-75"></span>
                         <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand"></span>
                     </span>
-                    লাইভ
+                    {{ __('লাইভ') }}
                 </a>
                 <span class="h-3 w-px bg-line"></span>
 
@@ -46,7 +46,8 @@
     {{-- 2 ── Masthead ───────────────────────────────────────────────────── --}}
     <div class="border-b border-line bg-surface">
         <div class="mx-auto flex max-w-site items-center gap-6 px-4 py-3 lg:py-5">
-            <a href="{{ route('home') }}" class="shrink-0" aria-label="{{ config('app.name') }} — প্রচ্ছদ">
+            <a href="{{ \App\Support\Locale::route('home') }}" class="shrink-0"
+               aria-label="{{ \App\Support\Locale::siteName() }} — {{ __('প্রচ্ছদ') }}">
                 <x-ui.logo class="h-9 w-auto lg:h-14" />
             </a>
 
@@ -57,12 +58,12 @@
 
             <button type="button" @click="search = !search"
                     class="ml-auto rounded-md p-2 text-ink hover:bg-surface-2 lg:hidden"
-                    aria-label="অনুসন্ধান">
+                    aria-label="{{ __('অনুসন্ধান') }}">
                 <x-ui.icon name="search" class="h-5 w-5" />
             </button>
             <button type="button" @click="mega = true"
                     class="rounded-md p-2 text-ink hover:bg-surface-2 lg:hidden"
-                    aria-label="মেনু" :aria-expanded="mega">
+                    aria-label="{{ __('মেনু') }}" :aria-expanded="mega">
                 <x-ui.icon name="menu" class="h-5 w-5" />
             </button>
         </div>
@@ -71,15 +72,15 @@
     {{-- 3 ── Sticky category nav ────────────────────────────────────────── --}}
     <nav class="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur
                 supports-[backdrop-filter]:bg-surface/80"
-         aria-label="প্রধান মেনু">
+         aria-label="{{ __('প্রধান মেনু') }}">
         <div class="mx-auto flex max-w-site items-center gap-1 px-4">
 
             <button type="button" @click="mega = true"
                     class="hidden shrink-0 items-center gap-2 py-3 pr-3 text-sm font-semibold text-ink
                            hover:text-brand lg:flex"
-                    aria-label="সব বিভাগ" :aria-expanded="mega">
+                    aria-label="{{ __('সব বিভাগ') }}" :aria-expanded="mega">
                 <x-ui.icon name="menu" class="h-4 w-4" />
-                <span>সব বিভাগ</span>
+                <span>{{ __('সব বিভাগ') }}</span>
             </button>
 
             {{-- Horizontally scrollable on mobile, wrapping never allowed --}}
@@ -93,7 +94,7 @@
                                'text-ink hover:text-brand' => $activeCategoryId !== $category->id,
                            ])
                            @if ($activeCategoryId === $category->id) aria-current="page" @endif>
-                            {{ $category->name }}
+                            {{ $category->display_name }}
                             @if ($activeCategoryId === $category->id)
                                 <span class="absolute inset-x-2 bottom-0 h-0.5 rounded-full"
                                       style="background: {{ $category->color }}"></span>
@@ -105,7 +106,7 @@
 
             <div class="hidden shrink-0 items-center gap-1 pl-2 lg:flex">
                 <button type="button" @click="search = !search"
-                        class="rounded-md p-2 text-ink hover:bg-surface-2" aria-label="অনুসন্ধান">
+                        class="rounded-md p-2 text-ink hover:bg-surface-2" aria-label="{{ __('অনুসন্ধান') }}">
                     <x-ui.icon name="search" class="h-4.5 w-4.5" />
                 </button>
 
@@ -116,12 +117,12 @@
                 @else
                     <a href="{{ route('login') }}"
                        class="rounded-md px-3 py-1.5 text-sm font-semibold text-ink hover:bg-surface-2">
-                        লগইন
+                        {{ __('লগইন') }}
                     </a>
                     <a href="{{ route('register') }}"
                        class="rounded-md bg-brand px-3.5 py-1.5 text-sm font-semibold text-white
                               transition hover:bg-brand-700">
-                        নিবন্ধন
+                        {{ __('নিবন্ধন') }}
                     </a>
                 @endauth
             </div>
@@ -131,7 +132,7 @@
         @if ($trendingTopics->isNotEmpty())
             <div class="border-t border-line/70 bg-surface-2/50">
                 <div class="no-scrollbar mx-auto flex max-w-site items-center gap-2 overflow-x-auto px-4 py-2">
-                    <span class="shrink-0 text-2xs font-bold uppercase tracking-wide text-muted">ট্রেন্ডিং</span>
+                    <span class="shrink-0 text-2xs font-bold uppercase tracking-wide text-muted">{{ __('ট্রেন্ডিং') }}</span>
                     @foreach ($trendingTopics as $topic)
                         <a href="{{ route('topic.show', $topic->slug) }}"
                            class="shrink-0 rounded-full border border-line bg-surface px-3 py-1 text-xs

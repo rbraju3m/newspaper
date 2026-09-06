@@ -5,7 +5,9 @@ namespace App\Models;
 use App\Enums\ArticleStatus;
 use App\Enums\ArticleType;
 use App\Support\Bangla;
+use App\Support\Fmt;
 use App\Support\Html;
+use App\Support\Locale;
 use App\Support\Slug;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
@@ -280,9 +282,71 @@ class Article extends Model
         return $this->belongsToMany(User::class, 'bookmarks');
     }
 
+    /** The article this one was translated *from*, if it was. */
     public function translation(): BelongsTo
     {
         return $this->belongsTo(self::class, 'translation_of');
+    }
+
+    /** The articles translated *from* this one. */
+    public function translations(): HasMany
+    {
+        return $this->hasMany(self::class, 'translation_of');
+    }
+
+    /**
+     * The counterpart at any status, which is what the **admin** wants.
+     *
+     * `counterpart()` is published-only because it feeds the switcher and
+     * `hreflang`, where an unpublished alternate is a 404 in a `<link>`. The
+     * desk needs the opposite: a translation that exists as a draft is
+     * exactly the thing that must not be created twice.
+     */
+    public function counterpartInAnyState(): ?self
+    {
+        $wanted = Locale::other($this->locale);
+
+        return ($this->translation_of
+                ? $this->translation()->with('category:id,path')->where('locale', $wanted)->first()
+                : null)
+            ?? $this->translations()->with('category:id,path')->where('locale', $wanted)->first();
+    }
+
+    /**
+     * The same story in the other edition, or null.
+     *
+     * `translation_of` is a one-way pointer and a counterpart can be on
+     * either end of it, so both directions have to be tried: the English
+     * article points at the Bangla one, and the Bangla one is found by
+     * looking for what points at it. Which end holds the pointer depends only
+     * on which was written first, and no reader should be able to tell.
+     *
+     * **Published-only**, because this is what the switcher and `hreflang`
+     * are built from. An unpublished draft is not a page, and offering it as
+     * an alternate is a 404 in a `<link rel="alternate">` — which a search
+     * engine reads as the pair being broken rather than as one side not
+     * existing yet.
+     *
+     * Returns null rather than throwing when a relation was not eager-loaded
+     * is *not* what this does: it queries. Call it once per page, from the
+     * controller, not from inside a card loop.
+     */
+    public function counterpart(): ?self
+    {
+        $wanted = Locale::other($this->locale);
+
+        // Whichever end holds the pointer. Both sides are scoped the same way,
+        // so a draft translation is invisible from either direction.
+        //
+        // `category` is eager-loaded because the only thing a caller does with
+        // the result is read `->url`, which reads `category->path`. Left off,
+        // that is a lazy load on a single-row `first()` — the case the
+        // framework's guard does not cover and `AppServiceProvider` closes by
+        // hand, so it is a 500 rather than a silent extra query.
+        return ($this->translation_of
+                ? $this->translation()->published()->with('category:id,path')->where('locale', $wanted)->first()
+                : null)
+            ?? $this->translations()->published()->with('category:id,path')->where('locale', $wanted)->first();
     }
 
     // ── Scopes ───────────────────────────────────────────────────────────
@@ -374,13 +438,25 @@ class Article extends Model
      * Canonical URL: /{category-path}/{id}/{slug}. The id makes the URL stable
      * when a headline is edited, which is how every reference site does it.
      */
+    /**
+     * The canonical URL, in **this article's** edition rather than the
+     * request's.
+     *
+     * Everything else on the site addresses the edition the reader is in;
+     * this one reads the row. An English story linked from a Bangla listing
+     * has to be an `/en` URL — serving an English body inside the Bangla
+     * frame at a Bangla URL would be a page whose `lang` attribute, chrome
+     * and content disagree, and `ArticleController` canonicalises against
+     * this value, so getting it from the request would 301 the story into the
+     * wrong edition and back for ever.
+     */
     protected function url(): Attribute
     {
-        return Attribute::get(fn (): string => route('article.show', [
+        return Attribute::get(fn (): string => Locale::route('article.show', [
             'category' => $this->category?->path ?? 'news',
             'article' => $this->id,
             'slug' => $this->slug,
-        ]));
+        ], $this->locale));
     }
 
     /**
@@ -469,7 +545,7 @@ class Article extends Model
     protected function publishedAgo(): Attribute
     {
         return Attribute::get(fn (): string => $this->published_at
-            ? Bangla::ago($this->published_at)
+            ? Fmt::ago($this->published_at)
             : '');
     }
 

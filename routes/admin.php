@@ -32,6 +32,9 @@ Route::middleware(['auth', 'staff', 'throttle:admin'])->prefix('admin')->name('a
         // Irreversible and reaches every subscribed browser, so it is its own
         // action rather than a side effect of saving `is_breaking`.
         Route::post('/{article}/push', 'push')->name('push');
+        // Creates the counterpart draft in the other edition, or reopens the
+        // one that already exists. POST because it writes a row.
+        Route::post('/{article}/translate', 'translate')->name('translate');
         Route::delete('/{article}', 'destroy')->name('destroy');
     });
 

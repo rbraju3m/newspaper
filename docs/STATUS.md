@@ -21,23 +21,24 @@
 
 ### By the numbers
 
-Counted rather than remembered, 6 September 2026 (twice that day; see below).
+Counted rather than remembered, 6 September 2026 (three times that day; see below).
 
 | | |
 |---|---|
-| PHP files (app/database/routes/config) | 180 |
+| PHP files (app/database/routes/config) | 185 |
 | Models · Enums · Policies · Services | 24 · 5 · 3 · 8 |
-| Controllers · Artisan commands | 47 · 14 |
-| Blade templates | 115 |
-| Test files · tests · assertions | 53 · 779 · 3,324 |
-| Routes | 140 total · 73 admin |
+| Controllers · Artisan commands | 47 · 15 |
+| Blade templates | 116 |
+| Test files · tests · assertions | 56 · 823 · 3,622 |
+| Routes | 148 total · 74 admin |
 | Database tables | 39 |
-| Content on this box | 55 categories · 374 articles · 110 comments · 37 users |
+| Content on this box | 55 categories · 374 Bangla + 50 English articles · 110 comments · 37 users |
 | Demo modules | 5 e-paper issues (40 pages) · 8 photo galleries (64 images) |
 | Imagery | 153 media · 749 WebP derivatives · 78 MB on disk |
 | Bundle (gzipped, as `npm run build` reports it) | 13.1 KB CSS · 25.2 KB JS |
+| Translated UI strings | 131, in `lang/en.json` |
 
-Two commits on 6 September. The first added `App\Support\Contrast` (179 PHP
+Three commits on 6 September. The first added `App\Support\Contrast` (179 PHP
 files to 180) with `Unit/ContrastTest` and two tests in `NewsletterDigestTest`
 — 51 test files to 52, 756 tests to 770, 3,243 assertions to 3,284. The second
 took the same fix to the site's own templates and added `SectionLabelTest`: 52
@@ -45,6 +46,14 @@ files to 53, 779 tests, 3,324 assertions. It added no PHP or Blade file,
 because it edited four existing templates and one existing class. The gzipped
 CSS moved 12.40 KB to 12.45 KB for the two new rules, inside the rounding this
 table shows.
+
+The third commit that day built the English edition (gap 11) and moved six:
+five new PHP files — `Locale`, `Fmt`, `SetLocale`, `TranslateArticles`,
+`EnglishContent` — one new Blade partial (the edition switcher), one new
+Artisan command, eight new routes under `/en`, and three test files taking the
+suite 779 → 823 and 3,324 → 3,622. `Content on this box` gained 50 English
+articles from `articles:translate`, which is demo content and not a seeder
+figure.
 
 Two more moved on their own, and both were found by re-counting rather than by
 remembering, which is the only reason this table is worth having. **Imagery is
@@ -1487,26 +1496,48 @@ and neither can be finished from this box.
 
 After them, in the order they are worth doing:
 
-3. **Gap 11 — bilingual.** The only substantial feature still unbuilt, and the
-   one thing left that is a *decision* before it is work. The data layer is
-   already there: `articles.locale`, `articles.translation_of` with a
-   self-referencing foreign key, and `unique(slug, locale)`. Missing is an
-   English edition, a language switcher and `hreflang` — and it is what Phase
-   6's last item is explicitly waiting on.
+3. ~~**Gap 11 — bilingual.**~~ **Built, 6 September**, as the *translated
+   edition* — the reading the schema was designed for, chosen by the user out
+   of the three the note below used to list.
 
-   Three readings, and they are not the same job. A **UI-only locale** puts
-   the interface in English and leaves content Bangla, which is smallest but
-   makes `translation_of` pointless. A **translated edition** gives an article
-   an English counterpart at `/en/…`, with a switcher that appears only when a
-   translation exists and `hreflang` pairs both ways — this is what the schema
-   was designed for. A **separate English desk** means independent English
-   articles with their own categories, which is largest and makes
-   `translation_of` optional rather than central.
+   **What exists.** Bangla is unprefixed; English is `/en`. An article in
+   either edition is its own row, linked by `articles.translation_of`, with
+   its own slug, byline, publication time and comment thread. `/en` is the
+   latest English stories, `/en/{section}` the section listings,
+   `/en/{section}/{id}/{slug}` the articles, plus `/en/search`, `/en/rss`,
+   `/en/sitemap.xml` and `/en/api/breaking` for the header ticker. A switcher
+   appears on a story **only when a published counterpart exists**, and
+   `hreflang` pairs both ways with `x-default` on the Bangla original.
 
-   Worth knowing before choosing: Bangla-first is not only templates. The
-   typography, the `@bn*` directives and the `class="lat"` convention all
-   assume Bangla is the default, and a second locale reaches the feeds, the
-   sitemap and the FULLTEXT index too. It is a phase, not an afternoon.
+   `categories.name_en` was on the table from the first migration and had
+   never been displayed or even filled; `CategorySeeder` now names all 55
+   sections in English and `Category::display_name` picks. UI strings go
+   through `__()` against `lang/en.json` (131 keys), and the `@bn*` directives
+   are locale-aware behind unchanged names.
+
+   Two doors into a translation: `POST /admin/articles/{article}/translate`
+   creates or reopens the counterpart draft, copying everything that is not
+   language and no words at all; and `articles:translate` fills the demo box —
+   insert-only, idempotent, deterministic on the source id.
+
+   **What was deliberately left out**, and it is a real list rather than an
+   oversight. There is no block-driven English front page: the homepage layout
+   is editor-managed with one position per column, and a second edition of it
+   is a second thing for the desk to keep current — a stale English front page
+   is worse than an honest list of the latest stories. Topics, tags, the
+   e-paper, the archive and the newsletter have no `/en` routes, and the
+   author bio and designation have no English column; every one of those is
+   **hidden** on an English page rather than rendered in Bangla. Google News's
+   sitemap stays Bangla-only, because the English desk is not a registered
+   publication.
+
+   **What it cost to get right**, worth knowing before extending it. Locale
+   leakage has no error and no visual break, so the tests assert the absence
+   of one edition's stories from the other's listings, feeds and sitemap —
+   with a control that says both editions render at all, because a broken
+   scope and an empty site look identical. `App::setLocale()` outlives a
+   request, which php-fpm hides and the suite did not.
+
 4. ~~**A contrast fix in the newsletter digest.**~~ **Done, 6 September.**
    `emails/newsletter-digest` printed the category name in the category's own
    colour on white, and it turned out to be **two** colours below WCAG AA

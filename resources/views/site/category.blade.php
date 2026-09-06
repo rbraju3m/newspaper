@@ -1,21 +1,34 @@
 @extends('layouts.site')
 
-@section('title', ($category->meta_title ?: $category->name).' — '.config('site.name_bn'))
-@section('description', $category->meta_description ?: 'সর্বশেষ '.$category->name.' বিষয়ক খবর।')
+@section('title', ($category->meta_title ?: $category->display_name).' — '.\App\Support\Locale::siteName())
+@section('description', $category->meta_description
+    ?: __('সর্বশেষ :section বিষয়ক খবর।', ['section' => $category->display_name]))
 @section('canonical', $category->url())
+
+{{-- A section exists in both editions whether or not it currently holds a
+     translated story, so unlike an article this pair is unconditional. An
+     empty English section listing is a thin page, not a broken one. --}}
+@push('alternates')
+    @foreach (\App\Support\Locale::ALL as $edition)
+        <link rel="alternate" hreflang="{{ \App\Support\Locale::hreflang($edition) }}"
+              href="{{ \App\Support\Locale::route('category.show', $category->path, $edition) }}">
+    @endforeach
+    <link rel="alternate" hreflang="x-default"
+          href="{{ \App\Support\Locale::route('category.show', $category->path, \App\Support\Locale::DEFAULT) }}">
+@endpush
 
 @section('content')
     <div class="mx-auto max-w-site px-4 py-5 lg:py-7"
          x-data="infiniteScroll({{ Js::from($articles->nextPageUrl()) }})">
 
         @include('site.partials.breadcrumb', [
-            'items' => $ancestors->map(fn ($a) => ['label' => $a->name, 'url' => $a->url()])
-                ->push(['label' => $category->name])
+            'items' => $ancestors->map(fn ($a) => ['label' => $a->display_name, 'url' => $a->url()])
+                ->push(['label' => $category->display_name])
                 ->all(),
         ])
 
         <header class="mb-6 border-b-2 pb-3" style="border-bottom-color: {{ $category->color }}">
-            <h1 class="font-headline text-3xl font-bold text-ink lg:text-4xl">{{ $category->name }}</h1>
+            <h1 class="font-headline text-3xl font-bold text-ink lg:text-4xl">{{ $category->display_name }}</h1>
             @if ($category->description)
                 <p class="mt-1.5 max-w-3xl text-base text-muted">{{ $category->description }}</p>
             @endif
@@ -26,7 +39,7 @@
                         <a href="{{ $child->url() }}"
                            class="shrink-0 rounded-full border border-line bg-surface px-3.5 py-1.5
                                   text-sm font-medium text-body transition hover:border-brand hover:text-brand">
-                            {{ $child->name }}
+                            {{ $child->display_name }}
                         </a>
                     @endforeach
                 </div>
@@ -54,8 +67,8 @@
         </div>
 
         @if ($articles->isEmpty() && ! $lead)
-            <x-ui.empty-state title="এই বিভাগে এখনো কোনো খবর নেই"
-                              message="শীঘ্রই নতুন খবর যুক্ত হবে।" />
+            <x-ui.empty-state :title="__('এই বিভাগে এখনো কোনো খবর নেই')"
+                              :message="__('শীঘ্রই নতুন খবর যুক্ত হবে।')" />
         @endif
 
         @include('site.partials.load-more', ['paginator' => $articles])

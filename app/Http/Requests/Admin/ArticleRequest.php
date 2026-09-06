@@ -5,6 +5,7 @@ namespace App\Http\Requests\Admin;
 use App\Enums\ArticleStatus;
 use App\Enums\ArticleType;
 use App\Support\Html;
+use App\Support\Locale;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -47,7 +48,29 @@ class ArticleRequest extends FormRequest
 
             'dateline' => ['nullable', 'string', 'max:120'],
             'source' => ['nullable', 'string', 'max:120'],
-            'locale' => ['required', 'in:bn,en'],
+            'locale' => ['required', Rule::in(Locale::ALL)],
+
+            /*
+             * Scoped, because `exists:articles,id` on its own would accept an
+             * article in the *same* edition — which is the graft this
+             * repository has been bitten by before on `poll_options`. A Bangla
+             * story pointing at another Bangla story is not a translation:
+             * `counterpart()` looks for the other locale, finds nothing, and
+             * the switcher never appears while the admin insists the two are
+             * linked.
+             *
+             * It also cannot point at itself, and cannot point at an article
+             * that is itself a translation — the pointer is one hop by design,
+             * and a chain would make "the other edition" ambiguous.
+             */
+            'translation_of' => [
+                'nullable',
+                Rule::exists('articles', 'id')
+                    ->where(fn ($q) => $q->where('locale', Locale::other($this->input('locale')))
+                        ->whereNull('translation_of')
+                        ->whereNull('deleted_at')),
+                Rule::notIn([$this->route('article')?->id]),
+            ],
 
             'meta_title' => ['nullable', 'string', 'max:255'],
             'meta_description' => ['nullable', 'string', 'max:500'],

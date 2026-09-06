@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="bn" dir="ltr" class="scroll-pt-24">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="ltr" class="scroll-pt-24">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -25,13 +25,24 @@
     </script>
 
     <title>@yield('title', config('app.name'))</title>
-    <meta name="description" content="@yield('description', config('site.description', ''))">
+    <meta name="description" content="@yield('description', \App\Support\Locale::siteDescription())">
     <link rel="canonical" href="@yield('canonical', url()->current())">
 
+    {{-- hreflang.
+         Only emitted where a page genuinely exists in both editions, which is
+         why it is a stack a view pushes to rather than something computed
+         here. A blanket pair on every page would advertise /en/archive and
+         /en/epaper, which are 404s — and a broken alternate is read as the
+         pair itself being wrong, so it costs the pages that *are* translated.
+
+         `x-default` names the Bangla edition: it is the original, and it is
+         what a reader with no matching language preference should land on. --}}
+    @stack('alternates')
+
     {{-- Open Graph / Twitter — every reference site under-invests here. --}}
-    <meta property="og:site_name" content="{{ config('app.name') }}">
+    <meta property="og:site_name" content="{{ \App\Support\Locale::siteName() }}">
     <meta property="og:type" content="@yield('og_type', 'website')">
-    <meta property="og:locale" content="bn_BD">
+    <meta property="og:locale" content="{{ app()->getLocale() }}_BD">
     <meta property="og:title" content="@yield('og_title', View::yieldContent('title'))">
     <meta property="og:description" content="@yield('og_description', View::yieldContent('description'))">
     <meta property="og:url" content="@yield('canonical', url()->current())">
@@ -42,7 +53,7 @@
     <link rel="apple-touch-icon" href="{{ asset('images/icon-180.png') }}">
     <link rel="manifest" href="{{ asset('manifest.webmanifest') }}">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="{{ config('site.name_bn') }}">
+    <meta name="apple-mobile-web-app-title" content="{{ \App\Support\Locale::siteName() }}">
 
     {{-- Read by the pwa store. Scope is derived from the worker's own URL, not
          from APP_URL: asset() follows the actual request root, so deriving them
@@ -65,8 +76,8 @@
     <meta name="theme-color" content="#C8102E" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0E1113" media="(prefers-color-scheme: dark)">
 
-    <link rel="alternate" type="application/rss+xml" title="{{ config('app.name') }} RSS"
-          href="{{ url('/rss') }}">
+    <link rel="alternate" type="application/rss+xml" title="{{ \App\Support\Locale::siteName() }} RSS"
+          href="{{ \App\Support\Locale::route('feed.rss') }}">
 
     @stack('head')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -82,7 +93,7 @@
     <a href="#main"
        class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100]
               focus:rounded-md focus:bg-brand focus:px-4 focus:py-2 focus:text-white">
-        মূল বিষয়বস্তুতে যান
+        {{ __('মূল বিষয়বস্তুতে যান') }}
     </a>
 
     @include('partials.header')

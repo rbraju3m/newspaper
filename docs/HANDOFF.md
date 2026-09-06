@@ -56,14 +56,14 @@ The two external watchers need a public hostname. The repo side is built and
 was driven over real HTTP against a local listener. User chose **Better Stack**;
 `DEPLOY.md` → "Setting the two watchers up" is copy-paste.
 
-**One decision, and it is the only substantial feature left.** Gap 11,
-bilingual. The data layer exists (`locale`, `translation_of`,
-`unique(slug, locale)`); an English edition, a switcher and `hreflang` do not.
-Three readings — UI-only locale, a translated edition, a separate English desk
-— and they are materially different jobs. The schema points at the translated
-edition. **Do not start this without asking which**; and know that Bangla-first
-reaches the typography, the `@bn*` directives, the `class="lat"` convention,
-the feeds, the sitemap and the FULLTEXT index, not just templates.
+~~**One decision, and it is the only substantial feature left.**~~ **Gap 11 is
+built, 6 September**, as the *translated edition* — the user chose that
+reading of the three. Bangla is unprefixed, English is `/en`, an article in
+either edition is its own row linked by `translation_of`, and the switcher
+appears only where a published counterpart exists. What was deliberately left
+out is listed in `STATUS.md` item 3: no block-driven English front page, and
+no `/en` topics, tags, e-paper, archive or newsletter — those surfaces are
+*hidden* in English rather than rendered in Bangla.
 
 ~~**One small known defect, deliberately not fixed.**~~ **Fixed on 6 September**
 — and it was two colours, not one: `#0891B2` fails as well at 3.68:1.

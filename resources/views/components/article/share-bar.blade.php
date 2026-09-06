@@ -7,14 +7,14 @@
         {{ Js::from(route('api.share', $article)) }}
      )">
 
-    <span class="mr-1 text-sm font-semibold text-ink">শেয়ার:</span>
+    <span class="mr-1 text-sm font-semibold text-ink">{{ __('শেয়ার:') }}</span>
 
     {{-- Native share sheet where the platform has one; the per-network buttons
          stay for desktop, where navigator.share is mostly absent. --}}
     <button type="button" x-show="canNative" x-cloak @click="native()"
             class="flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm
                    font-semibold text-white hover:bg-brand-700">
-        <x-ui.icon name="share" class="h-3.5 w-3.5" /> শেয়ার
+        <x-ui.icon name="share" class="h-3.5 w-3.5" /> {{ __('শেয়ার') }}
     </button>
 
     @foreach ([

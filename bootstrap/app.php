@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureUserIsStaff;
+use App\Http\Middleware\SetLocale;
 use App\Services\ErrorAlerter;
 use App\Services\RedirectResolver;
 use Illuminate\Foundation\Application;
@@ -18,7 +19,25 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'staff' => EnsureUserIsStaff::class,
+            'locale' => SetLocale::class,
         ]);
+
+        /*
+         * Put every request into an edition, explicitly.
+         *
+         * The `/en` group carries `locale:en` and everything else needs the
+         * default — but *needs* is the word: `App::setLocale()` mutates the
+         * container, and the container outlives a request in any process that
+         * serves more than one. A request to /en followed by a request to /
+         * left the second one rendering the Bangla site in English, and the
+         * only reason that is not a production bug today is that php-fpm
+         * throws the process away between requests. It is a bug under Octane,
+         * and it is a bug in the test suite, which is where it was caught.
+         *
+         * Group middleware runs before route middleware, so this sets `bn`
+         * and the `/en` group's `locale:en` then overrides it.
+         */
+        $middleware->appendToGroup('web', SetLocale::class);
 
         // RFC 8058 one-click unsubscribe. Gmail and Outlook POST this
         // themselves from their own chrome — no page was rendered, so there is

@@ -15,7 +15,7 @@
         <div class="flex items-center justify-between border-b border-line px-4 py-3 lg:hidden">
             <x-ui.logo class="h-8 w-auto" />
             <button type="button" @click="mega = false" class="rounded-md p-2 hover:bg-surface-2"
-                    aria-label="মেনু বন্ধ করুন">
+                    aria-label="{{ __('মেনু বন্ধ করুন') }}">
                 <x-ui.icon name="close" class="h-5 w-5" />
             </button>
         </div>
@@ -29,15 +29,15 @@
                                class="flex items-center gap-2 border-b-2 pb-1.5 font-headline text-base
                                       font-bold text-ink hover:text-brand"
                                style="border-color: {{ $category->color }}">
-                                {{ $category->name }}
+                                {{ $category->display_name }}
                             </a>
                             @if ($category->children->isNotEmpty())
                                 <ul class="mt-2 space-y-1">
                                     @foreach ($category->children as $child)
                                         <li>
-                                            <a href="{{ route('category.show', $child->path) }}"
+                                            <a href="{{ $child->url() }}"
                                                class="block py-0.5 text-sm text-body hover:text-brand">
-                                                {{ $child->name }}
+                                                {{ $child->display_name }}
                                             </a>
                                         </li>
                                     @endforeach
@@ -50,10 +50,10 @@
                 {{-- Utility links, duplicated here because on mobile the top bar is hidden --}}
                 <div class="mt-6 grid grid-cols-2 gap-2 border-t border-line pt-5 sm:grid-cols-4">
                     @foreach ([
-                        ['epaper.index', 'newspaper', 'ই-পেপার'],
-                        ['archive',      'calendar',  'আর্কাইভ'],
-                        ['video.index',  'play',      'ভিডিও'],
-                        ['photo.index',  'camera',    'ফটো'],
+                        ['epaper.index', 'newspaper', __('ই-পেপার')],
+                        ['archive',      'calendar',  __('আর্কাইভ')],
+                        ['video.index',  'play',      __('ভিডিও')],
+                        ['photo.index',  'camera',    __('ফটো')],
                     ] as [$route, $icon, $label])
                         <a href="{{ route($route) }}"
                            class="flex items-center gap-2 rounded-lg border border-line px-3 py-2.5
@@ -70,15 +70,15 @@
                         <a href="{{ route('account.index') }}"
                            class="flex flex-1 items-center justify-center gap-2 rounded-lg bg-surface-2
                                   px-4 py-2.5 text-sm font-semibold text-ink">
-                            <x-ui.icon name="user" class="h-4 w-4" /> আমার অ্যাকাউন্ট
+                            <x-ui.icon name="user" class="h-4 w-4" /> {{ __('আমার অ্যাকাউন্ট') }}
                         </a>
                     @else
                         <a href="{{ route('login') }}"
                            class="flex-1 rounded-lg border border-line px-4 py-2.5 text-center text-sm
-                                  font-semibold text-ink">লগইন</a>
+                                  font-semibold text-ink">{{ __('লগইন') }}</a>
                         <a href="{{ route('register') }}"
                            class="flex-1 rounded-lg bg-brand px-4 py-2.5 text-center text-sm
-                                  font-semibold text-white">নিবন্ধন</a>
+                                  font-semibold text-white">{{ __('নিবন্ধন') }}</a>
                     @endauth
                     <x-ui.theme-toggle />
                 </div>

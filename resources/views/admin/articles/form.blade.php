@@ -395,10 +395,67 @@
                 </div>
             </section>
 
-            <input type="hidden" name="locale" value="{{ old('locale', $article->locale ?? 'bn') }}">
+            {{-- ── Edition ────────────────────────────────────────────── --}}
+            <section class="rounded-xl border border-line bg-surface p-4">
+                <h2 class="mb-3 font-headline text-sm font-bold text-ink">সংস্করণ</h2>
+
+                <select name="locale"
+                        class="w-full rounded-lg border border-line-strong bg-canvas px-3 py-2 text-sm text-ink">
+                    @foreach (\App\Support\Locale::ALL as $edition)
+                        <option value="{{ $edition }}"
+                                @selected(old('locale', $article->locale ?? \App\Support\Locale::DEFAULT) === $edition)>
+                            {{ \App\Support\Locale::label($edition) }}
+                        </option>
+                    @endforeach
+                </select>
+
+                {{-- The pointer itself is never edited by hand. It is set when
+                     the counterpart is created and it decides which story the
+                     reader's switcher offers — a free-text id here would be a
+                     way to link two unrelated articles by typo. --}}
+                <input type="hidden" name="translation_of" value="{{ $article->translation_of }}">
+
+                @if ($article->exists)
+                    @php $counterpart = $article->counterpartInAnyState(); @endphp
+
+                    <p class="mt-3 text-xs text-muted">
+                        @if ($counterpart)
+                            {{ $article->translation_of ? 'মূল খবর:' : 'অনুবাদ:' }}
+                            <a href="{{ route('admin.articles.edit', $counterpart) }}"
+                               class="font-semibold text-link hover:underline">{{ $counterpart->title }}</a>
+                            <span class="text-muted">({{ \App\Support\Locale::label($counterpart->locale) }} ·
+                                {{ $counterpart->status->label() }})</span>
+                        @else
+                            এই খবরের কোনো অনুবাদ নেই।
+                        @endif
+                    </p>
+
+                    @can('create', App\Models\Article::class)
+                        <button type="submit" form="article-translate"
+                                class="mt-2 w-full rounded-lg border border-line-strong px-3 py-2
+                                       text-xs font-semibold text-ink hover:border-brand hover:text-brand">
+                            {{ $counterpart
+                                ? \App\Support\Locale::label(\App\Support\Locale::other($article->locale)).' সংস্করণে যান'
+                                : \App\Support\Locale::label(\App\Support\Locale::other($article->locale)).' অনুবাদ শুরু করুন' }}
+                        </button>
+                    @endcan
+                @endif
+            </section>
         </div>
     </div>
 </form>
+
+{{-- Separate form, targeted by `form="article-translate"` above: a nested form
+     is invalid HTML and the browser drops the inner one silently, so the
+     button would submit the whole article instead of starting a translation. --}}
+@if ($article->exists)
+    @can('create', App\Models\Article::class)
+        <form id="article-translate" method="POST"
+              action="{{ route('admin.articles.translate', $article) }}" class="hidden">
+            @csrf
+        </form>
+    @endcan
+@endif
 
 {{-- The push button's target. Outside the editor form because nesting forms is
      invalid HTML — the browser silently drops the inner one and the button

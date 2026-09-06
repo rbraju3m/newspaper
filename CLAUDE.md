@@ -23,6 +23,76 @@ if `auth.php` moves.
 `php artisan route:list` sorts alphabetically — it does **not** show match
 order. Verify ordering by matching a `Request` against the route collection.
 
+### The English edition is a second set of route names, not a parameter
+
+Bangla is unprefixed and English lives under `/en`. `web.php` registers an
+`/en` group with an `en.` **name prefix** — so `category.show` and
+`en.category.show` are one page in two editions — and that group must sit
+**above** the catch-alls for the same reason `auth.php` sits at the top: inside
+the group `/en/{category}` is constrained `.*` too, so it must come last within
+the group, and the outer `/{category}` would otherwise read `/en` as a section
+slug and 404.
+
+`php artisan route:list` still will not show you this. `BilingualTest` matches
+a `Request` against the route collection for thirteen paths instead.
+
+Four things follow, and each of them shipped as a bug once in this file's
+history or in the session that wrote it.
+
+**`route()` cannot be called directly from a shared template.** The header,
+the footer and the cards render in both editions. `App\Support\Locale::route()`
+picks the name for the edition the request is in; `Category::url()` already
+goes through it, which is why the nav localises itself.
+
+**An article is the exception: its URL comes from its own `locale` column.**
+An English story linked from anywhere must be an `/en` URL, or the reader gets
+an English body in a Bangla frame — and `ArticleController` canonicalises
+against `$article->url`, so a request-derived URL would 301 the story into the
+wrong edition and back for ever. The id lookup is locale-blind on purpose: a
+Bangla story requested at `/en/…` resolves, finds its own canonical URL, and
+redirects out of the edition.
+
+**`App::setLocale()` outlives the request.** It mutates the container, so a
+request to `/en` followed by one to `/` left the second rendering Bangla
+content with English chrome. `SetLocale` is therefore appended to the **`web`
+group** — every request is put into an edition explicitly — and the `/en`
+group's `locale:en` overrides it afterwards. php-fpm hides this by throwing
+the process away; the test suite does not, which is where it was caught.
+
+**Listings are scoped in exactly one place.** `ArticleQuery::deferred()` adds
+`->locale(Locale::current())`, which covers every `cards()` caller. It is not
+a global scope on the model — the admin lists both editions on purpose.
+Anything building its own public `Article::query()` scopes itself: the ticker,
+the two feeds, and `ArticleQuery::related()`'s **curated** list, which is the
+one that leaked. Leakage has no error and no visual break: `articles.locale`
+was on the table from the first migration and nothing read it, so the first
+English story published would have gone onto the Bangla front page.
+
+Two smaller ones worth knowing:
+
+- **A partial `category:` select feeding a template that prints
+  `display_name` must include `name_en`.** Strict mode makes a missing
+  attribute a `MissingAttributeException`, so it is a 500 rather than a lazy
+  load — and `layout.categories` is *cached*, so an old payload has to be
+  swept with `cache:clear` on deploy. `DEPLOY.md` says so.
+- **`counterpart()` queries, and eager-loads `category`.** It is called once
+  per page from a template, never inside a card loop, and the only thing a
+  caller does with the result is read `->url`.
+
+### Bangla-only surfaces are omitted in English, not translated
+
+Topics, tags, the e-paper, the archive and the newsletter have no `/en`
+routes, and the author bio and designation have no English column. Every one
+of those is **hidden** on an English page rather than rendered in Bangla:
+`LayoutComposer::trendingTopics()` returns an empty collection, the tag strip
+and the author card are guarded on `Locale::isDefault()`, and the masthead
+tagline is dropped. A byline *name* stays, because a person's name is their
+name in either edition.
+
+`BilingualTest` asserts the absence of Bangla script anywhere in the text of
+an English page — not the presence of a few English words, which is what a
+page translated in eight places and missed in forty would pass.
+
 ### Redirects fire at 404 time, so a numeric path segment can steal one
 
 `redirects` is read by `App\Services\RedirectResolver`, registered as an
@@ -832,13 +902,36 @@ All reader- and admin-facing strings are Bangla. Use the Blade directives rather
 than calling the helper:
 
 ```blade
-@bn($count)          {{-- ১২৩৪ --}}
-@bndate($date)       {{-- ২৫ আগস্ট ২০২৬ --}}
-@bntime($date)       {{-- রাত ৯:৪৫ --}}
-@bnago($date)        {{-- ৩৮ মিনিট আগে --}}
-@bncount($views)     {{-- ১২.৪ হাজার --}}
-@bnfulldate()        {{-- মঙ্গলবার, ২৫ আগস্ট ২০২৬, ১০ ভাদ্র ১৪৩৩ বঙ্গাব্দ --}}
+@bn($count)          {{-- ১২৩৪ · 1,234 --}}
+@bndate($date)       {{-- ২৫ আগস্ট ২০২৬ · 25 August 2026 --}}
+@bntime($date)       {{-- রাত ৯:৪৫ · 9:45 PM --}}
+@bnago($date)        {{-- ৩৮ মিনিট আগে · 38 minutes ago --}}
+@bncount($views)     {{-- ১২.৪ হাজার · 12.4K --}}
+@bnfulldate()        {{-- মঙ্গলবার, ২৫ আগস্ট ২০২৬, ১০ ভাদ্র ১৪৩৩ বঙ্গাব্দ · Tuesday, 25 August 2026 --}}
 ```
+
+**The `@bn*` names are unchanged but the directives are locale-aware.** They
+call `App\Support\Fmt`, which switches on the edition; `App\Support\Bangla`
+is untouched, still pure, and still what `BanglaTest` exercises. Renaming a few
+hundred call sites across 115 templates would have been a diff over nearly
+every view for no behaviour — read them as "the site's formatting", which is
+what they always were.
+
+Three of the English answers are **different in kind**, not translations: the
+time (`রাত ৯:৪৫` names the part of the day and English has no such thing),
+compact counts (লাখ and কোটি are 10⁵ and 10⁷; K and M are 10³ and 10⁶ — a
+translated word with the Bangla threshold prints "0.1M" for 100,000), and the
+masthead date, which drops the Bengali calendar rather than transliterating it.
+
+**Reader-facing strings go through `__()`.** `lang/en.json` maps the Bangla
+source string to English; `lang/bn.json` maps every key **to itself** and is
+not optional — `APP_FALLBACK_LOCALE` is `en` (it is where the framework's own
+validation messages come from), so without the identity file a Bangla page
+would miss, fall through to `en.json`, and render English to a Bangla reader.
+`BilingualTest` asserts the two files hold identical key sets and that every
+`__()` key in a view has an entry.
+
+The **admin is Bangla-only** and stays that way. Do not wrap admin strings.
 
 Wrap Latin runs (numerals, IDs, timestamps) in `class="lat"` so they render in
 Inter with tabular figures.
@@ -1019,7 +1112,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 779 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 823 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -1067,6 +1160,9 @@ coverage exists for both halves of the app:
 | `AdImpressionTest` | ad impressions counted from the browser, the one-query batch, what is refused, and that an ad with no URL is not a link |
 | `AdCreativeSizingTest` | ad creatives served at the slot size — the media link, the ladder, the single-rung case, and the cached payload |
 | `RedirectTest` | old-CMS URL preservation — that the lookup hangs off the 404 and costs a resolving request nothing, what matches, the loop and method guards, hit counting, and `redirects:import` including the rules it warns will never fire |
+| `BilingualTest` | the English edition — route order matched against the route collection, leakage in both directions and the control that says both editions render, an article's URL following its own row, canonicalisation out of the wrong edition, the switcher and `hreflang` including the untranslated and draft cases, that no Bangla chrome survives an English page and that the detector can fail, section naming and its fallback, the two translation files agreeing, and the admin's translate action and its `translation_of` guard |
+| `TranslateArticlesTest` | `articles:translate` — that it only inserts, is idempotent, is deterministic on the source id, keeps the original's publication time, and refuses a draft source |
+| `Unit/FmtTest` | the locale switch behind the `@bn*` directives, including the three English answers that are not translations |
 | `SectionLabelTest` | the section and topic labels — that each of the four templates carries a legible colour for both themes, that the editor's raw colour is gone from text and still present on a border, and that the surfaces the labels are computed against still match `app.css` |
 | `Unit/ContrastTest` | the WCAG ratio and the smallest legible shade of a colour — against published constants, not against its own arithmetic |
 | `AvatarTest` | the fallback avatar — that no page carrying a face reaches a third-party host, that Bangla initials survive into the SVG, that the data URI is inert in an attribute, that every palette colour clears WCAG AA against white and a reader's colour is stable without every reader sharing it, and that structured data gets a real photograph or none |

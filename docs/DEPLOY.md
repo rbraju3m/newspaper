@@ -328,9 +328,33 @@ If a release changes `ImageService::WIDTHS`:
 php artisan media:backfill
 ```
 
+`articles:translate` is **demo content and must not be run on a live
+install** — it writes generated English articles, not translations. The
+editorial door into the English edition is the *Translate* button on an
+article in the admin, which creates a draft counterpart for somebody to
+write.
+
 A release that changes what the front page caches — a new block type, a column
 added to `ArticleQuery::CARD_COLUMNS` — does not need anything: the payload
 carries a 120-second TTL and the first request after the deploy rebuilds it.
+
+**The release that added the English edition is the exception, and any release
+that adds a column to a cached model is the same shape:**
+
+```bash
+php artisan cache:clear
+```
+
+`layout.categories` holds `Category` models for an **hour**, and that release
+added `name_en` to the select. An entry written by the old code has no such
+attribute, and `Category::display_name` reads it — so for up to an hour after
+the deploy every page would render the section names it could still find and
+none of the ones it could not.
+
+Production degrades rather than breaks here: `Model::shouldBeStrict()` is
+guarded on `! app()->isProduction()`, so a missing attribute is `null` in
+production and a `MissingAttributeException` in development. That is the right
+way round, and it is still a wrong page for an hour. Sweep it.
 
 ---
 

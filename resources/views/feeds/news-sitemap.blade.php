@@ -8,7 +8,7 @@
     <loc>{{ $article->url }}</loc>
     <news:news>
       <news:publication>
-        <news:name>{{ config('site.name_bn') }}</news:name>
+        <news:name>{{ \App\Support\Locale::siteName() }}</news:name>
         <news:language>{{ $article->locale }}</news:language>
       </news:publication>
       <news:publication_date>{{ $article->published_at?->toAtomString() }}</news:publication_date>

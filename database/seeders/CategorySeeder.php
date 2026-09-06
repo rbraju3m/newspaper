@@ -82,6 +82,82 @@ class CategorySeeder extends Seeder
         ['ফটো', 'photo', '#4F46E5', []],
     ];
 
+    /**
+     * The English edition's name for each section, keyed by slug.
+     *
+     * `categories.name_en` was on the table from the first migration and the
+     * seeder never filled it — it existed so `Str::slug()` had something
+     * Latin to work with, and every row's was null. It is what the English
+     * edition prints now, so a missing one is a Bangla heading on an English
+     * page rather than a cosmetic gap.
+     *
+     * Keyed by slug rather than added to `TREE` so the tuples stay readable
+     * at three items and the two lists can be checked against each other —
+     * `BilingualTest` asserts every seeded section has an entry here.
+     *
+     * These are the names a Bangladeshi English-language daily uses, not
+     * dictionary glosses: `সারাদেশ` is "Countrywide" in the Daily Star and
+     * New Age rather than "Whole country", `প্রবাস` is the diaspora desk, and
+     * `উপসম্পাদকীয়` is the op-ed page.
+     */
+    private const NAMES_EN = [
+        'bangladesh' => 'Bangladesh',
+        'national' => 'National',
+        'capital' => 'Capital',
+        'country' => 'Countrywide',
+        'crime' => 'Crime',
+        'accident' => 'Accidents',
+        'politics' => 'Politics',
+        'international' => 'International',
+        'india' => 'India',
+        'usa' => 'United States',
+        'middle-east' => 'Middle East',
+        'asia' => 'Asia',
+        'europe' => 'Europe',
+        'economy' => 'Economy',
+        'bank-insurance' => 'Banking & Insurance',
+        'stock-market' => 'Stock Market',
+        'industry-trade' => 'Industry & Trade',
+        'budget' => 'Budget',
+        'sports' => 'Sport',
+        'cricket' => 'Cricket',
+        'football' => 'Football',
+        'tennis' => 'Tennis',
+        'other-sports' => 'Other Sport',
+        'entertainment' => 'Entertainment',
+        'dhallywood' => 'Dhallywood',
+        'bollywood' => 'Bollywood',
+        'hollywood' => 'Hollywood',
+        'music' => 'Music',
+        'television' => 'Television',
+        'opinion' => 'Opinion',
+        'editorial' => 'Editorial',
+        'sub-editorial' => 'Op-ed',
+        'interview' => 'Interviews',
+        'education' => 'Education',
+        'campus' => 'Campus',
+        'admission' => 'Admissions',
+        'exam' => 'Examinations',
+        'technology' => 'Technology',
+        'gadget' => 'Gadgets',
+        'social-media' => 'Social Media',
+        'science' => 'Science',
+        'health' => 'Health',
+        'lifestyle' => 'Lifestyle',
+        'fashion' => 'Fashion',
+        'recipe' => 'Food',
+        'travel' => 'Travel',
+        'religion' => 'Religion',
+        'islam' => 'Islam',
+        'other-religion' => 'Other Faiths',
+        'jobs' => 'Jobs',
+        'diaspora' => 'Diaspora',
+        'literature' => 'Literature',
+        'law-court' => 'Law & Courts',
+        'video' => 'Video',
+        'photo' => 'Photo',
+    ];
+
     public function run(): void
     {
         $navLimit = config('site.nav_limit', 11);
@@ -91,6 +167,7 @@ class CategorySeeder extends Seeder
                 ['slug' => $slug],
                 [
                     'name' => $name,
+                    'name_en' => self::NAMES_EN[$slug] ?? null,
                     'color' => $color,
                     'position' => $i,
                     'is_active' => true,
@@ -107,6 +184,7 @@ class CategorySeeder extends Seeder
                     [
                         'parent_id' => $parent->id,
                         'name' => $childName,
+                        'name_en' => self::NAMES_EN[$childSlug] ?? null,
                         'color' => $color,
                         'position' => $j,
                         'is_active' => true,

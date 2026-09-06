@@ -1,6 +1,6 @@
 @extends('layouts.site')
 
-@section('title', $title.' — '.config('site.name_bn'))
+@section('title', $title.' — '.\App\Support\Locale::siteName())
 @section('description', $description ?? '')
 
 @section('content')
@@ -16,7 +16,7 @@
             {{-- Popular has a time window; the other listings do not. --}}
             @isset($days)
                 <div class="mt-4 flex gap-2">
-                    @foreach ([1 => 'আজ', 7 => 'এই সপ্তাহ', 30 => 'এই মাস'] as $value => $label)
+                    @foreach ([1 => __('আজ'), 7 => __('এই সপ্তাহ'), 30 => __('এই মাস')] as $value => $label)
                         <a href="{{ route('popular', ['days' => $value]) }}"
                            @class([
                                'rounded-full px-3.5 py-1.5 text-sm font-medium transition',
@@ -37,7 +37,7 @@
         </div>
 
         @if ($articles->isEmpty())
-            <x-ui.empty-state title="কোনো খবর পাওয়া যায়নি" />
+            <x-ui.empty-state :title="__('কোনো খবর পাওয়া যায়নি')" />
         @endif
 
         @include('site.partials.load-more', ['paginator' => $articles])

@@ -15,7 +15,7 @@
         <a href="{{ $href }}"
            class="flex shrink-0 items-center gap-1 pb-1 text-sm font-semibold text-muted
                   transition hover:text-brand">
-            আরও দেখুন
+            {{ __('আরও দেখুন') }}
             <x-ui.icon name="chevron-right" class="h-3.5 w-3.5" />
         </a>
     @endif

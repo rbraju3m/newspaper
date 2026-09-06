@@ -216,24 +216,35 @@ class AppServiceProvider extends ServiceProvider
         });
     }
 
+    /**
+     * The `@bn*` family, which is now locale-aware behind an unchanged name.
+     *
+     * They call `Fmt` rather than `Bangla`: `Fmt` is the switch, `Bangla` is
+     * still the Bangla implementation and still what `BanglaTest` exercises.
+     * The names stayed because these appear a few hundred times across 115
+     * templates and renaming them would be a diff over nearly every view for
+     * no behaviour — read them as "the site's formatting", which is what they
+     * always were.
+     */
     private function registerBladeDirectives(): void
     {
-        // @bn(1234) -> ১২৩৪
-        Blade::directive('bn', fn ($e) => "<?php echo \App\Support\Bangla::digits($e); ?>");
+        // @bn(1234) -> ১২৩৪  /  1,234
+        Blade::directive('bn', fn ($e) => "<?php echo \App\Support\Fmt::digits($e); ?>");
 
-        // @bndate($article->published_at) -> ২৫ আগস্ট ২০২৬
-        Blade::directive('bndate', fn ($e) => "<?php echo \App\Support\Bangla::date($e); ?>");
+        // @bndate($article->published_at) -> ২৫ আগস্ট ২০২৬  /  25 August 2026
+        Blade::directive('bndate', fn ($e) => "<?php echo \App\Support\Fmt::date($e); ?>");
 
-        // @bntime($date) -> রাত ৯:৪৫
-        Blade::directive('bntime', fn ($e) => "<?php echo \App\Support\Bangla::time($e); ?>");
+        // @bntime($date) -> রাত ৯:৪৫  /  9:45 PM
+        Blade::directive('bntime', fn ($e) => "<?php echo \App\Support\Fmt::time($e); ?>");
 
-        // @bnago($date) -> ৩৮ মিনিট আগে
-        Blade::directive('bnago', fn ($e) => "<?php echo \App\Support\Bangla::ago($e); ?>");
+        // @bnago($date) -> ৩৮ মিনিট আগে  /  38 minutes ago
+        Blade::directive('bnago', fn ($e) => "<?php echo \App\Support\Fmt::ago($e); ?>");
 
-        // @bncount(12400) -> ১২.৪ হাজার
-        Blade::directive('bncount', fn ($e) => "<?php echo \App\Support\Bangla::compact($e); ?>");
+        // @bncount(12400) -> ১২.৪ হাজার  /  12.4K
+        Blade::directive('bncount', fn ($e) => "<?php echo \App\Support\Fmt::compact($e); ?>");
 
         // @bnfulldate -> মঙ্গলবার, ২৫ আগস্ট ২০২৬, ১০ ভাদ্র ১৪৩৩ বঙ্গাব্দ
-        Blade::directive('bnfulldate', fn ($e) => '<?php echo \App\Support\Bangla::fullDate('.($e ?: 'null').'); ?>');
+        //             /  Tuesday, 25 August 2026
+        Blade::directive('bnfulldate', fn ($e) => '<?php echo \App\Support\Fmt::fullDate('.($e ?: 'null').'); ?>');
     }
 }

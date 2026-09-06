@@ -107,13 +107,13 @@
                 @elseif ($badge === 'camera')
                     <span class="absolute bottom-1.5 right-1.5 flex items-center gap-1 rounded
                                  bg-black/75 px-1.5 py-0.5 text-2xs font-medium text-white">
-                        <x-ui.icon name="camera" class="h-3 w-3" /> ফটো
+                        <x-ui.icon name="camera" class="h-3 w-3" /> {{ __('ফটো') }}
                     </span>
                 @endif
 
                 @if ($article->is_premium)
                     <span class="absolute left-1.5 top-1.5 rounded bg-amber-400 px-1.5 py-0.5
-                                 text-2xs font-bold text-amber-950">প্রিমিয়াম</span>
+                                 text-2xs font-bold text-amber-950">{{ __('প্রিমিয়াম') }}</span>
                 @endif
             </figure>
         @endif
@@ -122,7 +122,7 @@
             @if ($showCategory && $article->category)
                 <span class="section-label text-2xs font-bold uppercase tracking-wide"
                       style="{{ \App\Support\Contrast::labelStyle($article->category->color) }}">
-                    {{ $article->kicker ?: $article->category->name }}
+                    {{ $article->kicker ?: $article->category->display_name }}
                 </span>
             @endif
 
@@ -137,7 +137,7 @@
             @if ($showMeta)
                 <div class="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted">
                     @if ($article->is_new)
-                        <span class="font-semibold text-brand">নতুন</span>
+                        <span class="font-semibold text-brand">{{ __('নতুন') }}</span>
                     @endif
 
                     <time datetime="{{ $article->published_at?->toIso8601String() }}">

@@ -16,6 +16,7 @@ use App\Services\HomepageService;
 use App\Services\ImageService;
 use App\Services\PushService;
 use App\Support\Bangla;
+use App\Support\Locale;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -81,6 +82,76 @@ class ArticleController extends Controller
         return redirect()
             ->route('admin.articles.edit', $article)
             ->with('status', 'খবরটি সংরক্ষিত হয়েছে।');
+    }
+
+    /**
+     * Start (or reopen) the counterpart of a story in the other edition.
+     *
+     * A translation is a **separate article row**, not a second set of columns
+     * on one row: it has its own slug, its own `published_at`, its own byline
+     * and its own comment thread, and the desk publishes it when it is ready
+     * rather than when the original was. That is the whole reason
+     * `translation_of` is a foreign key to `articles` and not a `title_en`
+     * column, and it is what lets an English story exist that the Bangla desk
+     * has not written yet.
+     *
+     * What is copied is everything that is *not* language: the section, the
+     * byline, the lead image and its credit, the tags and topics. What is not
+     * copied is every word — a half-translated article is worse than an empty
+     * one, because it looks finished.
+     *
+     * **Idempotent.** Pressing it twice opens the draft it made the first
+     * time. Two counterparts in one edition would make `counterpart()`
+     * ambiguous, and the second would be invisible to the switcher for ever.
+     */
+    public function translate(Article $article): RedirectResponse
+    {
+        Gate::authorize('create', Article::class);
+        Gate::authorize('update', $article);
+
+        // Route-model-bound, so it is a single-row fetch — the case the
+        // framework's lazy-loading guard does not cover and
+        // `AppServiceProvider` closes by hand. Both relations are read below.
+        $article->loadMissing(['tags:id', 'topics:id']);
+
+        if ($existing = $article->counterpartInAnyState()) {
+            return redirect()
+                ->route('admin.articles.edit', $existing)
+                ->with('status', 'এই খবরের অনুবাদ আগে থেকেই আছে।');
+        }
+
+        $translation = DB::transaction(function () use ($article) {
+            $copy = Article::create([
+                'category_id' => $article->category_id,
+                'author_id' => $article->author_id,
+                'editor_id' => request()->user()->id,
+                // Deliberately the original's headline, in the original's
+                // script: the translator replaces it, and an empty title
+                // would fail validation on the first save. It is a draft, so
+                // no reader can see it.
+                'title' => $article->title,
+                'excerpt' => $article->excerpt,
+                'body' => $article->body,
+                'type' => $article->type,
+                'status' => ArticleStatus::Draft,
+                'image_id' => $article->image_id,
+                'image' => $article->image,
+                'image_caption' => $article->image_caption,
+                'image_credit' => $article->image_credit,
+                'allow_comments' => $article->allow_comments,
+                'locale' => Locale::other($article->locale),
+                'translation_of' => $article->id,
+            ]);
+
+            $copy->tags()->sync($article->tags->pluck('id'));
+            $copy->topics()->sync($article->topics->pluck('id'));
+
+            return $copy;
+        });
+
+        return redirect()
+            ->route('admin.articles.edit', $translation)
+            ->with('status', 'অনুবাদের খসড়া তৈরি হয়েছে। শিরোনাম ও মূল লেখা অনুবাদ করুন।');
     }
 
     public function edit(Article $article): View

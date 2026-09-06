@@ -47,7 +47,7 @@ class SearchController extends Controller
             'term' => $term,
             'articles' => $articles,
             'filters' => $validated,
-            'categories' => Category::active()->roots()->orderBy('position')->get(['id', 'name', 'slug']),
+            'categories' => Category::active()->roots()->orderBy('position')->get(['id', 'name', 'name_en', 'slug']),
         ]);
     }
 }

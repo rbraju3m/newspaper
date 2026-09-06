@@ -2,9 +2,9 @@
 
 {{-- Visible breadcrumb + matching JSON-LD, so the trail shows in search
      results as well as on the page. --}}
-<nav aria-label="ব্রেডক্রাম্ব" class="mb-3">
+<nav aria-label="{{ __('ব্রেডক্রাম্ব') }}" class="mb-3">
     <ol class="flex flex-wrap items-center gap-1.5 text-xs text-muted">
-        <li><a href="{{ route('home') }}" class="hover:text-brand">প্রচ্ছদ</a></li>
+        <li><a href="{{ \App\Support\Locale::route('home') }}" class="hover:text-brand">{{ __('প্রচ্ছদ') }}</a></li>
         @foreach ($items as $item)
             <li aria-hidden="true"><x-ui.icon name="chevron-right" class="h-3 w-3" /></li>
             <li>

@@ -7,6 +7,7 @@ use App\Models\Article;
 use App\Models\LiveEntry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Support\Locale;
 use Illuminate\Support\Facades\Cache;
 
 class ApiController extends Controller
@@ -14,9 +15,14 @@ class ApiController extends Controller
     /** Polled by the ticker so a breaking story appears without a reload. */
     public function breaking(): JsonResponse
     {
-        $items = Cache::remember('api.breaking', now()->addSeconds(30), fn () => Article::query()
+        // Keyed per edition: the ticker on /en must not poll back Bangla
+        // headlines, and this endpoint is the same URL for both.
+        $items = Cache::remember(
+            Locale::isDefault() ? 'api.breaking' : 'api.breaking.'.Locale::current(),
+            now()->addSeconds(30), fn () => Article::query()
             ->select(['id', 'category_id', 'title', 'slug', 'locale'])
             ->with('category:id,path')
+            ->locale(Locale::current())
             ->breaking()
             ->newest()
             ->limit(6)

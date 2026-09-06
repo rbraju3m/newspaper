@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Article;
+use App\Support\Locale;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 
@@ -12,6 +13,22 @@ use Illuminate\Database\Eloquent\Collection as EloquentCollection;
  * Listing pages need exactly the columns the card renders and nothing more —
  * `body` is a longText and pulling it into a 20-row grid is the difference
  * between a 4ms and a 90ms query.
+ *
+ * **Every listing is scoped to the edition the request is in**, and this is
+ * the one place that does it. `articles.locale` was on the table from the
+ * start and nothing read it, so the day a single English story was published
+ * it would have appeared on the Bangla front page, in the Bangla category
+ * listings, in the RSS feed and in the sitemap — an English headline in a
+ * Bangla grid, with no error anywhere.
+ *
+ * It is on `deferred()` rather than on `cards()` so both shapes get it, and
+ * it is **not** a global scope on the model: the admin lists both editions on
+ * purpose, and a global scope would have every admin query silently hiding
+ * half the desk's work.
+ *
+ * Anything building its own public `Article::query()` — the ticker, the
+ * feeds, search — has to scope itself; `PublicRoutesTest` and
+ * `BilingualTest` both check for leakage rather than trusting that.
  */
 class ArticleQuery
 {
@@ -31,7 +48,7 @@ class ArticleQuery
      * CLS-reserving width/height need; `conversions` is the JSON ladder.
      */
     public const CARD_RELATIONS = [
-        'category:id,name,slug,path,color',
+        'category:id,name,name_en,slug,path,color',
         'author:id,name,slug,avatar,designation',
         'featuredImage:id,disk,path,conversions,width,height',
     ];
@@ -60,7 +77,8 @@ class ArticleQuery
     {
         return Article::query()
             ->select(self::CARD_COLUMNS)
-            ->published();
+            ->published()
+            ->locale(Locale::current());
     }
 
     /**
@@ -88,11 +106,17 @@ class ArticleQuery
      */
     public static function related(Article $article, int $limit = 6): \Illuminate\Support\Collection
     {
+        // Editor-curated picks are the one list that does **not** come through
+        // `deferred()`, so it is the one that has to scope itself. Without
+        // this, an English article showed its Bangla original's curated
+        // related stories — English page, Bangla headlines, Bangla dates —
+        // and every other listing on the site looked fine.
         $curated = $article->relatedArticles()
             ->select(self::CARD_COLUMNS)
             ->published()
+            ->where('articles.locale', $article->locale)
             ->with([
-                'category:id,name,slug,path,color',
+                'category:id,name,name_en,slug,path,color',
                 'author:id,name,slug,avatar',
                 'featuredImage:id,disk,path,conversions,width,height',
             ])

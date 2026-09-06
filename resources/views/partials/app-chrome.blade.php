@@ -22,7 +22,7 @@
              }">
             <span class="min-w-0 flex-1" x-text="toast.message"></span>
             <button type="button" @click="$store.toast.dismiss(toast.id)"
-                    class="shrink-0 opacity-60 hover:opacity-100" aria-label="বন্ধ করুন">
+                    class="shrink-0 opacity-60 hover:opacity-100" aria-label="{{ __('বন্ধ করুন') }}">
                 <x-ui.icon name="close" class="h-4 w-4" />
             </button>
         </div>
@@ -37,7 +37,7 @@
      role="status">
     <span class="inline-flex items-center gap-2">
         <span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
-        আপনি অফলাইনে আছেন — আগে পড়া খবরগুলো দেখতে পারবেন
+        {{ __('আপনি অফলাইনে আছেন — আগে পড়া খবরগুলো দেখতে পারবেন') }}
     </span>
 </div>
 
@@ -45,13 +45,13 @@
 <div x-show="$store.pwa.updateReady" x-cloak
      class="fixed inset-x-0 bottom-0 z-[75] border-t border-line bg-surface p-3 shadow-pop sm:inset-x-auto
             sm:bottom-4 sm:end-4 sm:max-w-sm sm:rounded-xl sm:border">
-    <p class="text-sm font-medium text-ink">নতুন সংস্করণ পাওয়া গেছে</p>
-    <p class="mt-0.5 text-xs text-muted">সর্বশেষ খবর দেখতে রিফ্রেশ করুন।</p>
+    <p class="text-sm font-medium text-ink">{{ __('নতুন সংস্করণ পাওয়া গেছে') }}</p>
+    <p class="mt-0.5 text-xs text-muted">{{ __('সর্বশেষ খবর দেখতে রিফ্রেশ করুন।') }}</p>
     <div class="mt-2.5 flex gap-2">
         <button type="button" @click="$store.pwa.applyUpdate()"
-                class="rounded-lg bg-brand px-4 py-1.5 text-sm font-semibold text-white">রিফ্রেশ</button>
+                class="rounded-lg bg-brand px-4 py-1.5 text-sm font-semibold text-white">{{ __('রিফ্রেশ') }}</button>
         <button type="button" @click="$store.pwa.updateReady = false"
-                class="rounded-lg border border-line px-4 py-1.5 text-sm font-semibold text-body">পরে</button>
+                class="rounded-lg border border-line px-4 py-1.5 text-sm font-semibold text-body">{{ __('পরে') }}</button>
     </div>
 </div>
 
@@ -64,14 +64,14 @@
     <img src="{{ asset('images/icon-192.png') }}" alt="" width="44" height="44"
          class="h-11 w-11 shrink-0 rounded-lg">
     <div class="min-w-0 flex-1">
-        <p class="text-sm font-semibold text-ink">অ্যাপ হিসেবে যোগ করুন</p>
-        <p class="text-xs text-muted">দ্রুত খুলবে, অফলাইনেও পড়া যাবে।</p>
+        <p class="text-sm font-semibold text-ink">{{ __('অ্যাপ হিসেবে যোগ করুন') }}</p>
+        <p class="text-xs text-muted">{{ __('দ্রুত খুলবে, অফলাইনেও পড়া যাবে।') }}</p>
     </div>
     <div class="flex shrink-0 flex-col gap-1">
         <button type="button" @click="$store.pwa.install()"
-                class="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white">যোগ করুন</button>
+                class="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white">{{ __('যোগ করুন') }}</button>
         <button type="button" @click="$store.pwa.dismissInstall()"
-                class="text-xs text-muted hover:text-brand">না</button>
+                class="text-xs text-muted hover:text-brand">{{ __('না') }}</button>
     </div>
 </div>
 
@@ -80,7 +80,7 @@
     <button type="button" x-show="visible" x-cloak x-transition.opacity @click="go()"
             class="fixed bottom-4 start-4 z-[60] flex h-10 w-10 items-center justify-center rounded-full
                    border border-line bg-surface text-ink shadow-pop transition hover:text-brand"
-            aria-label="উপরে যান">
+            aria-label="{{ __('উপরে যান') }}">
         <x-ui.icon name="chevron-down" class="h-5 w-5 rotate-180" />
     </button>
 </div>
@@ -88,10 +88,10 @@
 {{-- Keyboard shortcut help (? to open) --}}
 <div x-show="helpOpen" x-cloak @click.self="helpOpen = false"
      class="fixed inset-0 z-[90] hidden items-center justify-center bg-black/50 p-4 lg:flex"
-     role="dialog" aria-modal="true" aria-label="কীবোর্ড শর্টকাট">
+     role="dialog" aria-modal="true" aria-label="{{ __('কীবোর্ড শর্টকাট') }}">
     <div class="w-full max-w-md rounded-xl border border-line bg-surface p-5 shadow-pop">
         <div class="flex items-center justify-between">
-            <h2 class="font-headline text-lg font-bold text-ink">কীবোর্ড শর্টকাট</h2>
+            <h2 class="font-headline text-lg font-bold text-ink">{{ __('কীবোর্ড শর্টকাট') }}</h2>
             <button type="button" @click="helpOpen = false" class="rounded-md p-1.5 hover:bg-surface-2">
                 <x-ui.icon name="close" class="h-4 w-4" />
             </button>
@@ -99,9 +99,9 @@
 
         <dl class="mt-4 space-y-2">
             @foreach ([
-                ['/', 'অনুসন্ধান'], ['h', 'প্রচ্ছদ'], ['l', 'সর্বশেষ খবর'],
-                ['b', 'সংরক্ষিত খবর'], ['t', 'উপরে যান'], ['d', 'ডার্ক মোড'],
-                ['?', 'এই তালিকা'],
+                ['/', __('অনুসন্ধান')], ['h', __('প্রচ্ছদ')], ['l', __('সর্বশেষ খবর')],
+                ['b', __('সংরক্ষিত খবর')], ['t', __('উপরে যান')], ['d', __('ডার্ক মোড')],
+                ['?', __('এই তালিকা')],
             ] as [$key, $label])
                 <div class="flex items-center justify-between gap-4">
                     <dt class="text-sm text-body">{{ $label }}</dt>

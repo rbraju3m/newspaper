@@ -11,12 +11,12 @@
            class="rounded-lg border border-line-strong bg-surface px-6 py-2.5 text-sm
                   font-semibold text-ink transition hover:border-brand hover:text-brand"
            x-show="!done">
-            <span x-show="!loading">আরও খবর</span>
-            <span x-show="loading" x-cloak>লোড হচ্ছে…</span>
+            <span x-show="!loading">{{ __('আরও খবর') }}</span>
+            <span x-show="loading" x-cloak>{{ __('লোড হচ্ছে…') }}</span>
         </a>
     </div>
 
     <p x-show="failed" x-cloak class="mt-4 text-center text-sm text-brand">
-        লোড করা যায়নি। <button type="button" @click="load()" class="underline">আবার চেষ্টা করুন</button>
+        {{ __('লোড করা যায়নি।') }} <button type="button" @click="load()" class="underline">{{ __('আবার চেষ্টা করুন') }}</button>
     </p>
 @endif

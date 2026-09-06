@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Support\Locale;
 use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -155,8 +157,28 @@ class Category extends Model
         return 'path';
     }
 
+    /** The section's URL in the edition the reader is in. */
     public function url(): string
     {
-        return route('category.show', $this->path);
+        return Locale::route('category.show', $this->path);
+    }
+
+    /**
+     * The section's name in the edition the reader is in.
+     *
+     * `name_en` was on the table from the start and nothing displayed it — it
+     * existed only to give `Str::slug()` something Latin to work with. It is
+     * the name now, and it is **optional**: a section with no English name
+     * falls back to the Bangla one rather than to its slug, because a section
+     * heading that reads "law-court" is worse than one that reads
+     * "আইন ও আদালত" on an English page. That fallback is visible in the admin
+     * rather than silent — `CategoryController` shows which sections are
+     * missing an English name.
+     */
+    protected function displayName(): Attribute
+    {
+        return Attribute::get(fn (): string => Locale::isDefault()
+            ? $this->name
+            : ($this->name_en ?: $this->name));
     }
 }

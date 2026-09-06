@@ -14,8 +14,8 @@ class ListingController extends Controller
     public function latest(Request $request): Response
     {
         return $this->render($request, ArticleQuery::cards()->newest()->paginate(config('site.per_page')), [
-            'title' => 'সর্বশেষ খবর',
-            'description' => 'সর্বশেষ প্রকাশিত সব খবর এক জায়গায়।',
+            'title' => __('সর্বশেষ খবর'),
+            'description' => __('সর্বশেষ প্রকাশিত সব খবর এক জায়গায়।'),
         ]);
     }
 

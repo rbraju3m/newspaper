@@ -100,6 +100,64 @@ Route::delete('/push/subscribe', [Site\PushController::class, 'destroy'])
 
 /*
 |--------------------------------------------------------------------------
+| English edition — must stay above the catch-alls, and carry its own
+|--------------------------------------------------------------------------
+|
+| Bangla is unprefixed and English lives under /en. Every route here is a
+| second name for a page that already exists, prefixed `en.`, which is what
+| `App\Support\Locale::route()` resolves for a template rendered in either
+| edition.
+|
+| Two ordering rules, and both are the same rule the file already obeys one
+| level up. This group must be registered **before** the outer `/{category}`
+| catch-all, or `/en` is read as a category path and 404s. And inside the
+| group, `/en/{category}` is constrained `.*` in exactly the same way, so it
+| must come last within the group or it swallows /en/search and the feeds.
+|
+| `/en` deliberately has no block-driven front page. The homepage layout is
+| an editor-managed set of blocks with one position per column, and a second
+| edition of it is a second thing for the desk to keep current — an English
+| front page nobody remembered to update is worse than an honest list of the
+| latest English stories, which is what this is.
+|
+*/
+Route::prefix(App\Support\Locale::ALTERNATE)
+    ->name(App\Support\Locale::ALTERNATE.'.')
+    ->middleware('locale:'.App\Support\Locale::ALTERNATE)
+    ->group(function () {
+        // The English front door is the latest-stories listing, not a second
+        // block layout. `ListingController@latest` already paginates, already
+        // does the infinite-scroll fragment, and its heading is a translated
+        // string — so `/en` is a page that exists rather than one to maintain.
+        Route::get('/', [Site\ListingController::class, 'latest'])->name('home');
+
+        Route::get('/search', Site\SearchController::class)
+            ->middleware('throttle:search')->name('search');
+
+        // The ticker is in the header, so it renders on these pages too. Its
+        // poll has to stay inside the edition — a header that server-renders
+        // English breaking news and then swaps it for Bangla 30 seconds later
+        // is worse than one that never had it.
+        Route::get('/api/breaking', [Site\ApiController::class, 'breaking'])
+            ->middleware('throttle:polling')->name('api.breaking');
+
+        Route::get('/rss', [Site\FeedController::class, 'rss'])->name('feed.rss');
+        Route::get('/sitemap.xml', [Site\FeedController::class, 'sitemap'])->name('feed.sitemap');
+
+        // Same shapes as the Bangla catch-alls, and last for the same reason.
+        Route::get('/{category}/{article}/{slug?}', Site\ArticleController::class)
+            ->where('category', '.*')
+            ->where('article', '[0-9]+')
+            ->where('slug', '[^/]*')
+            ->name('article.show');
+
+        Route::get('/{category}', Site\CategoryController::class)
+            ->where('category', '.*')
+            ->name('category.show');
+    });
+
+/*
+|--------------------------------------------------------------------------
 | Catch-all content routes — must stay last
 |--------------------------------------------------------------------------
 |

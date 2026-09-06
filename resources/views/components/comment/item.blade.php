@@ -51,7 +51,7 @@
                 </time>
 
                 @if ($comment->updated_at->gt($comment->created_at->addMinute()))
-                    <span class="text-2xs text-muted">(সম্পাদিত)</span>
+                    <span class="text-2xs text-muted">({{ __('সম্পাদিত') }})</span>
                 @endif
             </div>
 
@@ -65,18 +65,18 @@
                       action="{{ route('comments.update', $comment) }}" class="mt-2">
                     @csrf
                     @method('PATCH')
-                    <label for="edit-{{ $comment->id }}" class="sr-only">মন্তব্য সম্পাদনা</label>
+                    <label for="edit-{{ $comment->id }}" class="sr-only">{{ __('মন্তব্য সম্পাদনা') }}</label>
                     <textarea id="edit-{{ $comment->id }}" name="body" rows="3" required
                               class="w-full rounded-lg border border-line-strong bg-canvas px-3 py-2
                                      text-base text-ink outline-none focus:border-brand">{{ $comment->body }}</textarea>
                     <div class="mt-2 flex gap-2">
                         <button type="submit"
                                 class="rounded-lg bg-brand px-4 py-1.5 text-sm font-semibold text-white">
-                            সংরক্ষণ
+                            {{ __('সংরক্ষণ') }}
                         </button>
                         <button type="button" @click="editing = false"
                                 class="rounded-lg border border-line px-4 py-1.5 text-sm font-semibold text-body">
-                            বাতিল
+                            {{ __('বাতিল') }}
                         </button>
                     </div>
                 </form>
@@ -92,7 +92,7 @@
                         <path d="M7 22V11l5-9a2.5 2.5 0 012.4 3.2L13.5 9H19a2 2 0 012 2.3l-1.3 8A2 2 0 0117.7 21H7z"/>
                     </svg>
                     <span class="lat" x-text="likes || ''"></span>
-                    <span>ভালো লাগল</span>
+                    <span>{{ __('ভালো লাগল') }}</span>
                 </button>
 
                 @if (! $isReply)
@@ -104,33 +104,33 @@
                             box.focus();
                             box.dispatchEvent(new Event('input'));
                             box.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        " class="font-medium text-muted transition hover:text-brand">উত্তর দিন</button>
+                        " class="font-medium text-muted transition hover:text-brand">{{ __('উত্তর দিন') }}</button>
                     @else
                         <a href="{{ route('login', ['redirect' => request()->path()]) }}"
-                           class="font-medium text-muted transition hover:text-brand">উত্তর দিন</a>
+                           class="font-medium text-muted transition hover:text-brand">{{ __('উত্তর দিন') }}</a>
                     @endauth
                 @endif
 
                 @can('update', $comment)
                     <button type="button" @click="editing = true"
-                            class="font-medium text-muted transition hover:text-brand">সম্পাদনা</button>
+                            class="font-medium text-muted transition hover:text-brand">{{ __('সম্পাদনা') }}</button>
                 @endcan
 
                 @can('delete', $comment)
                     <form method="POST" action="{{ route('comments.destroy', $comment) }}"
-                          onsubmit="return confirm('এই মন্তব্যটি মুছে ফেলতে চান?')">
+                          onsubmit="return confirm('{{ __('এই মন্তব্যটি মুছে ফেলতে চান?') }}')">
                         @csrf
                         @method('DELETE')
                         <button type="submit" class="font-medium text-muted transition hover:text-brand">
-                            মুছুন
+                            {{ __('মুছুন') }}
                         </button>
                     </form>
                 @endcan
 
                 <button type="button" @click="report()" :disabled="reported"
                         class="ms-auto font-medium text-muted transition hover:text-brand disabled:opacity-50">
-                    <span x-show="!reported">রিপোর্ট</span>
-                    <span x-show="reported" x-cloak>রিপোর্ট করা হয়েছে</span>
+                    <span x-show="!reported">{{ __('রিপোর্ট') }}</span>
+                    <span x-show="reported" x-cloak>{{ __('রিপোর্ট করা হয়েছে') }}</span>
                 </button>
             </div>
         </div>
