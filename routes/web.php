@@ -141,6 +141,11 @@ Route::prefix(App\Support\Locale::ALTERNATE)
         Route::get('/api/breaking', [Site\ApiController::class, 'breaking'])
             ->middleware('throttle:polling')->name('api.breaking');
 
+        // Fixed prefixes, so they sit above this group's own catch-alls for
+        // the same reason `/topic` and `/tag` sit above the outer ones.
+        Route::get('/topic/{topic:slug}', Site\TopicController::class)->name('topic.show');
+        Route::get('/tag/{tag:slug}', Site\TagController::class)->name('tag.show');
+
         Route::get('/rss', [Site\FeedController::class, 'rss'])->name('feed.rss');
         Route::get('/sitemap.xml', [Site\FeedController::class, 'sitemap'])->name('feed.sitemap');
 

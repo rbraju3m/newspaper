@@ -31,9 +31,9 @@
             <div class="mt-3 flex flex-wrap items-center gap-2">
                 <span class="text-xs text-muted">{{ __('জনপ্রিয়:') }}</span>
                 @foreach ($trendingTopics->take(6) as $topic)
-                    <a href="{{ route('search') }}?q={{ urlencode($topic->name) }}"
+                    <a href="{{ \App\Support\Locale::route('search') }}?q={{ urlencode($topic->display_name) }}"
                        class="rounded-full bg-surface-2 px-2.5 py-1 text-xs text-body hover:text-brand">
-                        {{ $topic->name }}
+                        {{ $topic->display_name }}
                     </a>
                 @endforeach
             </div>

@@ -345,9 +345,10 @@ that adds a column to a cached model is the same shape:**
 php artisan cache:clear
 ```
 
-`layout.categories` holds `Category` models for an **hour**, and that release
-added `name_en` to the select. An entry written by the old code has no such
-attribute, and `Category::display_name` reads it — so for up to an hour after
+`layout.categories` holds `Category` models for an **hour** and `layout.trending`
+holds `Topic` models for ten minutes; those releases added `name_en` to both
+selects. An entry written by the old code has no such
+attribute, and `display_name` reads it — so for up to an hour after
 the deploy every page would render the section names it could still find and
 none of the ones it could not.
 

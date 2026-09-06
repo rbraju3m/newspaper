@@ -61,9 +61,11 @@ built, 6 September**, as the *translated edition* — the user chose that
 reading of the three. Bangla is unprefixed, English is `/en`, an article in
 either edition is its own row linked by `translation_of`, and the switcher
 appears only where a published counterpart exists. What was deliberately left
-out is listed in `STATUS.md` item 3: no block-driven English front page, and
-no `/en` topics, tags, e-paper, archive or newsletter — those surfaces are
-*hidden* in English rather than rendered in Bangla.
+out is listed in `STATUS.md` item 3. Topics and tags joined the edition later
+the same day (`name_en` columns, `/en/topic` and `/en/tag`); what is still out
+is the block-driven English front page, the e-paper, the archive, the
+newsletter and the author bio — all *hidden* in English rather than rendered
+in Bangla.
 
 ~~**One small known defect, deliberately not fixed.**~~ **Fixed on 6 September**
 — and it was two colours, not one: `#0891B2` fails as well at 3.68:1.

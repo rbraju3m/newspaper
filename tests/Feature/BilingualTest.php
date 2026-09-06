@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Article;
 use App\Models\Category;
+use App\Models\Tag;
+use App\Models\Topic;
 use App\Models\User;
 use App\Support\Locale;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -102,6 +104,10 @@ class BilingualTest extends TestCase
             '/en/rss' => 'en.feed.rss',
             '/en/sitemap.xml' => 'en.feed.sitemap',
             '/en/api/breaking' => 'en.api.breaking',
+            '/topic/x' => 'topic.show',
+            '/en/topic/x' => 'en.topic.show',
+            '/tag/x' => 'tag.show',
+            '/en/tag/x' => 'en.tag.show',
             '/sports/cricket' => 'category.show',
             '/en/sports/cricket' => 'en.category.show',
             '/sports/cricket/9/x' => 'article.show',
@@ -377,6 +383,176 @@ class BilingualTest extends TestCase
             'A seeded section has no English name: '
                 .Category::whereNull('name_en')->pluck('slug')->implode(', '),
         );
+    }
+
+    // ── Topics and tags ──────────────────────────────────────────────────
+
+    /**
+     * Both were **hidden** on `/en` when the edition shipped, because neither
+     * table had an English name and neither had an `/en` route — a Bangla chip
+     * on an English page is a word the reader cannot read linking out of the
+     * edition. Both now exist, so the hiding is gone and the naming has to
+     * work instead.
+     */
+    public function test_a_topic_and_a_tag_are_named_in_the_edition_being_read(): void
+    {
+        $topic = Topic::factory()->create([
+            'name' => 'বিশ্বকাপ ২০২৬', 'name_en' => 'World Cup 2026', 'slug' => 'world-cup-2026',
+        ]);
+        $tag = Tag::create(['name' => 'ক্রিকেট', 'name_en' => 'Cricket']);
+
+        $bn = $this->article('bn');
+        $en = $this->article('en');
+        $bn->topics()->attach($topic);
+        $en->topics()->attach($topic);
+        $bn->tags()->attach($tag);
+        $en->tags()->attach($tag);
+
+        $this->get(route('topic.show', $topic))->assertOk()
+            ->assertSee('বিশ্বকাপ ২০২৬')->assertDontSee('World Cup 2026');
+
+        $this->get(route('en.topic.show', $topic))->assertOk()
+            ->assertSee('World Cup 2026')->assertDontSee('বিশ্বকাপ ২০২৬');
+
+        $this->get(route('en.tag.show', $tag))->assertOk()
+            ->assertSee('Cricket')->assertDontSee('ক্রিকেট', false);
+    }
+
+    /** A listing is a listing: it must not show the other edition's stories. */
+    public function test_topic_and_tag_listings_are_scoped_to_their_edition(): void
+    {
+        $topic = Topic::factory()->create(['name_en' => 'A topic']);
+        $tag = Tag::create(['name' => 'ট্যাগ', 'name_en' => 'A tag']);
+
+        $bn = $this->article('bn', ['title' => 'বাংলা ফাঁস']);
+        $en = $this->article('en', ['title' => 'The English one']);
+
+        foreach ([$bn, $en] as $a) {
+            $a->topics()->attach($topic);
+            $a->tags()->attach($tag);
+        }
+
+        foreach ([route('en.topic.show', $topic), route('en.tag.show', $tag)] as $url) {
+            $this->get($url)->assertOk()
+                ->assertSee($en->title, false)
+                ->assertDontSee($bn->title, false);
+        }
+
+        foreach ([route('topic.show', $topic), route('tag.show', $tag)] as $url) {
+            $this->get($url)->assertOk()
+                ->assertSee($bn->title, false)
+                ->assertDontSee($en->title, false);
+        }
+    }
+
+    /**
+     * The same fallback sections have, for the same reason: a heading reading
+     * "world-cup-2026" is worse than one reading the Bangla name.
+     */
+    public function test_a_topic_or_tag_with_no_english_name_falls_back_to_bangla(): void
+    {
+        $topic = Topic::factory()->create(['name' => 'অনামী বিষয়', 'name_en' => null]);
+        $tag = Tag::create(['name' => 'অনামী ট্যাগ', 'name_en' => null]);
+
+        app()->setLocale(Locale::ALTERNATE);
+
+        $this->assertSame('অনামী বিষয়', $topic->display_name);
+        $this->assertSame('অনামী ট্যাগ', $tag->display_name);
+    }
+
+    /**
+     * The description is the one field whose fallback goes the **other** way.
+     * A name has to render something or the page has no heading; a
+     * description is optional everywhere, so nothing beats a Bangla paragraph
+     * sitting under an English one.
+     */
+    public function test_a_topic_description_is_dropped_rather_than_shown_in_bangla(): void
+    {
+        $topic = Topic::factory()->create([
+            'name' => 'বিষয়', 'name_en' => 'Topic',
+            'description' => 'বাংলা বিবরণ', 'description_en' => null,
+        ]);
+
+        $this->get(route('topic.show', $topic))->assertOk()->assertSee('বাংলা বিবরণ');
+        $this->get(route('en.topic.show', $topic))->assertOk()->assertDontSee('বাংলা বিবরণ');
+    }
+
+    public function test_a_topic_and_a_tag_pair_themselves_with_hreflang(): void
+    {
+        $topic = Topic::factory()->create(['name_en' => 'A topic']);
+        $tag = Tag::create(['name' => 'ট্যাগ', 'name_en' => 'A tag']);
+
+        foreach ([
+            route('en.topic.show', $topic) => route('topic.show', $topic),
+            route('en.tag.show', $tag) => route('tag.show', $tag),
+        ] as $english => $bangla) {
+            $html = $this->get($english)->assertOk()->getContent();
+
+            $this->assertStringContainsString('hreflang="en-BD"', $html);
+            $this->assertMatchesRegularExpression(
+                '/hreflang="x-default"\s*\n?\s*href="'.preg_quote($bangla, '/').'"/', $html,
+                "x-default on {$english} does not name the Bangla edition.",
+            );
+        }
+    }
+
+    /**
+     * The tag strip under an English article was guarded on
+     * `Locale::isDefault()` and is not any more. Its chips must stay inside
+     * the edition: an English page whose only outbound taxonomy links go to
+     * the Bangla site is the thing the guard existed to prevent.
+     */
+    public function test_an_english_articles_tags_stay_inside_the_english_edition(): void
+    {
+        $tag = Tag::create(['name' => 'নির্বাচন', 'name_en' => 'Election']);
+        [, $en] = $this->pair();
+        $en->tags()->attach($tag);
+
+        $html = $this->get($en->url)->assertOk()->getContent();
+
+        $this->assertStringContainsString(route('en.tag.show', $tag), $html);
+        $this->assertStringContainsString('Election', $html);
+        $this->assertStringNotContainsString(route('tag.show', $tag).'"', $html);
+    }
+
+    /**
+     * The trending rail is cached once for both editions — the rows are the
+     * same and only the printed column differs — so `name_en` has to be in
+     * the select. A column missing from a **cached** model is a
+     * `MissingAttributeException` that no lazy-loading guard can see, because
+     * `unserialize()` fires no events.
+     */
+    public function test_the_trending_rail_renders_in_both_editions_from_one_cache_entry(): void
+    {
+        Topic::factory()->create([
+            'name' => 'ট্রেন্ডিং বিষয়', 'name_en' => 'A trending topic',
+            'is_active' => true, 'is_trending' => true,
+        ]);
+
+        $this->article('bn');
+        $this->article('en');
+
+        // Bangla first, so its payload is the one that would be reused.
+        $this->get('/latest')->assertOk()->assertSee('ট্রেন্ডিং বিষয়');
+        $this->get('/en')->assertOk()->assertSee('A trending topic');
+    }
+
+    /**
+     * `ContentSeeder::TAGS` and `TOPICS` carry the English name in the same
+     * tuple as the Bangla one, so the two cannot drift — but a name added to
+     * one list and not the other would be a Bangla chip on an English page,
+     * which is what all of this exists to remove.
+     */
+    public function test_every_seeded_topic_and_tag_has_an_english_name(): void
+    {
+        $this->seed(\Database\Seeders\CategorySeeder::class);
+        $this->seed(\Database\Seeders\ContentSeeder::class);
+
+        $this->assertSame(0, Topic::whereNull('name_en')->count(),
+            'A seeded topic has no English name: '.Topic::whereNull('name_en')->pluck('slug')->implode(', '));
+
+        $this->assertSame(0, Tag::whereNull('name_en')->count(),
+            'A seeded tag has no English name: '.Tag::whereNull('name_en')->pluck('name')->implode(', '));
     }
 
     // ── The translation files ────────────────────────────────────────────

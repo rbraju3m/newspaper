@@ -13,9 +13,9 @@
                       style="{{ \App\Support\Contrast::labelStyle($topic->color) }}">
                     বিশেষ আয়োজন
                 </span>
-                <h2 class="font-headline text-xl font-bold text-ink lg:text-2xl">{{ $topic->name }}</h2>
+                <h2 class="font-headline text-xl font-bold text-ink lg:text-2xl">{{ $topic->display_name }}</h2>
             </div>
-            <a href="{{ route('topic.show', $topic) }}"
+            <a href="{{ $topic->url() }}"
                class="flex shrink-0 items-center gap-1 text-sm font-semibold text-muted hover:text-brand">
                 সব খবর <x-ui.icon name="chevron-right" class="h-3.5 w-3.5" />
             </a>

@@ -22,7 +22,11 @@ class ArticleController extends Controller
                 // lazy load — a 500 on the page, not a slow one.
                 'category:id,name,name_en,slug,path,color',
                 'author:id,name,slug,avatar,designation,bio',
-                'tags:id,name,slug',
+                // `name_en` for the same reason the category select carries
+                // it: the tag strip prints `display_name`, and a column left
+                // out of a partial select is a MissingAttributeException
+                // under strict mode — a 500 rather than a lazy load.
+                'tags:id,name,name_en,slug',
                 'topics:id,name,slug,color',
                 'gallery.images',
                 // Feeds the hero's srcset and its width/height. Without this

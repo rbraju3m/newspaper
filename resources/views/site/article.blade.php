@@ -13,7 +13,7 @@
     <meta property="article:modified_time" content="{{ $article->updated_at?->toIso8601String() }}">
     <meta property="article:section" content="{{ $article->category?->display_name }}">
     @foreach ($article->tags as $tag)
-        <meta property="article:tag" content="{{ $tag->name }}">
+        <meta property="article:tag" content="{{ $tag->display_name }}">
     @endforeach
 @endpush
 
@@ -213,18 +213,14 @@
                         {!! $article->body !!}
                     </div>
 
-                    {{-- Tags and topics link to `/tag` and `/topic`, which have no
-                         English edition, so the strips are hidden there rather than
-                         offering a reader a Bangla word that leaves the edition. The
-                         rows stay linked in the database for when those routes exist. --}}
-                    @if ($article->tags->isNotEmpty() && \App\Support\Locale::isDefault())
+                    @if ($article->tags->isNotEmpty())
                         <div class="mt-7 flex flex-wrap items-center gap-2">
                             <span class="text-sm font-semibold text-ink">{{ __('বিষয়:') }}</span>
                             @foreach ($article->tags as $tag)
-                                <a href="{{ route('tag.show', $tag) }}"
+                                <a href="{{ $tag->url() }}"
                                    class="rounded-full bg-surface-2 px-3 py-1 text-sm text-body
                                           transition hover:bg-brand hover:text-white">
-                                    {{ $tag->name }}
+                                    {{ $tag->display_name }}
                                 </a>
                             @endforeach
                         </div>

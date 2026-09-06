@@ -13,18 +13,32 @@ use Illuminate\Database\Seeder;
 
 class ContentSeeder extends Seeder
 {
+    /**
+     * [Bangla, English]. The English name is what `/en/tag/{slug}` prints.
+     *
+     * The **slug does not change between editions** — it is derived from the
+     * Bangla name and stays Bangla, so `/en/tag/ক্রিকেট` is an English page at
+     * a Bangla address. A second slug column would give a tag two identities
+     * and make `Tag::articles()` choose one; a percent-encoded path segment is
+     * something browsers have handled correctly for twenty years, and the
+     * Bangla site already ships them everywhere.
+     */
     private const TAGS = [
-        'নির্বাচন', 'বাজেট', 'ডেঙ্গু', 'শিক্ষাক্রম', 'রেমিট্যান্স', 'বিশ্বকাপ',
-        'জলবায়ু', 'যানজট', 'মূল্যস্ফীতি', 'সংস্কার', 'রপ্তানি', 'ক্রিকেট',
-        'ফুটবল', 'চলচ্চিত্র', 'প্রযুক্তি', 'স্বাস্থ্যসেবা', 'কৃষি', 'জ্বালানি',
+        ['নির্বাচন', 'Election'], ['বাজেট', 'Budget'], ['ডেঙ্গু', 'Dengue'],
+        ['শিক্ষাক্রম', 'Curriculum'], ['রেমিট্যান্স', 'Remittance'], ['বিশ্বকাপ', 'World Cup'],
+        ['জলবায়ু', 'Climate'], ['যানজট', 'Traffic'], ['মূল্যস্ফীতি', 'Inflation'],
+        ['সংস্কার', 'Reform'], ['রপ্তানি', 'Exports'], ['ক্রিকেট', 'Cricket'],
+        ['ফুটবল', 'Football'], ['চলচ্চিত্র', 'Cinema'], ['প্রযুক্তি', 'Technology'],
+        ['স্বাস্থ্যসেবা', 'Healthcare'], ['কৃষি', 'Agriculture'], ['জ্বালানি', 'Energy'],
     ];
 
+    /** [Bangla, slug, trending, English]. */
     private const TOPICS = [
-        ['জাতীয় নির্বাচন ২০২৬', 'national-election-2026', true],
-        ['বিশ্বকাপ ২০২৬', 'world-cup-2026', true],
-        ['ডেঙ্গু পরিস্থিতি', 'dengue-situation', true],
-        ['অর্থনৈতিক সংস্কার', 'economic-reform', true],
-        ['জলবায়ু সম্মেলন', 'climate-summit', false],
+        ['জাতীয় নির্বাচন ২০২৬', 'national-election-2026', true, 'National Election 2026'],
+        ['বিশ্বকাপ ২০২৬', 'world-cup-2026', true, 'World Cup 2026'],
+        ['ডেঙ্গু পরিস্থিতি', 'dengue-situation', true, 'The Dengue Outbreak'],
+        ['অর্থনৈতিক সংস্কার', 'economic-reform', true, 'Economic Reform'],
+        ['জলবায়ু সম্মেলন', 'climate-summit', false, 'The Climate Summit'],
     ];
 
     public function run(): void
@@ -34,14 +48,17 @@ class ContentSeeder extends Seeder
         $categories = Category::with('parent')->whereNotNull('parent_id')->get();
         $roots = Category::whereNull('parent_id')->get()->keyBy('slug');
 
+        // `updateOrCreate` on the name rather than `firstOrCreate`, so a
+        // re-seed fills in `name_en` on tags that already existed from before
+        // the column did. It writes nothing else.
         $tags = collect(self::TAGS)->map(
-            fn ($name) => Tag::firstOrCreate(['name' => $name])
+            fn ($t) => Tag::updateOrCreate(['name' => $t[0]], ['name_en' => $t[1]])
         );
 
         $topics = collect(self::TOPICS)->map(
             fn ($t) => Topic::updateOrCreate(
                 ['slug' => $t[1]],
-                ['name' => $t[0], 'is_trending' => $t[2], 'is_active' => true],
+                ['name' => $t[0], 'name_en' => $t[3], 'is_trending' => $t[2], 'is_active' => true],
             )
         );
 

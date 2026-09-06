@@ -129,5 +129,9 @@
     "আরও খবর": "More stories",
     "লোড হচ্ছে…": "Loading…",
     "লোড করা যায়নি।": "Could not load.",
-    "আবার চেষ্টা করুন": "Try again"
+    "আবার চেষ্টা করুন": "Try again",
+    "বিষয়": "Topic",
+    ":count টি খবর": ":count stories",
+    "এই বিষয়ে কোনো খবর নেই": "No stories on this topic yet",
+    "বিশেষ আয়োজন": "Special coverage"
 }

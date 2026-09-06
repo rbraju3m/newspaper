@@ -76,27 +76,27 @@ class LayoutComposer
     }
 
     /**
-     * Empty outside the default edition, on purpose.
+     * The same eight topics in both editions, cached once.
      *
-     * A topic has one name and `/topic/{slug}` has one edition, so every chip
-     * in this rail is a Bangla name linking out of the English site. The two
-     * templates that render it already guard on `isNotEmpty()`, so the rail
-     * disappears rather than rendering a heading over nothing.
+     * This used to return an empty collection outside the default edition,
+     * because a topic had one name and `/topic/{slug}` had one edition — so
+     * every chip was a Bangla word linking out of the English site. Both of
+     * those are now false: `topics.name_en` exists and `/en/topic/{slug}` is a
+     * route.
      *
-     * This is the honest shape of the scope that was chosen: topics are not
-     * part of the English edition. When they are, they need a `name_en` and
-     * an `/en/topic` route, and this returns the same query for both.
+     * **One cache entry, not one per edition**, for the same reason
+     * `layout.categories` has one: these are the same rows either way, and
+     * only which column a template prints changes. `name_en` is therefore in
+     * the select even though the Bangla edition never reads it — a column
+     * missing from a *cached* model is a `MissingAttributeException` that no
+     * lazy-loading guard can see, because `unserialize()` fires no events.
      */
     private function trendingTopics(): Collection
     {
-        if (! Locale::isDefault()) {
-            return collect();
-        }
-
         return $this->trending ??= Cache::remember(
             'layout.trending',
             now()->addMinutes(10),
-            fn () => Topic::trending()->limit(8)->get(['id', 'name', 'slug', 'color']),
+            fn () => Topic::trending()->limit(8)->get(['id', 'name', 'name_en', 'slug', 'color']),
         );
     }
 

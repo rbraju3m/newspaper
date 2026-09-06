@@ -67,11 +67,16 @@ class TaxonomyController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:80'],
+            'name_en' => ['nullable', 'string', 'max:80'],
             'slug' => ['nullable', 'string', 'max:120', Rule::unique('tags')->ignore($tag->id)],
         ]);
 
         // Blanking the slug asks the model to rebuild it from the new name.
-        $tag->update(['name' => $validated['name'], 'slug' => $validated['slug'] ?: null]);
+        $tag->update([
+            'name' => $validated['name'],
+            'name_en' => $validated['name_en'] ?: null,
+            'slug' => $validated['slug'] ?: null,
+        ]);
 
         return back()->with('status', 'ট্যাগ হালনাগাদ হয়েছে।');
     }
@@ -111,9 +116,13 @@ class TaxonomyController extends Controller
     {
         return $request->validate([
             'name' => ['required', 'string', 'max:150'],
+            // Optional in both taxonomies: an empty English name falls back to
+            // the Bangla one on /en rather than to the slug.
+            'name_en' => ['nullable', 'string', 'max:150'],
             'slug' => ['nullable', 'string', 'max:150', 'regex:/^[a-z0-9-]+$/',
                 Rule::unique('topics')->ignore($topic?->id)],
             'description' => ['nullable', 'string', 'max:1000'],
+            'description_en' => ['nullable', 'string', 'max:1000'],
             'color' => ['required', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'position' => ['nullable', 'integer', 'min:0', 'max:999'],
         ]) + [

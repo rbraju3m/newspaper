@@ -29,10 +29,17 @@
                         @csrf @method('PUT')
                         <input name="name" value="{{ $topic->name }}" required
                                class="w-full rounded border border-line-strong bg-canvas px-2 py-1.5 text-sm">
+                        {{-- Optional. Empty falls back to the Bangla name on /en
+                             rather than to the slug, so a topic added in a hurry
+                             still reads as a topic there. --}}
+                        <input name="name_en" value="{{ $topic->name_en }}" placeholder="নাম (ইংরেজি)"
+                               class="lat w-full rounded border border-line-strong bg-canvas px-2 py-1.5 text-sm">
                         <input name="slug" value="{{ $topic->slug }}"
                                class="lat w-full rounded border border-line-strong bg-canvas px-2 py-1.5 text-xs">
                         <textarea name="description" rows="2" placeholder="বিবরণ"
                                   class="w-full rounded border border-line-strong bg-canvas px-2 py-1.5 text-xs">{{ $topic->description }}</textarea>
+                        <textarea name="description_en" rows="2" placeholder="বিবরণ (ইংরেজি)"
+                                  class="lat w-full rounded border border-line-strong bg-canvas px-2 py-1.5 text-xs">{{ $topic->description_en }}</textarea>
                         <div class="flex items-center gap-2">
                             <input type="color" name="color" value="{{ $topic->color }}"
                                    class="h-8 w-12 rounded border border-line-strong bg-canvas">
@@ -105,6 +112,8 @@
                                     @csrf @method('PUT')
                                     <input name="name" value="{{ $tag->name }}" required
                                            class="min-w-0 flex-1 rounded border border-line-strong bg-canvas px-2 py-1 text-sm">
+                                    <input name="name_en" value="{{ $tag->name_en }}" placeholder="ইংরেজি"
+                                           class="lat min-w-0 flex-1 rounded border border-line-strong bg-canvas px-2 py-1 text-sm">
                                     <button type="submit" class="rounded bg-brand px-2 py-1 text-xs text-white">✓</button>
                                 </form>
                             </td>

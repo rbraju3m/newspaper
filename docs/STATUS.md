@@ -25,18 +25,18 @@ Counted rather than remembered, 6 September 2026 (three times that day; see belo
 
 | | |
 |---|---|
-| PHP files (app/database/routes/config) | 185 |
+| PHP files (app/database/routes/config) | 186 |
 | Models · Enums · Policies · Services | 24 · 5 · 3 · 8 |
 | Controllers · Artisan commands | 47 · 15 |
 | Blade templates | 116 |
-| Test files · tests · assertions | 56 · 823 · 3,622 |
-| Routes | 148 total · 74 admin |
+| Test files · tests · assertions | 56 · 831 · 3,673 |
+| Routes | 150 total · 74 admin |
 | Database tables | 39 |
 | Content on this box | 55 categories · 374 Bangla + 50 English articles · 110 comments · 37 users |
 | Demo modules | 5 e-paper issues (40 pages) · 8 photo galleries (64 images) |
 | Imagery | 153 media · 749 WebP derivatives · 78 MB on disk |
 | Bundle (gzipped, as `npm run build` reports it) | 13.1 KB CSS · 25.2 KB JS |
-| Translated UI strings | 131, in `lang/en.json` |
+| Translated UI strings | 135, in `lang/en.json` |
 
 Three commits on 6 September. The first added `App\Support\Contrast` (179 PHP
 files to 180) with `Unit/ContrastTest` and two tests in `NewsletterDigestTest`
@@ -46,6 +46,11 @@ files to 53, 779 tests, 3,324 assertions. It added no PHP or Blade file,
 because it edited four existing templates and one existing class. The gzipped
 CSS moved 12.40 KB to 12.45 KB for the two new rules, inside the rounding this
 table shows.
+
+A fourth commit that day took topics and tags into the English edition: one
+migration (`topics.name_en`, `topics.description_en`, `tags.name_en`), two
+routes, four more `lang/en.json` keys, and eight tests — 823 → 831 and
+3,622 → 3,673, in the same file rather than a new one.
 
 The third commit that day built the English edition (gap 11) and moved six:
 five new PHP files — `Locale`, `Fmt`, `SetLocale`, `TranslateArticles`,
@@ -1520,16 +1525,30 @@ After them, in the order they are worth doing:
    language and no words at all; and `articles:translate` fills the demo box —
    insert-only, idempotent, deterministic on the source id.
 
-   **What was deliberately left out**, and it is a real list rather than an
+   **Topics and tags followed later the same day.** `topics.name_en`,
+   `topics.description_en` and `tags.name_en` are new columns; `/en/topic` and
+   `/en/tag` are routes; the trending rail and the article tag strip are no
+   longer hidden on `/en`, and both page types carry `hreflang`. A tag's slug
+   deliberately stays Bangla in both editions — `/en/tag/ক্রিকেট` is an
+   English page at a percent-encoded Bangla address, because a second slug
+   column would give a tag two identities and make `Tag::articles()` choose
+   one. A name falls back to the Bangla one; a *description* falls back to
+   nothing, because an English heading over a Bangla standfirst is worse than
+   no standfirst.
+
+   **What is still deliberately out**, and it is a real list rather than an
    oversight. There is no block-driven English front page: the homepage layout
    is editor-managed with one position per column, and a second edition of it
    is a second thing for the desk to keep current — a stale English front page
-   is worse than an honest list of the latest stories. Topics, tags, the
-   e-paper, the archive and the newsletter have no `/en` routes, and the
-   author bio and designation have no English column; every one of those is
-   **hidden** on an English page rather than rendered in Bangla. Google News's
-   sitemap stays Bangla-only, because the English desk is not a registered
-   publication.
+   is worse than an honest list of the latest stories. The e-paper, the
+   archive and the newsletter have no `/en` routes, and the author bio and
+   designation have no English column; each of those is **hidden** on an
+   English page rather than rendered in Bangla. Google News's sitemap stays
+   Bangla-only, because the English desk is not a registered publication.
+
+   Anything else joining the edition needs the same three things topics and
+   tags needed — a column, a route, and a display accessor — with the
+   `Locale::isDefault()` guard removed in the same commit.
 
    **What it cost to get right**, worth knowing before extending it. Locale
    leakage has no error and no visual break, so the tests assert the absence

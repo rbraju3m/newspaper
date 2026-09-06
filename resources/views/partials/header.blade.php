@@ -134,10 +134,10 @@
                 <div class="no-scrollbar mx-auto flex max-w-site items-center gap-2 overflow-x-auto px-4 py-2">
                     <span class="shrink-0 text-2xs font-bold uppercase tracking-wide text-muted">{{ __('ট্রেন্ডিং') }}</span>
                     @foreach ($trendingTopics as $topic)
-                        <a href="{{ route('topic.show', $topic->slug) }}"
+                        <a href="{{ $topic->url() }}"
                            class="shrink-0 rounded-full border border-line bg-surface px-3 py-1 text-xs
                                   font-medium text-body transition hover:border-brand hover:text-brand">
-                            {{ $topic->name }}
+                            {{ $topic->display_name }}
                         </a>
                     @endforeach
                 </div>
