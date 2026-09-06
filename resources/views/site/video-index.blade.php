@@ -1,10 +1,19 @@
 @extends('layouts.site')
-@section('title', 'ভিডিও — '.config('site.name_bn'))
+@section('title', __('ভিডিও').' — '.\App\Support\Locale::siteName())
+
+@push('alternates')
+    @foreach (\App\Support\Locale::ALL as $edition)
+        <link rel="alternate" hreflang="{{ \App\Support\Locale::hreflang($edition) }}"
+              href="{{ \App\Support\Locale::route('video.index', [], $edition) }}">
+    @endforeach
+    <link rel="alternate" hreflang="x-default"
+          href="{{ \App\Support\Locale::route('video.index', [], \App\Support\Locale::DEFAULT) }}">
+@endpush
 
 @section('content')
     <div class="bg-[#14171A] text-white">
         <div class="mx-auto max-w-site px-4 py-8">
-            <h1 class="font-headline text-3xl font-bold text-white lg:text-4xl">ভিডিও</h1>
+            <h1 class="font-headline text-3xl font-bold text-white lg:text-4xl">{{ __('ভিডিও') }}</h1>
 
             @if ($featured)
                 <div class="mt-6 grid gap-6 lg:grid-cols-12">
@@ -28,7 +37,7 @@
     </div>
 
     <div class="mx-auto max-w-site px-4 py-8">
-        <x-ui.section-header title="সব ভিডিও" />
+        <x-ui.section-header :title="__('সব ভিডিও')" />
         <div class="grid gap-x-6 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
             @foreach ($videos->skip(7) as $video)
                 <x-article.card :article="$video" variant="standard" />

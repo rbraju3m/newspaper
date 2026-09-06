@@ -6,11 +6,11 @@
     <section class="-mx-4 bg-[#14171A] px-4 py-8 text-white lg:mx-0 lg:rounded-xl lg:px-8">
         <div class="mb-4 flex items-end justify-between gap-4 border-b-2 border-brand pb-2">
             <h2 class="font-headline text-xl font-bold text-white lg:text-2xl">
-                {{ $block->heading() ?: 'ভিডিও' }}
+                {{ $block->heading() ?: __('ভিডিও') }}
             </h2>
-            <a href="{{ route('video.index') }}"
+            <a href="{{ \App\Support\Locale::route('video.index') }}"
                class="flex shrink-0 items-center gap-1 pb-1 text-sm font-semibold text-white/70 hover:text-white">
-                আরও দেখুন <x-ui.icon name="chevron-right" class="h-3.5 w-3.5" />
+                {{ __('আরও দেখুন') }} <x-ui.icon name="chevron-right" class="h-3.5 w-3.5" />
             </a>
         </div>
 

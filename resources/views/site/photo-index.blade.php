@@ -1,15 +1,24 @@
 @extends('layouts.site')
-@section('title', 'ফটো গ্যালারি — '.config('site.name_bn'))
+@section('title', __('ফটো গ্যালারি').' — '.\App\Support\Locale::siteName())
+
+@push('alternates')
+    @foreach (\App\Support\Locale::ALL as $edition)
+        <link rel="alternate" hreflang="{{ \App\Support\Locale::hreflang($edition) }}"
+              href="{{ \App\Support\Locale::route('photo.index', [], $edition) }}">
+    @endforeach
+    <link rel="alternate" hreflang="x-default"
+          href="{{ \App\Support\Locale::route('photo.index', [], \App\Support\Locale::DEFAULT) }}">
+@endpush
 
 @section('content')
     <div class="mx-auto max-w-site px-4 py-5 lg:py-7">
         <header class="mb-6 border-b-2 pb-3" style="border-bottom-color: #4F46E5">
-            <h1 class="font-headline text-3xl font-bold text-ink lg:text-4xl">ফটো গ্যালারি</h1>
+            <h1 class="font-headline text-3xl font-bold text-ink lg:text-4xl">{{ __('ফটো গ্যালারি') }}</h1>
         </header>
 
         <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             @foreach ($galleries as $gallery)
-                <a href="{{ route('photo.show', $gallery) }}" class="group block">
+                <a href="{{ $gallery->url() }}" class="group block">
                     <figure class="relative aspect-[4/3] overflow-hidden rounded-lg bg-surface-2">
                         @if ($gallery->cover)
                             <img src="{{ asset('storage/'.$gallery->cover) }}" alt="" loading="lazy"
@@ -22,16 +31,16 @@
                         </span>
                     </figure>
                     <h2 class="mt-2 font-headline text-base font-semibold text-ink clamp-2
-                               group-hover:text-brand">{{ $gallery->title }}</h2>
+                               group-hover:text-brand">{{ $gallery->display_title }}</h2>
                     <time class="mt-1 block text-xs text-muted">
-                        {{ App\Support\Bangla::ago($gallery->published_at) }}
+                        @bnago($gallery->published_at)
                     </time>
                 </a>
             @endforeach
         </div>
 
         @if ($galleries->isEmpty())
-            <x-ui.empty-state icon="camera" title="এখনো কোনো গ্যালারি নেই" />
+            <x-ui.empty-state icon="camera" :title="__('এখনো কোনো গ্যালারি নেই')" />
         @endif
 
         <div class="mt-8">{{ $galleries->links() }}</div>

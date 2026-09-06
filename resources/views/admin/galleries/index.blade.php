@@ -62,11 +62,16 @@
             <h2 class="font-headline text-sm font-bold text-ink">নতুন গ্যালারি</h2>
 
             <x-form.input name="title" label="শিরোনাম" required />
+            {{-- Optional. Empty means /en shows the Bangla title, which is
+                 a heading and has to render something. --}}
+            <x-form.input name="title_en" label="শিরোনাম (ইংরেজি)" class="lat" />
 
             <div>
                 <label for="g-desc" class="mb-1.5 block text-xs font-semibold text-ink">বিবরণ (ঐচ্ছিক)</label>
                 <textarea id="g-desc" name="description" rows="3" maxlength="2000"
                           class="w-full rounded-lg border border-line-strong bg-canvas px-3 py-2 text-sm">{{ old('description') }}</textarea>
+                <textarea name="description_en" rows="3" maxlength="2000" placeholder="বিবরণ (ইংরেজি)"
+                          class="lat mt-2 w-full rounded-lg border border-line-strong bg-canvas px-3 py-2 text-sm">{{ old('description_en') }}</textarea>
             </div>
 
             <div>

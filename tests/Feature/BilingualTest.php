@@ -108,6 +108,12 @@ class BilingualTest extends TestCase
             '/en/rss' => 'en.feed.rss',
             '/en/sitemap.xml' => 'en.feed.sitemap',
             '/en/api/breaking' => 'en.api.breaking',
+            '/video' => 'video.index',
+            '/en/video' => 'en.video.index',
+            '/en/video/9' => 'en.video.show',
+            '/photo' => 'photo.index',
+            '/en/photo' => 'en.photo.index',
+            '/en/photo/x' => 'en.photo.show',
             '/newsletter/verify/x' => 'newsletter.verify',
             '/en/newsletter/verify/x' => 'en.newsletter.verify',
             '/en/newsletter/unsubscribe/x' => 'en.newsletter.unsubscribe',
@@ -1097,6 +1103,112 @@ class BilingualTest extends TestCase
         $subscriber->forceFill(['verified_at' => now()->subWeek()])->save();
 
         return $subscriber->fresh();
+    }
+
+    // ── Video and the photo galleries ────────────────────────────────────
+
+    /**
+     * A video **is** an article, so it belongs to an edition the way a story
+     * does — and the id lookup is locale-blind, so a Bangla video can be
+     * asked for at an `/en` URL. It must not render there.
+     */
+    public function test_a_video_belongs_to_an_edition_and_canonicalises_into_it(): void
+    {
+        $bn = $this->article('bn', ['type' => \App\Enums\ArticleType::Video, 'video_url' => 'https://youtu.be/x']);
+        $en = $this->article('en', ['type' => \App\Enums\ArticleType::Video, 'video_url' => 'https://youtu.be/y']);
+
+        $this->get('/en/video/'.$bn->id)->assertRedirect(route('video.show', $bn));
+        $this->get('/video/'.$en->id)->assertRedirect(route('en.video.show', $en));
+
+        $this->get(route('en.video.show', $en))->assertOk()->assertSee($en->title, false);
+    }
+
+    public function test_the_video_listing_is_scoped_to_its_edition(): void
+    {
+        $bn = $this->article('bn', ['type' => \App\Enums\ArticleType::Video, 'title' => 'বাংলা ভিডিও']);
+        $en = $this->article('en', ['type' => \App\Enums\ArticleType::Video, 'title' => 'An English video']);
+
+        $this->get('/video')->assertOk()
+            ->assertSee($bn->title, false)->assertDontSee($en->title, false);
+
+        $this->get('/en/video')->assertOk()
+            ->assertSee($en->title, false)->assertDontSee($bn->title, false)
+            ->assertSee('All videos');
+    }
+
+    /**
+     * A gallery is the other shape: the **photographs are the content** and
+     * they are language-neutral, so there is one gallery with one slug shown
+     * in two frames — like an e-paper issue, unlike an article. Only the
+     * words around them change.
+     */
+    public function test_a_gallery_is_one_gallery_shown_in_both_editions(): void
+    {
+        $gallery = $this->gallery();
+
+        $this->get(route('photo.show', $gallery))->assertOk()
+            ->assertSee('বাংলা গ্যালারি')->assertSee('বাংলা বিবরণ')->assertSee('বাংলা ক্যাপশন');
+
+        $this->get(route('en.photo.show', $gallery))->assertOk()
+            ->assertSee('An English gallery')->assertSee('An English blurb')->assertSee('An English caption')
+            ->assertDontSee('বাংলা গ্যালারি')->assertDontSee('বাংলা বিবরণ')->assertDontSee('বাংলা ক্যাপশন');
+
+        // One row, one slug, addressed per edition — the URL follows the
+        // request rather than a locale column, because there isn't one.
+        app()->setLocale(Locale::ALTERNATE);
+        $this->assertStringContainsString('/en/photo/', $gallery->url());
+        app()->setLocale(Locale::DEFAULT);
+        $this->assertStringNotContainsString('/en/photo/', $gallery->url());
+    }
+
+    /**
+     * A title is a heading and falls back to the Bangla one; a description
+     * and a caption are not, and fall back to nothing. Same split as
+     * everywhere else in the edition.
+     */
+    public function test_gallery_text_falls_back_the_way_the_rest_of_the_edition_does(): void
+    {
+        $gallery = $this->gallery(['title_en' => null, 'description_en' => null]);
+        $gallery->images()->update(['caption_en' => null]);
+
+        $html = $this->get(route('en.photo.show', $gallery))->assertOk()->getContent();
+
+        $this->assertStringContainsString('বাংলা গ্যালারি', $html, 'A heading has to render something.');
+        $this->assertStringNotContainsString('বাংলা বিবরণ', $html);
+        $this->assertStringNotContainsString('বাংলা ক্যাপশন', $html);
+    }
+
+    public function test_the_gallery_hub_is_in_the_edition_being_read(): void
+    {
+        $this->gallery();
+
+        $this->get('/en/photo')->assertOk()
+            ->assertSee('Photo galleries')->assertSee('An English gallery')
+            ->assertDontSee('ফটো গ্যালারি')->assertDontSee('বাংলা গ্যালারি');
+
+        $this->get('/photo')->assertOk()
+            ->assertSee('ফটো গ্যালারি')->assertSee('বাংলা গ্যালারি');
+    }
+
+    private function gallery(array $attributes = []): \App\Models\Gallery
+    {
+        $gallery = \App\Models\Gallery::create($attributes + [
+            'title' => 'বাংলা গ্যালারি',
+            'title_en' => 'An English gallery',
+            'description' => 'বাংলা বিবরণ',
+            'description_en' => 'An English blurb',
+            'status' => 'published',
+            'published_at' => now()->subHour(),
+        ]);
+
+        $gallery->images()->create([
+            'path' => 'uploads/g/1.webp',
+            'caption' => 'বাংলা ক্যাপশন',
+            'caption_en' => $attributes['caption_en'] ?? 'An English caption',
+            'position' => 1,
+        ]);
+
+        return $gallery->fresh('images');
     }
 
     // ── The translation files ────────────────────────────────────────────

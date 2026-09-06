@@ -1,7 +1,7 @@
 @extends('layouts.site')
-@section('title', $article->title.' — '.config('site.name_bn'))
+@section('title', $article->title.' — '.\App\Support\Locale::siteName())
 @section('description', $article->excerpt ?? '')
-@section('canonical', route('video.show', $article))
+@section('canonical', \App\Support\Locale::route('video.show', $article, $article->locale))
 @section('og_type', 'video.other')
 
 @section('content')
@@ -29,7 +29,7 @@
             </div>
 
             <aside class="lg:col-span-4">
-                <x-ui.section-header title="আরও ভিডিও" :href="route('video.index')" />
+                <x-ui.section-header :title="__('আরও ভিডিও')" :href="\App\Support\Locale::route('video.index')" />
                 <div class="space-y-4">
                     @foreach ($playlist as $video)
                         <x-article.card :article="$video" variant="list" :show-category="false" />

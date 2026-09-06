@@ -25,20 +25,20 @@ Counted rather than remembered, 6 September 2026 (three times that day; see belo
 
 | | |
 |---|---|
-| PHP files (app/database/routes/config) | 189 |
+| PHP files (app/database/routes/config) | 190 |
 | Models · Enums · Policies · Services | 24 · 5 · 3 · 8 |
 | Controllers · Artisan commands | 47 · 15 |
 | Blade templates | 116 |
-| Test files · tests · assertions | 56 · 854 · 3,847 |
-| Routes | 158 total · 74 admin |
+| Test files · tests · assertions | 56 · 859 · 3,900 |
+| Routes | 162 total · 74 admin |
 | Database tables | 39 |
 | Content on this box | 55 categories · 374 Bangla + 50 English articles · 110 comments · 37 users |
 | Demo modules | 5 e-paper issues (40 pages) · 8 photo galleries (64 images) |
 | Imagery | 153 media · 749 WebP derivatives · 78 MB on disk |
 | Bundle (gzipped, as `npm run build` reports it) | 13.1 KB CSS · 25.2 KB JS |
-| Translated UI strings | 193, in `lang/en.json` |
+| Translated UI strings | 202, in `lang/en.json` |
 
-Seven commits on 6 September. The first added `App\Support\Contrast` (179 PHP
+Eight commits on 6 September. The first added `App\Support\Contrast` (179 PHP
 files to 180) with `Unit/ContrastTest` and two tests in `NewsletterDigestTest`
 — 51 test files to 52, 756 tests to 770, 3,243 assertions to 3,284. The second
 took the same fix to the site's own templates and added `SectionLabelTest`: 52
@@ -57,8 +57,11 @@ e-paper: `epaper_pages.section_en`, `site.epaper_editions_en`, three routes,
 the 4xx error family translated, and eight more tests — 839 → 847 and
 3,716 → 3,790. A seventh took the newsletter:
 `newsletter_subscribers.locale`, four routes, both mailables and all four mail
-templates, and seven more tests — 847 → 854 and 3,790 → 3,847. Every figure above was
-re-counted after that seventh commit, not carried forward.
+templates, and seven more tests — 847 → 854 and 3,790 → 3,847. An eighth took video and
+the photo galleries: `galleries.title_en` + `description_en`,
+`gallery_images.caption_en`, four routes, and five more tests — 854 → 859 and
+3,847 → 3,900. Every figure above was re-counted after that eighth commit, not
+carried forward.
 
 The third commit that day built the English edition (gap 11) and moved six:
 five new PHP files — `Locale`, `Fmt`, `SetLocale`, `TranslateArticles`,
@@ -1562,7 +1565,16 @@ After them, in the order they are worth doing:
    was translated with them, because those pages extend `layouts.site` and a
    reader hits them inside whichever edition they were browsing.
 
-   **The newsletter followed, and it is the odd one.** Every other decision
+   **Video and the galleries came last, and they split the two shapes
+   cleanly.** A video *is* an article, so it belongs to an edition and
+   `VideoController::show()` canonicalises into it the way `ArticleController`
+   does. A gallery is one set of photographs with one slug, shown in two
+   frames — `Gallery::url()` follows the request, like an e-paper issue, and
+   only `title_en`, `description_en` and `caption_en` differ. The rule that
+   decides which shape a surface has: ask what the reader is consuming. Words
+   belong to an edition; a photograph does not.
+
+   **The newsletter, and it is the odd one.** Every other decision
    here comes from the request; the digest goes out from cron hours later and
    nothing in that process knows what a reader can read. So
    `newsletter_subscribers.locale` is captured at sign-up from the box they
@@ -1577,8 +1589,8 @@ After them, in the order they are worth doing:
    oversight. There is no block-driven English front page: the homepage layout
    is editor-managed with one position per column, and a second edition of it
    is a second thing for the desk to keep current — a stale English front page
-   is worse than an honest list of the latest stories. `/video`, `/photo` and
-   `/live` have no `/en` routes; the chrome omits a
+   is worse than an honest list of the latest stories. `/live` is the only
+   reader-facing surface with no `/en` route; the chrome omits a
    link to any page the edition lacks, decided by `Route::has` rather than a
    hand-kept list. `/opinion` is the one listing that prints a job title and
    has no English edition, which is why `ArticleQuery::CARD_RELATIONS` carries

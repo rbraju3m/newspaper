@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Locale;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,7 +11,7 @@ class GalleryImage extends Model
 {
     public $timestamps = false;
 
-    protected $fillable = ['gallery_id', 'media_id', 'path', 'caption', 'credit', 'position'];
+    protected $fillable = ['gallery_id', 'media_id', 'path', 'caption', 'caption_en', 'credit', 'position'];
 
     /**
      * `galleries.images_count` is denormalised, so it is maintained here the
@@ -72,6 +73,14 @@ class GalleryImage extends Model
 
             return $this->media->srcset() ?: null;
         });
+    }
+
+    /** The caption in the edition being read, or null. Not a heading. */
+    protected function displayCaption(): Attribute
+    {
+        return Attribute::get(fn (): ?string => Locale::isDefault()
+            ? $this->caption
+            : $this->caption_en);
     }
 
     protected function url(): Attribute

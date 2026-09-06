@@ -204,6 +204,9 @@ class GalleryController extends Controller
 
         $image->update($request->validate([
             'caption' => ['nullable', 'string', 'max:500'],
+            // Optional: empty means /en shows no caption rather than a
+            // Bangla one. A caption is not a heading.
+            'caption_en' => ['nullable', 'string', 'max:500'],
             'credit' => ['nullable', 'string', 'max:255'],
         ]));
 
@@ -288,7 +291,11 @@ class GalleryController extends Controller
     {
         $data = $request->validate([
             'title' => ['required', 'string', 'max:500'],
+            // The English title *is* a heading, so an empty one falls back to
+            // the Bangla title rather than leaving the page without one.
+            'title_en' => ['nullable', 'string', 'max:500'],
             'description' => ['nullable', 'string', 'max:2000'],
+            'description_en' => ['nullable', 'string', 'max:2000'],
             'category_id' => ['nullable', 'integer', 'exists:categories,id'],
             'status' => ['required', Rule::in(['draft', 'published'])],
             'published_at' => ['nullable', 'date'],

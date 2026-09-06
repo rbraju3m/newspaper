@@ -77,6 +77,8 @@
                             @csrf @method('PUT')
                             <input name="caption" value="{{ $image->caption }}" placeholder="ক্যাপশন" maxlength="500"
                                    class="w-full rounded border border-line-strong bg-canvas px-2 py-1.5 text-sm">
+                            <input name="caption_en" value="{{ $image->caption_en }}" placeholder="Caption, English" maxlength="500"
+                                   class="lat w-full rounded border border-line-strong bg-canvas px-2 py-1.5 text-sm">
                             <input name="credit" value="{{ $image->credit }}" placeholder="কৃতজ্ঞতা" maxlength="255"
                                    class="w-full rounded border border-line-strong bg-canvas px-2 py-1.5 text-sm">
                             <div class="flex gap-2">
@@ -126,11 +128,16 @@
             <h2 class="font-headline text-sm font-bold text-ink">গ্যালারির তথ্য</h2>
 
             <x-form.input name="title" label="শিরোনাম" :value="$gallery->title" required />
+            <x-form.input name="title_en" label="শিরোনাম (ইংরেজি)" :value="$gallery->title_en" class="lat" />
 
             <div>
                 <label for="g-desc" class="mb-1.5 block text-xs font-semibold text-ink">বিবরণ</label>
                 <textarea id="g-desc" name="description" rows="3" maxlength="2000"
                           class="w-full rounded-lg border border-line-strong bg-canvas px-3 py-2 text-sm">{{ $gallery->description }}</textarea>
+                {{-- Optional, and empty means /en shows no blurb rather than a
+                     Bangla one — a description is not a heading. --}}
+                <textarea name="description_en" rows="3" maxlength="2000" placeholder="বিবরণ (ইংরেজি)"
+                          class="lat mt-2 w-full rounded-lg border border-line-strong bg-canvas px-3 py-2 text-sm">{{ $gallery->description_en }}</textarea>
             </div>
 
             <div>

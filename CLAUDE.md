@@ -107,15 +107,16 @@ Bangla one.
 
 ### Bangla-only surfaces are omitted in English, not translated
 
-`/video`, `/photo` and `/live` have no `/en` routes. The masthead tagline is
-dropped in English rather than translated, and the chrome **omits a link to a
-page the edition does not have** — `Route::has` on
+`/live` is the only reader-facing surface with no `/en` route. The masthead
+tagline is dropped in English rather than translated, and the chrome **omits a
+link to a page the edition does not have** — `Route::has` on
 `Locale::routeName($name)` decides, not a hand-kept list, so the day one of
 those is registered under `en.` the link appears without anything being
 edited.
 
-**Topics, tags, the byline block, the archive, the e-paper and the newsletter
-used to be on that list and are not any more.** `topics.name_en` + `description_en`,
+**Everything else used to be on that list and is not any more** — topics,
+tags, the byline block, the archive, the e-paper, the newsletter, video and
+the photo galleries. `topics.name_en` + `description_en`,
 `tags.name_en`, `users.designation_en` + `bio_en`, `epaper_pages.section_en`
 and `site.epaper_editions_en` are the columns and config; `/en/topic`,
 `/en/tag`, `/en/author`, `/en/archive` and `/en/epaper` are the routes; and
@@ -146,11 +147,22 @@ tested for:
   writing the request's edition there would move an English subscriber back to
   the Bangla digest every time they changed their frequency.
 
-**The e-paper is the one surface that is not per-edition.** There is one
-printed paper: its page images are Bangla from either side, and `Epaper::url()`
-therefore follows the *request* the way `Category::url()` does rather than a
-row's own locale the way `Article::url()` does. What the English edition adds
-is chrome — captions, dates, the back-issue rail — around the same issues.
+**Three surfaces are not per-edition, and they are the ones whose content is
+not words.** An e-paper issue is one printed paper, a photo gallery is one set
+of photographs, and both are the same from either side — so `Epaper::url()`
+and `Gallery::url()` follow the *request* the way `Category::url()` does,
+rather than a row's own locale the way `Article::url()` does. What the English
+edition adds is the words around them: captions, blurbs, dates, rails.
+
+**A video is not one of them.** A video *is* an article, so it belongs to an
+edition and `VideoController::show()` canonicalises into it exactly as
+`ArticleController` does — the id lookup is locale-blind, and without that
+redirect an English frame would wrap a Bangla video at a URL claiming to be
+English.
+
+The test for whether a new surface is per-edition: ask what the reader is
+actually consuming. Words belong to an edition; a photograph or a scanned page
+does not.
 
 Anything else moving off this list needs the same three things — **a column, a
 route, and a display accessor** — with the `Locale::isDefault()` guard removed
@@ -1197,7 +1209,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 854 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 859 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -1245,7 +1257,7 @@ coverage exists for both halves of the app:
 | `AdImpressionTest` | ad impressions counted from the browser, the one-query batch, what is refused, and that an ad with no URL is not a link |
 | `AdCreativeSizingTest` | ad creatives served at the slot size — the media link, the ladder, the single-rung case, and the cached payload |
 | `RedirectTest` | old-CMS URL preservation — that the lookup hangs off the 404 and costs a resolving request nothing, what matches, the loop and method guards, hit counting, and `redirects:import` including the rules it warns will never fire |
-| `BilingualTest` | the English edition — route order matched against the route collection, leakage in both directions and the control that says both editions render, an article's URL following its own row, canonicalisation out of the wrong edition, the switcher and `hreflang` including the untranslated and draft cases, that no Bangla chrome survives an English page and that the detector can fail, section naming and its fallback, the two translation files agreeing, the admin's translate action and its `translation_of` guard, topics and tags in both editions, and the byline block — the English author card, the author page in both editions, the JSON-LD following the edition, the fallbacks going opposite ways, the archive and e-paper in both editions, that an English 404 stays English, that a section cannot take a slug the `/en` prefix owns, and the newsletter — which digest a sign-up box subscribes you to, that the send loop and the edition memo do not leak between languages, and that changing your preferences does not change your edition |
+| `BilingualTest` | the English edition — route order matched against the route collection, leakage in both directions and the control that says both editions render, an article's URL following its own row, canonicalisation out of the wrong edition, the switcher and `hreflang` including the untranslated and draft cases, that no Bangla chrome survives an English page and that the detector can fail, section naming and its fallback, the two translation files agreeing, the admin's translate action and its `translation_of` guard, topics and tags in both editions, and the byline block — the English author card, the author page in both editions, the JSON-LD following the edition, the fallbacks going opposite ways, the archive and e-paper in both editions, that an English 404 stays English, that a section cannot take a slug the `/en` prefix owns, and the newsletter — which digest a sign-up box subscribes you to, that the send loop and the edition memo do not leak between languages, that changing your preferences does not change your edition, and video and the photo galleries — a video canonicalising into its own edition where a gallery is one gallery shown in two frames |
 | `TranslateArticlesTest` | `articles:translate` — that it only inserts, is idempotent, is deterministic on the source id, keeps the original's publication time, and refuses a draft source |
 | `Unit/FmtTest` | the locale switch behind the `@bn*` directives, including the three English answers that are not translations |
 | `SectionLabelTest` | the section and topic labels — that each of the four templates carries a legible colour for both themes, that the editor's raw colour is gone from text and still present on a border, and that the surfaces the labels are computed against still match `app.css` |

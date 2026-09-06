@@ -156,6 +156,15 @@ Route::prefix(App\Support\Locale::ALTERNATE)
         Route::post('/newsletter/unsubscribe/{subscriber:token}', [Site\NewsletterController::class, 'destroy'])
             ->middleware('throttle:newsletter')->name('newsletter.unsubscribe.click');
 
+        // Video is articles of type `video`, so it is already per-edition;
+        // a gallery is not — the photographs are the same either way and only
+        // the words around them change, like an e-paper issue.
+        Route::get('/video', [Site\VideoController::class, 'index'])->name('video.index');
+        Route::get('/video/{article}', [Site\VideoController::class, 'show'])->name('video.show');
+
+        Route::get('/photo', [Site\PhotoController::class, 'index'])->name('photo.index');
+        Route::get('/photo/{gallery:slug}', [Site\PhotoController::class, 'show'])->name('photo.show');
+
         Route::get('/archive', Site\ArchiveController::class)->name('archive');
 
         // The e-paper is one printed paper, not one per edition — these are

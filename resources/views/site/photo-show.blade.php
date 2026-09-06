@@ -1,6 +1,16 @@
 @extends('layouts.site')
-@section('title', $gallery->title.' — '.config('site.name_bn'))
-@section('description', $gallery->description ?? '')
+@section('title', $gallery->display_title.' — '.\App\Support\Locale::siteName())
+@section('description', $gallery->display_description ?? '')
+
+{{-- One gallery, two frames: the photographs are the same either way. --}}
+@push('alternates')
+    @foreach (\App\Support\Locale::ALL as $edition)
+        <link rel="alternate" hreflang="{{ \App\Support\Locale::hreflang($edition) }}"
+              href="{{ \App\Support\Locale::route('photo.show', $gallery, $edition) }}">
+    @endforeach
+    <link rel="alternate" hreflang="x-default"
+          href="{{ \App\Support\Locale::route('photo.show', $gallery, \App\Support\Locale::DEFAULT) }}">
+@endpush
 
 @section('content')
     {{-- Lightbox: keyboard-navigable, focus-trapped, and it locks body scroll
@@ -20,13 +30,13 @@
          @keydown.arrow-left.window="open && prev()">
 
         <header class="mb-6">
-            <h1 class="font-headline text-3xl font-bold text-ink lg:text-4xl">{{ $gallery->title }}</h1>
-            @if ($gallery->description)
-                <p class="mt-2 max-w-3xl text-base text-body">{{ $gallery->description }}</p>
+            <h1 class="font-headline text-3xl font-bold text-ink lg:text-4xl">{{ $gallery->display_title }}</h1>
+            @if ($gallery->display_description)
+                <p class="mt-2 max-w-3xl text-base text-body">{{ $gallery->display_description }}</p>
             @endif
             <p class="mt-2 text-sm text-muted">
-                @bn($gallery->images->count()) টি ছবি ·
-                {{ App\Support\Bangla::ago($gallery->published_at) }}
+                {{ __(':count টি ছবি', ['count' => \App\Support\Fmt::digits($gallery->images->count())]) }} ·
+                @bnago($gallery->published_at)
             </p>
         </header>
 
@@ -34,7 +44,7 @@
             @foreach ($gallery->images as $i => $image)
                 <button type="button" @click="show({{ $i }})"
                         class="group relative block aspect-square overflow-hidden rounded-lg bg-surface-2">
-                    <img src="{{ $image->url }}" alt="{{ $image->caption }}" loading="lazy"
+                    <img src="{{ $image->url }}" alt="{{ $image->display_caption }}" loading="lazy"
                          decoding="async"
                          @if ($image->srcset)
                              srcset="{{ $image->srcset }}" sizes="(min-width:1024px) 300px, 45vw"
@@ -51,7 +61,7 @@
                 <span class="lat text-sm">
                     <span x-text="index + 1"></span> / <span x-text="total"></span>
                 </span>
-                <button type="button" @click="close()" aria-label="বন্ধ করুন"
+                <button type="button" @click="close()" aria-label="{{ __('বন্ধ করুন') }}"
                         class="rounded-md p-2 hover:bg-white/10">
                     <x-ui.icon name="close" class="h-6 w-6" />
                 </button>
@@ -60,28 +70,28 @@
             <div class="relative flex flex-1 items-center justify-center px-4 pb-4">
                 @foreach ($gallery->images as $i => $image)
                     <figure x-show="index === {{ $i }}" x-cloak class="max-h-full">
-                        <img src="{{ $image->url }}" alt="{{ $image->caption }}"
+                        <img src="{{ $image->url }}" alt="{{ $image->display_caption }}"
                              class="mx-auto max-h-[75vh] w-auto object-contain">
                         {{-- Credit is shown with or without a caption: a photo
                              desk files plenty of frames that need attributing
                              and have nothing to say, and nesting the credit
                              inside the caption test dropped it silently. --}}
-                        @if ($image->caption || $image->credit)
+                        @if ($image->display_caption || $image->credit)
                             <figcaption class="mt-3 text-center text-sm text-white/80">
-                                {{ $image->caption }}
+                                {{ $image->display_caption }}
                                 @if ($image->credit)
-                                    <span class="text-white/50">@if ($image->caption)— @endif{{ $image->credit }}</span>
+                                    <span class="text-white/50">@if ($image->display_caption)— @endif{{ $image->credit }}</span>
                                 @endif
                             </figcaption>
                         @endif
                     </figure>
                 @endforeach
 
-                <button type="button" @click="prev()" aria-label="আগের ছবি"
+                <button type="button" @click="prev()" aria-label="{{ __('আগের ছবি') }}"
                         class="absolute left-2 rounded-full bg-white/10 p-3 text-white hover:bg-white/20">
                     <x-ui.icon name="chevron-left" class="h-5 w-5" />
                 </button>
-                <button type="button" @click="next()" aria-label="পরের ছবি"
+                <button type="button" @click="next()" aria-label="{{ __('পরের ছবি') }}"
                         class="absolute right-2 rounded-full bg-white/10 p-3 text-white hover:bg-white/20">
                     <x-ui.icon name="chevron-right" class="h-5 w-5" />
                 </button>
@@ -90,17 +100,17 @@
 
         @if ($more->isNotEmpty())
             <section class="mt-12 border-t border-line pt-8">
-                <x-ui.section-header title="আরও গ্যালারি" :href="route('photo.index')" />
+                <x-ui.section-header :title="__('আরও গ্যালারি')" :href="\App\Support\Locale::route('photo.index')" />
                 <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
                     @foreach ($more as $g)
-                        <a href="{{ route('photo.show', $g) }}" class="group block">
+                        <a href="{{ $g->url() }}" class="group block">
                             <figure class="aspect-square overflow-hidden rounded-lg bg-surface-2">
                                 @if ($g->cover)
                                     <img src="{{ asset('storage/'.$g->cover) }}" alt="" loading="lazy"
                                          class="h-full w-full object-cover transition group-hover:scale-105">
                                 @endif
                             </figure>
-                            <h3 class="mt-1.5 text-xs font-semibold text-ink clamp-2">{{ $g->title }}</h3>
+                            <h3 class="mt-1.5 text-xs font-semibold text-ink clamp-2">{{ $g->display_title }}</h3>
                         </a>
                     @endforeach
                 </div>
