@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Bangla;
+use App\Support\Locale;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -65,7 +66,12 @@ class Epaper extends Model
                 $params['edition'] = $this->edition;
             }
 
-            return route('epaper.show', $params);
+            // `Locale::route()`, not the article rule: an issue belongs to
+            // **no** edition of the site. There is one printed paper, and its
+            // pages are Bangla images whichever edition a reader reached them
+            // from — so unlike `Article::url()`, which is fixed by the row's
+            // own `locale`, this follows the request the way a section does.
+            return Locale::route('epaper.show', $params);
         });
     }
 
@@ -78,8 +84,17 @@ class Epaper extends Model
      */
     protected function editionLabel(): Attribute
     {
-        return Attribute::get(
-            fn (): string => config('site.epaper_editions')[$this->edition] ?? $this->edition
-        );
+        return Attribute::get(function (): string {
+            $bangla = config('site.epaper_editions')[$this->edition] ?? $this->edition;
+
+            if (Locale::isDefault()) {
+                return $bangla;
+            }
+
+            // Falls back to the Bangla label rather than to the raw key,
+            // because this names an edition of the paper and behaves like a
+            // heading — `chittagong` is worse than চট্টগ্রাম.
+            return config('site.epaper_editions_en')[$this->edition] ?? $bangla;
+        });
     }
 }

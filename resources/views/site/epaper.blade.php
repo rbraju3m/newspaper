@@ -1,23 +1,37 @@
 @extends('layouts.site')
-@section('title', 'ই-পেপার'
+@section('title', __('ই-পেপার')
     .($epaper && $editions->count() > 1 ? ' — '.$epaper->edition_label : '')
-    .' — '.config('site.name_bn'))
+    .' — '.\App\Support\Locale::siteName())
+
+{{-- One printed paper, two sets of chrome around it: the pages are the same
+     Bangla images from either edition, so the pair is unconditional and the
+     hub pairs with the hub. --}}
+@push('alternates')
+    @foreach (\App\Support\Locale::ALL as $edition)
+        <link rel="alternate" hreflang="{{ \App\Support\Locale::hreflang($edition) }}"
+              href="{{ $epaper ? \App\Support\Locale::route('epaper.show', ['date' => $epaper->date->toDateString()], $edition)
+                               : \App\Support\Locale::route('epaper.index', [], $edition) }}">
+    @endforeach
+    <link rel="alternate" hreflang="x-default"
+          href="{{ $epaper ? \App\Support\Locale::route('epaper.show', ['date' => $epaper->date->toDateString()], \App\Support\Locale::DEFAULT)
+                           : \App\Support\Locale::route('epaper.index', [], \App\Support\Locale::DEFAULT) }}">
+@endpush
 
 @section('content')
     <div class="mx-auto max-w-site px-4 py-5 lg:py-7">
         <header class="mb-6 flex flex-wrap items-end justify-between gap-4 border-b-2 border-brand pb-3">
             <div>
-                <h1 class="font-headline text-3xl font-bold text-ink lg:text-4xl">ই-পেপার</h1>
+                <h1 class="font-headline text-3xl font-bold text-ink lg:text-4xl">{{ __('ই-পেপার') }}</h1>
                 @if ($epaper)
                     <p class="mt-1 text-base text-muted">
-                        @bndate($epaper->date), {{ App\Support\Bangla::weekday($epaper->date) }}
+                        @bndate($epaper->date), {{ \App\Support\Fmt::weekday($epaper->date) }}
                     </p>
                 @endif
 
                 {{-- Only drawn when the day genuinely holds more than one
                      issue, which on a single-edition paper is never. --}}
                 @if ($editions->count() > 1)
-                    <nav class="mt-2.5 flex flex-wrap gap-1.5" aria-label="সংস্করণ">
+                    <nav class="mt-2.5 flex flex-wrap gap-1.5" aria-label="{{ __('সংস্করণ') }}">
                         @foreach ($editions as $issue)
                             <a href="{{ $issue->url }}"
                                @if ($issue->id === $epaper->id) aria-current="page" @endif
@@ -36,7 +50,7 @@
             @if ($epaper?->pdf)
                 <a href="{{ asset('storage/'.$epaper->pdf) }}" target="_blank" rel="noopener"
                    class="rounded-lg bg-brand px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">
-                    পিডিএফ ডাউনলোড
+                    {{ __('পিডিএফ ডাউনলোড') }}
                 </a>
             @endif
         </header>
@@ -49,19 +63,19 @@
                            class="group block">
                             <figure class="relative overflow-hidden rounded-lg border border-line bg-surface">
                                 <img src="{{ asset('storage/'.($page->thumbnail ?: $page->image)) }}"
-                                     alt="পৃষ্ঠা {{ $page->page_number }}" loading="lazy"
+                                     alt="{{ __('পৃষ্ঠা') }} {{ $page->page_number }}" loading="lazy"
                                      class="w-full transition duration-500 group-hover:scale-[1.02]">
                             </figure>
                             <p class="mt-1.5 text-center text-xs font-medium text-body">
-                                @if ($page->section) {{ $page->section }} — @endif
-                                পৃষ্ঠা @bn($page->page_number)
+                                @if ($page->display_section) {{ $page->display_section }} — @endif
+                                {{ __('পৃষ্ঠা') }} @bn($page->page_number)
                             </p>
                         </a>
                     @endforeach
                 </div>
 
                 <aside class="lg:col-span-3">
-                    <x-ui.section-header title="আগের সংখ্যা" />
+                    <x-ui.section-header :title="__('আগের সংখ্যা')" />
                     <ul class="space-y-1.5">
                         @foreach ($recent as $issue)
                             <li>
@@ -71,7 +85,7 @@
                                        'bg-brand text-white' => $epaper->id === $issue->id,
                                        'text-body hover:bg-surface-2' => $epaper->id !== $issue->id,
                                    ])>
-                                    {{ App\Support\Bangla::date($issue->date) }}
+                                    {{ \App\Support\Fmt::date($issue->date) }}
                                 </a>
                             </li>
                         @endforeach
@@ -79,8 +93,8 @@
                 </aside>
             </div>
         @else
-            <x-ui.empty-state icon="newspaper" title="ই-পেপার এখনো প্রকাশিত হয়নি"
-                              message="আজকের সংস্করণ শীঘ্রই পাওয়া যাবে।" />
+            <x-ui.empty-state icon="newspaper" :title="__('ই-পেপার এখনো প্রকাশিত হয়নি')"
+                              :message="__('আজকের সংস্করণ শীঘ্রই পাওয়া যাবে।')" />
         @endif
     </div>
 @endsection

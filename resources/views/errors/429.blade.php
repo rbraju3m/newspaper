@@ -6,13 +6,13 @@
 
 @extends('errors.layout')
 
-@section('code', '৪২৯')
-@section('heading', 'একটু ধীরে')
+@section('code', \App\Support\Fmt::digits(429))
+@section('heading', __('একটু ধীরে'))
 @section('message')
-    অল্প সময়ে অনেকবার অনুরোধ এসেছে, তাই কিছুক্ষণের জন্য থামানো হয়েছে।
+    {{ __('অল্প সময়ে অনেকবার অনুরোধ এসেছে, তাই কিছুক্ষণের জন্য থামানো হয়েছে।') }}
     @if ($retryAfter > 0)
-        <span class="whitespace-nowrap">@bn($retryAfter) সেকেন্ড পর আবার চেষ্টা করুন।</span>
+        <span class="whitespace-nowrap">{{ __(':seconds সেকেন্ড পর আবার চেষ্টা করুন।', ['seconds' => \App\Support\Fmt::digits($retryAfter)]) }}</span>
     @else
-        একটু পরে আবার চেষ্টা করুন।
+        {{ __('একটু পরে আবার চেষ্টা করুন।') }}
     @endif
 @endsection

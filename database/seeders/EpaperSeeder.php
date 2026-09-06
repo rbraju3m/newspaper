@@ -88,7 +88,14 @@ class EpaperSeeder extends Seeder
             'is_published' => true,
         ]);
 
-        $sections = ['প্রথম পাতা', 'শেষ পাতা', 'খেলা', 'বাণিজ্য', 'সম্পাদকীয়', 'আন্তর্জাতিক', 'বিনোদন', 'শেষের পাতা'];
+        // Paired, so page 6 is not "খেলা" in one edition and "Business" in
+        // the other — the caption describes the same printed page either way.
+        $sections = [
+            ['প্রথম পাতা', 'Front Page'], ['শেষ পাতা', 'Back Page'],
+            ['খেলা', 'Sport'], ['বাণিজ্য', 'Business'],
+            ['সম্পাদকীয়', 'Editorial'], ['আন্তর্জাতিক', 'International'],
+            ['বিনোদন', 'Entertainment'], ['শেষের পাতা', 'Inside Back'],
+        ];
 
         for ($page = 1; $page <= self::PAGES_PER_ISSUE; $page++) {
             $colour = $palette->get(($page - 1) % max(1, $palette->count())) ?: '#C8102E';
@@ -104,7 +111,8 @@ class EpaperSeeder extends Seeder
                 'page_number' => $page,
                 'image' => $media->path,
                 'thumbnail' => $media->conversions['thumb'] ?? null,
-                'section' => $sections[$page - 1] ?? null,
+                'section' => $sections[$page - 1][0] ?? null,
+                'section_en' => $sections[$page - 1][1] ?? null,
             ]);
         }
 

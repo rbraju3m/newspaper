@@ -47,6 +47,25 @@ class Locale
         return $locale === self::DEFAULT ? '' : $locale;
     }
 
+    /**
+     * Slugs no taxonomy may take, because a route prefix already owns them.
+     *
+     * Only the non-default editions are here: Bangla is unprefixed, so `bn`
+     * is a perfectly good slug and reserving it would be inventing a rule.
+     * A root section slugged `en` would have the path `en`, be shadowed by
+     * the `/en` group for ever, and 404 while looking completely correct in
+     * the admin — so it is refused at the point somebody types it.
+     *
+     * @return list<string>
+     */
+    public static function reservedSlugs(): array
+    {
+        return array_values(array_filter(array_map(
+            fn (string $locale): string => self::prefix($locale),
+            self::ALL,
+        )));
+    }
+
     public static function current(): string
     {
         return in_array(App::getLocale(), self::ALL, true) ? App::getLocale() : self::DEFAULT;

@@ -346,8 +346,8 @@ php artisan cache:clear
 ```
 
 `layout.categories` holds `Category` models for an **hour** and `layout.trending`
-holds `Topic` models for ten minutes; those releases added `name_en` to both
-selects. An entry written by the old code has no such
+holds `Topic` models for ten minutes; the bilingual releases added `name_en` to
+both selects. An entry written by the old code has no such
 attribute, and `display_name` reads it — so for up to an hour after
 the deploy every page would render the section names it could still find and
 none of the ones it could not.

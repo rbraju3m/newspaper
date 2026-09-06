@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Article;
 use App\Models\Category;
+use App\Models\Epaper;
 use App\Models\Tag;
 use App\Models\Topic;
 use App\Models\User;
@@ -104,6 +105,11 @@ class BilingualTest extends TestCase
             '/en/rss' => 'en.feed.rss',
             '/en/sitemap.xml' => 'en.feed.sitemap',
             '/en/api/breaking' => 'en.api.breaking',
+            '/archive' => 'archive',
+            '/en/archive' => 'en.archive',
+            '/epaper' => 'epaper.index',
+            '/en/epaper' => 'en.epaper.index',
+            '/en/epaper/2026-08-26' => 'en.epaper.show',
             '/author/x' => 'author.show',
             '/en/author/x' => 'en.author.show',
             '/topic/x' => 'topic.show',
@@ -718,6 +724,186 @@ class BilingualTest extends TestCase
             'en.opinion', collect(\Illuminate\Support\Facades\Route::getRoutes()->getRoutesByName())->all(),
             'An English opinion listing exists, so CARD_RELATIONS must now carry designation_en.',
         );
+    }
+
+    // ── The e-paper and the archive ──────────────────────────────────────
+
+    private function issue(string $date = '2026-08-26'): Epaper
+    {
+        $epaper = Epaper::create([
+            'date' => $date, 'edition' => Epaper::defaultEdition(), 'is_published' => true,
+        ]);
+
+        $epaper->pages()->create([
+            'page_number' => 1, 'image' => 'epaper/p1.jpg',
+            'section' => 'প্রথম পাতা', 'section_en' => 'Front Page',
+        ]);
+
+        return $epaper->fresh('pages');
+    }
+
+    public function test_the_archive_answers_in_both_editions_and_is_scoped(): void
+    {
+        $bn = $this->article('bn', ['title' => 'বাংলা ফাঁস', 'published_at' => now()->subHours(2)]);
+        $en = $this->article('en', ['title' => 'The English one', 'published_at' => now()->subHours(2)]);
+
+        $this->get('/archive')->assertOk()
+            ->assertSee($bn->title, false)->assertDontSee($en->title, false);
+
+        $this->get('/en/archive')->assertOk()
+            ->assertSee($en->title, false)->assertDontSee($bn->title, false)
+            ->assertSee('Archive');
+    }
+
+    /**
+     * The e-paper is **one printed paper**. Unlike an article, an issue does
+     * not belong to an edition — its pages are the same Bangla images from
+     * either side — so `Epaper::url()` follows the *request* the way a
+     * section does rather than a row's own locale.
+     */
+    public function test_an_issue_is_addressed_in_the_edition_being_read(): void
+    {
+        $epaper = $this->issue();
+
+        // Asserted on the rail's own link, not on the absence of `/en`
+        // anywhere: the Bangla page carries an `/en` hreflang alternate on
+        // purpose, and an `assertDontSee` would fail on that.
+        $this->get('/en/epaper')->assertOk()
+            ->assertSee('href="'.url('/en/epaper/2026-08-26').'"', false);
+
+        $this->get('/epaper')->assertOk()
+            ->assertSee('href="'.url('/epaper/2026-08-26').'"', false);
+
+        app()->setLocale(Locale::ALTERNATE);
+        $this->assertStringContainsString('/en/epaper/', $epaper->url);
+
+        app()->setLocale(Locale::DEFAULT);
+        $this->assertStringNotContainsString('/en/epaper/', $epaper->url);
+    }
+
+    public function test_the_epaper_chrome_and_page_captions_follow_the_edition(): void
+    {
+        $this->issue();
+
+        $this->get('/epaper')->assertOk()
+            ->assertSee('ই-পেপার')->assertSee('প্রথম পাতা');
+
+        $this->get('/en/epaper')->assertOk()
+            ->assertSee('E-paper')->assertSee('Front Page')
+            ->assertDontSee('প্রথম পাতা')->assertDontSee('ই-পেপার');
+    }
+
+    /**
+     * A page caption falls back to nothing, not to the Bangla one — the page
+     * number beside it is the heading and always renders.
+     */
+    public function test_a_page_with_no_english_caption_shows_only_its_number(): void
+    {
+        $epaper = Epaper::create([
+            'date' => '2026-08-27', 'edition' => Epaper::defaultEdition(), 'is_published' => true,
+        ]);
+        $epaper->pages()->create([
+            'page_number' => 1, 'image' => 'epaper/p1.jpg',
+            'section' => 'খেলা', 'section_en' => null,
+        ]);
+
+        $this->get('/en/epaper')->assertOk()
+            ->assertDontSee('খেলা')
+            ->assertSee('Page');
+    }
+
+    /**
+     * A print edition's label is a *name*, so it falls back to the Bangla one
+     * rather than to the raw key — `chittagong` is worse than চট্টগ্রাম.
+     */
+    public function test_a_print_edition_label_follows_the_edition_and_falls_back(): void
+    {
+        config(['site.epaper_editions' => ['main' => 'প্রধান সংস্করণ', 'sylhet' => 'সিলেট']]);
+        config(['site.epaper_editions_en' => ['main' => 'Main Edition']]);
+
+        $labelled = Epaper::create(['date' => '2026-08-26', 'edition' => 'main', 'is_published' => true]);
+        $unlabelled = Epaper::create(['date' => '2026-08-26', 'edition' => 'sylhet', 'is_published' => true]);
+
+        app()->setLocale(Locale::ALTERNATE);
+        $this->assertSame('Main Edition', $labelled->edition_label);
+        $this->assertSame('সিলেট', $unlabelled->edition_label, 'A missing English label must fall back to the Bangla name.');
+
+        app()->setLocale(Locale::DEFAULT);
+        $this->assertSame('প্রধান সংস্করণ', $labelled->edition_label);
+    }
+
+    // ── The edges the prefix creates ─────────────────────────────────────
+
+    /**
+     * A 404 under `/en/` renders in English.
+     *
+     * It works because the group's own `/{category}` is constrained `.*`, so
+     * an unknown path under the prefix still matches *inside* the group and
+     * `locale:en` has run by the time `CategoryController` throws. That is
+     * worth pinning precisely because it is not obvious: I first "fixed" this
+     * by inferring the edition from the path in `SetLocale`, and removing
+     * that inference again changed no test — it had never been doing
+     * anything. What this guards is the group middleware, and mutating
+     * `locale:en` off the group is what makes it fail.
+     */
+    public function test_a_404_under_en_is_an_english_404(): void
+    {
+        $english = $this->get('/en/no-such-page')->assertNotFound()->getContent();
+
+        $this->assertStringContainsString('<html lang="en"', $english);
+        $this->assertStringContainsString('Page not found', $english);
+
+        preg_match_all('/>[^<>]*[\x{0980}-\x{09FF}][^<>]*</u', $english, $found);
+        $this->assertEmpty(array_filter(array_map('trim', array_map(fn ($x) => trim($x, '<>'), $found[0]))));
+
+        // The control: the Bangla 404 is still Bangla.
+        $this->get('/no-such-page')->assertNotFound()->assertSee('পাতাটি খুঁজে পাওয়া যায়নি');
+    }
+
+    /**
+     * `/en` is a route prefix, so a root section slugged `en` would be
+     * shadowed by it for ever — a 404 on a section that exists and looks
+     * completely correct in the admin. Refused where it is typed.
+     */
+    public function test_a_category_cannot_take_a_slug_the_prefix_owns(): void
+    {
+        $admin = User::factory()->admin()->create()->fresh();
+
+        $this->actingAs($admin)
+            ->from(route('admin.categories.index'))
+            ->post(route('admin.categories.store'), [
+                'name' => 'ইংরেজি', 'slug' => 'en', 'color' => '#C8102E',
+            ])
+            ->assertSessionHasErrors('slug');
+
+        // `bn` is not a prefix — Bangla is unprefixed — so it stays legal.
+        $this->actingAs($admin)
+            ->post(route('admin.categories.store'), [
+                'name' => 'বাংলা', 'slug' => 'bn', 'color' => '#C8102E',
+            ])
+            ->assertSessionHasNoErrors();
+    }
+
+    /**
+     * A link to a page the edition does not have must not appear at all.
+     * `/video`, `/photo` and `/live` are Bangla-only, and the chrome decides
+     * with `Route::has` rather than a hand-kept list — so the day they are
+     * registered under `en.` the links appear without anything being edited.
+     */
+    public function test_the_chrome_offers_only_pages_this_edition_has(): void
+    {
+        $this->article('en');
+
+        $html = $this->get('/en')->assertOk()->getContent();
+
+        foreach (['/video', '/photo', '/live'] as $banglaOnly) {
+            $this->assertStringNotContainsString('href="'.url($banglaOnly).'"', $html,
+                "The English chrome links to {$banglaOnly}, which has no English edition.");
+        }
+
+        // The control: the Bangla chrome does offer them.
+        $bangla = $this->get('/latest')->assertOk()->getContent();
+        $this->assertStringContainsString('href="'.url('/video').'"', $bangla);
     }
 
     // ── The translation files ────────────────────────────────────────────

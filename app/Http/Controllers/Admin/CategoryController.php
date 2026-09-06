@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Services\HomepageService;
+use App\Support\Locale;
 use App\View\Composers\LayoutComposer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -97,6 +98,9 @@ class CategoryController extends Controller
             'name' => ['required', 'string', 'max:120'],
             'name_en' => ['nullable', 'string', 'max:120'],
             'slug' => ['nullable', 'string', 'max:120', 'regex:/^[a-z0-9-]+$/',
+                // `/en` is a route prefix. A root section with that slug is
+                // shadowed for ever and 404s while looking correct here.
+                Rule::notIn(Locale::reservedSlugs()),
                 Rule::unique('categories')->ignore($category?->id)],
             'parent_id' => ['nullable', 'integer', 'exists:categories,id'],
             'description' => ['nullable', 'string', 'max:1000'],
@@ -109,6 +113,7 @@ class CategoryController extends Controller
             'meta_description' => ['nullable', 'string', 'max:500'],
         ], [
             'slug.regex' => 'স্লাগে শুধু ছোট হাতের ইংরেজি অক্ষর, সংখ্যা ও হাইফেন ব্যবহার করুন।',
+            'slug.not_in' => 'এই স্লাগটি সংরক্ষিত — অন্য একটি বেছে নিন।',
             'color.regex' => 'রঙ #RRGGBB আকারে দিন।',
         ]) + [
             'is_active' => $request->boolean('is_active'),

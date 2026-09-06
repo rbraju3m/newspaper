@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Site;
 
 use App\Http\Controllers\Controller;
 use App\Models\Epaper;
+use App\Support\Locale;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -34,7 +35,7 @@ class EpaperController extends Controller
         $edition = $this->requestedEdition($request);
 
         if ($edition === Epaper::defaultEdition()) {
-            return redirect()->to(route('epaper.index'), 301);
+            return redirect()->to(Locale::route('epaper.index'), 301);
         }
 
         $epaper = $this->preferHouseEdition(

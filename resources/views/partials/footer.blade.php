@@ -58,7 +58,7 @@
                     <ul class="mt-3 space-y-2">
                         @foreach ($chunk as $category)
                             <li>
-                                <a href="{{ route('category.show', $category->path) }}"
+                                <a href="{{ $category->url() }}"
                                    class="text-sm text-muted hover:text-brand">{{ $category->display_name }}</a>
                             </li>
                         @endforeach

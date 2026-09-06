@@ -64,6 +64,12 @@ class Fmt
         return self::bangla() ? Bangla::time($date) : $date->format('g:i A');
     }
 
+    /** "মঙ্গলবার" / "Tuesday" */
+    public static function weekday(CarbonInterface $date): string
+    {
+        return self::bangla() ? Bangla::weekday($date) : $date->format('l');
+    }
+
     /** "মঙ্গলবার, ২৫ আগস্ট ২০২৬, ১০ ভাদ্র ১৪৩৩ বঙ্গাব্দ" / "Tuesday, 25 August 2026" */
     public static function fullDate(?CarbonInterface $date = null): string
     {

@@ -25,7 +25,7 @@
                 <div class="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-5">
                     @foreach ($allCategories as $category)
                         <div>
-                            <a href="{{ route('category.show', $category->path) }}"
+                            <a href="{{ $category->url() }}"
                                class="flex items-center gap-2 border-b-2 pb-1.5 font-headline text-base
                                       font-bold text-ink hover:text-brand"
                                style="border-color: {{ $category->color }}">
@@ -55,7 +55,13 @@
                         ['video.index',  'play',      __('ভিডিও')],
                         ['photo.index',  'camera',    __('ফটো')],
                     ] as [$route, $icon, $label])
-                        <a href="{{ route($route) }}"
+                        {{-- Only the ones this edition actually has. `/video`
+                             and `/photo` are Bangla-only, so on /en they are
+                             absent rather than links out of the edition —
+                             and the day they are registered under `en.` this
+                             picks them up without being edited. --}}
+                        @continue (! Route::has($name = \App\Support\Locale::routeName($route)))
+                        <a href="{{ route($name) }}"
                            class="flex items-center gap-2 rounded-lg border border-line px-3 py-2.5
                                   text-sm font-semibold text-ink hover:border-brand hover:text-brand">
                             <x-ui.icon name="{{ $icon }}" class="h-4 w-4" />

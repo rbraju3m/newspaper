@@ -63,9 +63,11 @@ either edition is its own row linked by `translation_of`, and the switcher
 appears only where a published counterpart exists. What was deliberately left
 out is listed in `STATUS.md` item 3. Topics and tags joined the edition later
 the same day (`name_en` columns, `/en/topic` and `/en/tag`), and so did the
-byline block (`users.designation_en`, `users.bio_en`, `/en/author`). What is
-still out is the block-driven English front page, the e-paper, the archive and
-the newsletter — all *hidden* in English rather than rendered in Bangla.
+byline block, the archive and the e-paper. What is still out is the
+block-driven English front page, the newsletter, `/video`, `/photo` and
+`/live` — the chrome omits a link to any of them in English, decided by
+`Route::has` rather than a list — and the 5xx error pages, which must stay
+dependency-free.
 
 ~~**One small known defect, deliberately not fixed.**~~ **Fixed on 6 September**
 — and it was two colours, not one: `#0891B2` fails as well at 3.68:1.

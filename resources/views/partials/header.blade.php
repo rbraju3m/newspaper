@@ -16,17 +16,24 @@
             <p class="text-muted">@bnfulldate()</p>
 
             <div class="flex items-center gap-4">
-                <a href="{{ route('epaper.index') }}" class="font-medium text-body hover:text-brand">{{ __('ই-পেপার') }}</a>
+                <a href="{{ \App\Support\Locale::route('epaper.index') }}" class="font-medium text-body hover:text-brand">{{ __('ই-পেপার') }}</a>
                 <span class="h-3 w-px bg-line"></span>
-                <a href="{{ route('archive') }}" class="font-medium text-body hover:text-brand">{{ __('আর্কাইভ') }}</a>
-                <span class="h-3 w-px bg-line"></span>
-                <a href="{{ route('live') }}" class="flex items-center gap-1.5 font-medium text-body hover:text-brand">
-                    <span class="relative flex h-1.5 w-1.5">
-                        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand opacity-75"></span>
-                        <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand"></span>
-                    </span>
-                    {{ __('লাইভ') }}
-                </a>
+                <a href="{{ \App\Support\Locale::route('archive') }}" class="font-medium text-body hover:text-brand">{{ __('আর্কাইভ') }}</a>
+                {{-- The live hub has no English edition yet, so the link is
+                     absent there rather than carrying the reader out of it.
+                     `Route::has` rather than a hand-kept list: the day
+                     `en.live` is registered this starts working on its own. --}}
+                @if (Route::has(\App\Support\Locale::routeName('live')))
+                    <span class="h-3 w-px bg-line"></span>
+                    <a href="{{ \App\Support\Locale::route('live') }}"
+                       class="flex items-center gap-1.5 font-medium text-body hover:text-brand">
+                        <span class="relative flex h-1.5 w-1.5">
+                            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand opacity-75"></span>
+                            <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand"></span>
+                        </span>
+                        {{ __('লাইভ') }}
+                    </a>
+                @endif
                 <span class="h-3 w-px bg-line"></span>
 
                 <div class="flex items-center gap-2.5">
@@ -87,7 +94,7 @@
             <ul class="no-scrollbar flex flex-1 items-center gap-0.5 overflow-x-auto lg:gap-0">
                 @foreach ($navCategories as $category)
                     <li class="shrink-0">
-                        <a href="{{ route('category.show', $category->path) }}"
+                        <a href="{{ $category->url() }}"
                            @class([
                                'relative block whitespace-nowrap px-3 py-3 text-sm font-semibold transition',
                                'text-brand' => $activeCategoryId === $category->id,

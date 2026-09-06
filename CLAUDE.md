@@ -86,17 +86,46 @@ Two smaller ones worth knowing:
   per page from a template, never inside a card loop, and the only thing a
   caller does with the result is read `->url`.
 
+### A 404 under `/en/` is already an English 404
+
+Nothing special does this, and it is worth knowing before somebody "fixes" it.
+The `/en` group's own `/{category}` is constrained `.*`, so **every** path
+under the prefix matches something inside the group — the catch-all if nothing
+else — which means `locale:en` has run before the controller throws. The 4xx
+views extend `layouts.site` and are translated, so the reader stays in the
+edition they were browsing.
+
+I did add path inference to `SetLocale` for this, and removing it again
+changed no test: it had never fired. `BilingualTest` mutates `locale:en` off
+the group instead, which is the thing that actually holds it up.
+
+The 5xx family is deliberately **not** translated. Those views extend
+`errors/standalone`, must render with no database and no composers, and
+`artisan down` pre-renders 503 to a static file — whatever locale rendered it
+is what every visitor gets, so a translated one would be worse than an honest
+Bangla one.
+
 ### Bangla-only surfaces are omitted in English, not translated
 
-The e-paper, the archive and the newsletter have no `/en` routes. Each is
-**hidden** on an English page rather than rendered in Bangla — guarded on
-`Locale::isDefault()` — and the masthead tagline is dropped the same way.
+The newsletter, `/video`, `/photo` and `/live` have no `/en` routes. The
+masthead tagline is dropped in English rather than translated, and the chrome
+**omits a link to a page the edition does not have** — `Route::has` on
+`Locale::routeName($name)` decides, not a hand-kept list, so the day one of
+those is registered under `en.` the link appears without anything being
+edited.
 
-**Topics, tags and the byline block used to be on that list and are not any
-more.** `topics.name_en` + `description_en`, `tags.name_en`,
-`users.designation_en` + `bio_en` are columns; `/en/topic`, `/en/tag` and
-`/en/author` are routes; and `display_name` / `display_designation` /
-`display_bio` / `url()` do the work the guards used to.
+**Topics, tags, the byline block, the archive and the e-paper used to be on
+that list and are not any more.** `topics.name_en` + `description_en`,
+`tags.name_en`, `users.designation_en` + `bio_en`, `epaper_pages.section_en`
+and `site.epaper_editions_en` are the columns and config; `/en/topic`,
+`/en/tag`, `/en/author`, `/en/archive` and `/en/epaper` are the routes; and
+the `display_*` accessors and `url()` methods do the work the guards used to.
+
+**The e-paper is the one surface that is not per-edition.** There is one
+printed paper: its page images are Bangla from either side, and `Epaper::url()`
+therefore follows the *request* the way `Category::url()` does rather than a
+row's own locale the way `Article::url()` does. What the English edition adds
+is chrome — captions, dates, the back-issue rail — around the same issues.
 
 Anything else moving off this list needs the same three things — **a column, a
 route, and a display accessor** — with the `Locale::isDefault()` guard removed
@@ -1143,7 +1172,7 @@ Hiding a nav link is not access control.
 
 ## Verifying a change
 
-`php artisan test` runs and passes — 839 tests. The ~98s this used to quote was
+`php artisan test` runs and passes — 847 tests. The ~98s this used to quote was
 measured at 568 on an idle box; `HomepageCacheTest` adds about 20s of its own,
 since it builds the front page from scratch several times over. Behaviour
 coverage exists for both halves of the app:
@@ -1191,7 +1220,7 @@ coverage exists for both halves of the app:
 | `AdImpressionTest` | ad impressions counted from the browser, the one-query batch, what is refused, and that an ad with no URL is not a link |
 | `AdCreativeSizingTest` | ad creatives served at the slot size — the media link, the ladder, the single-rung case, and the cached payload |
 | `RedirectTest` | old-CMS URL preservation — that the lookup hangs off the 404 and costs a resolving request nothing, what matches, the loop and method guards, hit counting, and `redirects:import` including the rules it warns will never fire |
-| `BilingualTest` | the English edition — route order matched against the route collection, leakage in both directions and the control that says both editions render, an article's URL following its own row, canonicalisation out of the wrong edition, the switcher and `hreflang` including the untranslated and draft cases, that no Bangla chrome survives an English page and that the detector can fail, section naming and its fallback, the two translation files agreeing, the admin's translate action and its `translation_of` guard, topics and tags in both editions, and the byline block — the English author card, the author page in both editions, the JSON-LD following the edition, and the fallbacks going opposite ways |
+| `BilingualTest` | the English edition — route order matched against the route collection, leakage in both directions and the control that says both editions render, an article's URL following its own row, canonicalisation out of the wrong edition, the switcher and `hreflang` including the untranslated and draft cases, that no Bangla chrome survives an English page and that the detector can fail, section naming and its fallback, the two translation files agreeing, the admin's translate action and its `translation_of` guard, topics and tags in both editions, and the byline block — the English author card, the author page in both editions, the JSON-LD following the edition, the fallbacks going opposite ways, the archive and e-paper in both editions, that an English 404 stays English, and that a section cannot take a slug the `/en` prefix owns |
 | `TranslateArticlesTest` | `articles:translate` — that it only inserts, is idempotent, is deterministic on the source id, keeps the original's publication time, and refuses a draft source |
 | `Unit/FmtTest` | the locale switch behind the `@bn*` directives, including the three English answers that are not translations |
 | `SectionLabelTest` | the section and topic labels — that each of the four templates carries a legible colour for both themes, that the editor's raw colour is gone from text and still present on a border, and that the surfaces the labels are computed against still match `app.css` |

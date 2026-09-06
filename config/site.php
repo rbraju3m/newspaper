@@ -81,6 +81,21 @@ return [
         'chittagong' => 'চট্টগ্রাম',
     ],
 
+    /*
+     * The same print editions, labelled for the English site.
+     *
+     * A key with no entry here falls back to the Bangla label rather than to
+     * the bare key: this is the *name of an edition of the paper*, so it
+     * behaves like a heading — something has to render, and `chittagong` is
+     * worse than চট্টগ্রাম. That is the opposite of a job title or a blurb,
+     * and the rule is in CLAUDE.md.
+     */
+    'epaper_editions_en' => [
+        'main' => 'Main Edition',
+        'dhaka' => 'Dhaka',
+        'chittagong' => 'Chattogram',
+    ],
+
     /** Ad slot dimensions — used to reserve space and prevent layout shift. */
     'ad_slots' => [
         'header_leaderboard' => ['w' => 728, 'h' => 90],

@@ -7,7 +7,7 @@
      stand alone, because at those codes none of that can be relied on. --}}
 @extends('layouts.site')
 
-@section('title', View::yieldContent('heading').' — '.config('site.name_bn'))
+@section('title', View::yieldContent('heading').' — '.\App\Support\Locale::siteName())
 @section('description', '')
 
 @section('content')
@@ -31,7 +31,7 @@
         <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
             <a href="{{ route('home') }}"
                class="rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">
-                প্রথম পাতায় ফিরুন
+                {{ __('প্রথম পাতায় ফিরুন') }}
             </a>
 
             @yield('actions')

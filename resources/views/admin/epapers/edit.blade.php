@@ -83,6 +83,11 @@
                             <input name="section" value="{{ $page->section }}" maxlength="60"
                                    placeholder="বিভাগ — যেমন প্রথম পাতা, খেলা"
                                    class="w-full rounded border border-line-strong bg-canvas px-2 py-1.5 text-sm">
+                            {{-- Optional. Empty means /en captions the page with
+                                 its number alone rather than a Bangla section. --}}
+                            <input name="section_en" value="{{ $page->section_en }}" maxlength="60"
+                                   placeholder="Section — e.g. Front Page, Sport"
+                                   class="lat w-full rounded border border-line-strong bg-canvas px-2 py-1.5 text-sm">
                             <div class="flex gap-2">
                                 <button type="submit" class="rounded bg-brand px-3 py-1.5 text-xs font-semibold text-white">
                                     সংরক্ষণ
@@ -118,6 +123,8 @@
                    class="w-full rounded-lg border border-line-strong bg-canvas px-3 py-2 text-sm">
             <input name="section" maxlength="60" placeholder="বিভাগ (সব পৃষ্ঠার জন্য)"
                    class="w-full rounded-lg border border-line-strong bg-canvas px-3 py-2 text-sm">
+            <input name="section_en" maxlength="60" placeholder="Section, English (all pages)"
+                   class="lat w-full rounded-lg border border-line-strong bg-canvas px-3 py-2 text-sm">
             <p class="text-2xs text-muted">ফাইলগুলি যে ক্রমে বেছে নেবেন, সেই ক্রমেই পৃষ্ঠা নম্বর বসবে।</p>
 
             <button type="submit" class="w-full rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white">

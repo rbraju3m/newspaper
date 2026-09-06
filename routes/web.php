@@ -145,6 +145,17 @@ Route::prefix(App\Support\Locale::ALTERNATE)
         // the same reason `/topic` and `/tag` sit above the outer ones.
         Route::get('/topic/{topic:slug}', Site\TopicController::class)->name('topic.show');
         Route::get('/tag/{tag:slug}', Site\TagController::class)->name('tag.show');
+        Route::get('/archive', Site\ArchiveController::class)->name('archive');
+
+        // The e-paper is one printed paper, not one per edition — these are
+        // the same issues with English chrome. `{date}` is constrained the
+        // same way the Bangla route constrains it, so a malformed date falls
+        // through to this group's catch-alls rather than 404ing here.
+        Route::get('/epaper', [Site\EpaperController::class, 'index'])->name('epaper.index');
+        Route::get('/epaper/{date}', [Site\EpaperController::class, 'show'])
+            ->where('date', '\d{4}-\d{2}-\d{2}')
+            ->name('epaper.show');
+
         // One person, two pages: this one lists their English stories.
         Route::get('/author/{user:slug}', Site\AuthorController::class)->name('author.show');
 

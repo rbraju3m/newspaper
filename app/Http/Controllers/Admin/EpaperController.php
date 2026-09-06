@@ -111,6 +111,9 @@ class EpaperController extends Controller
             'files' => ['required', 'array'],
             'files.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'max:12288'],
             'section' => ['nullable', 'string', 'max:60'],
+            // Optional: an empty English caption means /en shows the page
+            // number alone rather than a Bangla section name.
+            'section_en' => ['nullable', 'string', 'max:60'],
         ], [
             'files.required' => 'অন্তত একটি পৃষ্ঠা বেছে নিন।',
             'files.*.mimes' => 'পৃষ্ঠার ছবি JPG, PNG বা WebP হতে হবে।',
@@ -147,6 +150,7 @@ class EpaperController extends Controller
                 // already falls back to `image`.
                 'thumbnail' => $media->conversions['thumb'] ?? null,
                 'section' => $validated['section'] ?? null,
+                'section_en' => $validated['section_en'] ?? null,
             ]);
         }
 
@@ -192,6 +196,7 @@ class EpaperController extends Controller
 
         $page->update($request->validate([
             'section' => ['nullable', 'string', 'max:60'],
+            'section_en' => ['nullable', 'string', 'max:60'],
         ]));
 
         return back()->with('status', 'পৃষ্ঠার তথ্য হালনাগাদ হয়েছে।');

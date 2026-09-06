@@ -43,7 +43,7 @@ class ArchiveController extends Controller
             'date' => $date,
             'category' => $category,
             'articles' => $articles,
-            'categories' => Category::active()->roots()->orderBy('position')->get(['id', 'name', 'slug']),
+            'categories' => Category::active()->roots()->orderBy('position')->get(['id', 'name', 'name_en', 'slug']),
         ]);
     }
 }
